@@ -1,3 +1,7 @@
+from .metadetect import (
+    do_metadetect,
+    Metadetect,
+)
 from . import detect
 from . import metadetect
 from . import fitting
