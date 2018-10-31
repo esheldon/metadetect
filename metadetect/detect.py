@@ -15,65 +15,12 @@ import esutil as eu
 from esutil.numpy_util import between
 import meds
 import ngmix
-import time
+
+from . import defaults
 
 logger = logging.getLogger(__name__)
 
 FWHM_FAC = 2*np.sqrt(2*np.log(2))
-
-DEFAULT_SX_CONFIG = {
-    # in sky sigma
-    #DETECT_THRESH
-    'detect_thresh': 0.8,
-
-    # Minimum contrast parameter for deblending
-    #DEBLEND_MINCONT
-    'deblend_cont': 0.00001,
-
-    # minimum number of pixels above threshold
-    #DETECT_MINAREA: 6
-    'minarea': 4,
-
-    'filter_type': 'conv',
-
-    # 7x7 convolution mask of a gaussian PSF with FWHM = 3.0 pixels.
-    'filter_kernel':  [
-        [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],
-        [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],
-        [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],
-        [0.068707, 0.296069, 0.710525, 0.951108, 0.710525, 0.296069, 0.068707],
-        [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],
-        [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],
-        [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],
-    ]
-
-}
-
-DEFAULT_MEDS_CONFIG = {
-    'min_box_size': 32,
-    'max_box_size': 256,
-
-    'box_type': 'iso_radius',
-
-    'rad_min': 4,
-    'rad_fac': 2,
-    'box_padding': 2,
-}
-
-BMASK_EDGE=2**30
-DEFAULT_IMAGE_VALUES = {
-    'image':0.0,
-    'weight':0.0,
-    'seg':0,
-    'bmask':BMASK_EDGE,
-}
-
-ALLOWED_BOX_SIZES = [
-    2,3,4,6,8,12,16,24,32,48,
-    64,96,128,192,256,
-    384,512,768,1024,1536,
-    2048,3072,4096,6144
-]
 
 class MultiBandMEDS(object):
     """
@@ -167,7 +114,7 @@ class MEDSInterface(meds.MEDS):
                      ocol_box[0]:ocol_box[1]]
 
         subim = np.zeros( (bsize, bsize), dtype=im.dtype)
-        subim += DEFAULT_IMAGE_VALUES[type]
+        subim += defaults.DEFAULT_IMAGE_VALUES[type]
 
         subim[row_box[0]:row_box[1],
               col_box[0]:col_box[1]] = read_im
@@ -666,7 +613,7 @@ class MEDSifier(object):
 
         # now put in fft sizes
         bins = [0]
-        bins.extend([sze for sze in ALLOWED_BOX_SIZES
+        bins.extend([sze for sze in defaults.ALLOWED_BOX_SIZES
                      if sze >= mconf['min_box_size']
                      and sze <= mconf['max_box_size']])
 
@@ -699,7 +646,7 @@ class MEDSifier(object):
 
     def _set_sx_config(self, config):
         sx_config={}
-        sx_config.update(DEFAULT_SX_CONFIG)
+        sx_config.update(defaults.DEFAULT_SX_CONFIG)
 
         if config is not None:
             sx_config.update(config)
@@ -712,7 +659,7 @@ class MEDSifier(object):
 
     def _set_meds_config(self, config):
         meds_config={}
-        meds_config.update(DEFAULT_MEDS_CONFIG)
+        meds_config.update(defaults.DEFAULT_MEDS_CONFIG)
 
         if config is not None:
             meds_config.update(config)
@@ -747,6 +694,7 @@ def test(ntrial=1, dim=2000, show=False):
     import biggles
     import images
     import mof
+    import time
 
     rng=np.random.RandomState()
 

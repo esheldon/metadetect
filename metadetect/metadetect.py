@@ -1,10 +1,6 @@
 import ngmix
 from . import fitting
-
-DEFAULT_METACAL_PARS = {
-    'symmetrize_psf': True,
-    'types': ['noshear','1p','1m','2p','2m'],
-}
+from . import defaults
 
 def do_metadetect(config, mbobs, rng):
     """
@@ -87,4 +83,4 @@ class Metadetect(dict):
         self.update(config)
 
         if 'metacal' not in self:
-            self['metacal'] = DEFAULT_METACAL_PARS
+            self['metacal'] = defaults.DEFAULT_METACAL_PARS
