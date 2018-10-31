@@ -14,8 +14,6 @@ import meds
 import ngmix
 import time
 
-from . import moflib
-
 logger = logging.getLogger(__name__)
 
 FWHM_FAC = 2*np.sqrt(2*np.log(2))
@@ -745,6 +743,7 @@ def test(ntrial=1, dim=2000, show=False):
     import galsim
     import biggles
     import images
+    import mof
 
     rng=np.random.RandomState()
 
@@ -902,14 +901,14 @@ def test(ntrial=1, dim=2000, show=False):
                 for obs in obslist:
                     obs.set_psf(psf_obs)
 
-        prior=moflib.get_mof_prior(list_of_obs, "bdf", rng)
-        mof_fitter=moflib.MOFStamps(
+        prior=mof.moflib.get_mof_prior(list_of_obs, "bdf", rng)
+        mof_fitter=mof.moflib.MOFStamps(
             list_of_obs,
             "bdf",
             prior=prior,
         )
         band=2
-        guess=moflib.get_stamp_guesses(list_of_obs, band, "bdf", rng)
+        guess=mof.moflib.get_stamp_guesses(list_of_obs, band, "bdf", rng)
         mof_fitter.go(guess)
 
         if show:
