@@ -33,7 +33,7 @@ DEFAULT_SX_CONFIG = {
     #DETECT_MINAREA: 6
     'minarea': 4,
 
-    'filter_type: 'conv'
+    'filter_type': 'conv',
 
     # 7x7 convolution mask of a gaussian PSF with FWHM = 3.0 pixels.
     'filter_kernel':  [
