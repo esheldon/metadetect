@@ -335,4 +335,4 @@ def test_metadetect(ntrial=1):
         res = metadetect.do_metadetect(config, mbobs, rng)
 
     total_time=time.time()-tm0
-    print("time per group:",total_time/ntrial)
+    print("time per:",total_time/ntrial)
