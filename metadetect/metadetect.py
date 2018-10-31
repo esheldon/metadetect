@@ -30,6 +30,18 @@ class Metadetect(dict):
         self.mbobs=mbobs
         self.rng=rng
 
+        self._set_fitter()
+
+    def _set_fitter(self):
+        """
+        set the fitter to be used
+        """
+        self._fitter=fitting.Moments(
+            self,
+            nband,
+            self.rng,
+        )
+
     @property
     def result(self):
         """

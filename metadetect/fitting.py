@@ -19,9 +19,8 @@ class FitterBase(dict):
     we don't create a new instance of this for each fit, because
     the prior can be set once
     """
-    def __init__(self, config, nband, rng):
+    def __init__(self, config, rng):
 
-        self.nband=nband
         self.rng=rng
         self.update(config)
 
@@ -31,101 +30,10 @@ class FitterBase(dict):
         """
         raise NotImplementedError("implement go()")
 
-    def _get_prior(self, conf):
-        """
-        Set all the priors
-        """
-        from ngmix.joint_prior import PriorSimpleSep, PriorBDFSep
-
-        if 'priors' not in conf:
-            return None
-
-        ppars=conf['priors']
-        if ppars.get('prior_from_mof',False):
-            return None
-
-        # g
-        gp = ppars['g']
-        assert gp['type']=="ba"
-        g_prior = self._get_prior_generic(gp)
-
-        T_prior = self._get_prior_generic(ppars['T'])
-        flux_prior = self._get_prior_generic(ppars['flux'])
-
-        # center
-        cp=ppars['cen']
-        assert cp['type'] == 'normal2d'
-        cen_prior = self._get_prior_generic(cp)
-
-        if conf['model']=='bdf':
-            assert 'fracdev' in ppars,"set fracdev prior for bdf model"
-            fp = ppars['fracdev']
-            assert fp['type'] == 'normal','only normal prior supported for fracdev'
-
-            fracdev_prior = self._get_prior_generic(fp)
-
-            prior = PriorBDFSep(
-                cen_prior,
-                g_prior,
-                T_prior,
-                fracdev_prior,
-                [flux_prior]*self.nband,
-            )
-
-        else:
-
-            prior = PriorSimpleSep(
-                cen_prior,
-                g_prior,
-                T_prior,
-                [flux_prior]*self.nband,
-            )
-
-        return prior
-
-    def _get_prior_generic(self, ppars):
-        ptype=ppars['type']
-
-        if ptype=="flat":
-            prior=ngmix.priors.FlatPrior(*ppars['pars'], rng=self.rng)
-
-        elif ptype == 'two-sided-erf':
-            prior=ngmix.priors.TwoSidedErf(*ppars['pars'], rng=self.rng)
-
-        elif ptype=='normal':
-            prior = ngmix.priors.Normal(
-                ppars['mean'],
-                ppars['sigma'],
-                rng=self.rng,
-            )
-
-        elif ptype=='log-normal':
-            prior = ngmix.priors.LogNormal(
-                ppars['mean'],
-                ppars['sigma'],
-                rng=self.rng,
-            )
-
-
-        elif ptype=='normal2d':
-            prior=ngmix.priors.CenPrior(
-                0.0,
-                0.0,
-                ppars['sigma'],
-                ppars['sigma'],
-                rng=self.rng,
-            )
-
-        elif ptype=='ba':
-            prior = ngmix.priors.GPriorBA(ppars['sigma'], rng=self.rng)
-
-        else:
-            raise ValueError("bad prior type: '%s'" % ptype)
-
-        return prior
-
-
 class Moments(FitterBase):
+    """
+    measure simple weighted moments
+    """
     def __init__(self, *args, **kw):
         super(Moments,self).__init__(*args, **kw)
         self._set_mompars()
@@ -133,6 +41,16 @@ class Moments(FitterBase):
     def go(self, mbobs_list):
         """
         run moments measurements on all objects
+
+        parameters
+        ----------
+        mbobs_list: list of ngmix.MultiBandObsList
+            One for each object to be measured
+
+        returns
+        -------
+        output: list of numpy arrays with fields
+            Results for each object
         """
 
         datalist=[]
@@ -232,15 +150,6 @@ class Moments(FitterBase):
         new_obs.psf.set_image(psf_im, update_pixels=False )
         new_obs.psf.set_weight(psf_wt)
 
-        """
-        pconf={
-            'model':'gauss',
-            'lm_pars':{'maxfev':2000,'ftol':1.0e-5,'xtol':1.0e-5},
-            'ntry':2,
-        )
-        _fit_one_psf(new_obs.psf, pconf)
-        """
-
         if False:
             import images
             images.multiview(new_obs.image,title='im')
@@ -260,28 +169,9 @@ class Moments(FitterBase):
         measure weighted moments
         """
 
-
         wpars=self['weight']
 
-        if wpars['use_canonical_center']:
-            #logger.debug('        getting moms with canonical center')
-        
-            ccen=(np.array(obs.image.shape)-1.0)/2.0
-            jold=obs.jacobian
-            obs.jacobian = ngmix.Jacobian(
-                row=ccen[0],
-                col=ccen[1],
-                dvdrow=jold.dvdrow,
-                dudrow=jold.dudrow,
-                dvdcol=jold.dvdcol,
-                dudcol=jold.dudcol,
-
-            )
-
         res = self.weight.get_weighted_moments(obs=obs,maxrad=1.e9)
-
-        if wpars['use_canonical_center']:
-            obs.jacobian=jold
 
         if res['flags'] != 0:
             return res
@@ -360,8 +250,6 @@ class Moments(FitterBase):
 
         self.weight=weight
 
-        wpars['use_canonical_center']=wpars.get('use_canonical_center',False)
-
     def _check_flags(self, mbobs):
         """
         only one image per band, no epochs, so anything that hits an edge
@@ -379,7 +267,6 @@ class Moments(FitterBase):
                         break
 
         return isok
-
 
 
 class AllPSFFitter(object):
