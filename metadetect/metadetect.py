@@ -1,4 +1,10 @@
 import ngmix
+from . import fitting
+
+DEFAULT_METACAL_PARS = {
+    'symmetrize_psf': True,
+    'types': ['noshear','1p','1m','2p','2m'],
+}
 
 def do_metadetect(config, mbobs, rng):
     """
@@ -24,7 +30,7 @@ class Metadetect(dict):
 
     """
     def __init__(self, config, mbobs, rng):
-        self.update(config)
+        self._set_config(config)
         self.mbobs=mbobs
         self.rng=rng
 
@@ -60,12 +66,25 @@ class Metadetect(dict):
         """
         get the sheared versions of the observations
         """
+
+        if self['metacal'].get('symmetrize_psf',False):
+            assert 'psf' in self,'need psf fitting for symmetrize_psf'
+            fitting.fit_all_psfs(self.mbobs, self['psf'], self.rng)
+
         odict = ngmix.metacal.get_all_metacal(
             self.mbobs,
             rng=sim.rng,
-            **metacal_pars
+            **self['metacal']
         )
 
         return odict
 
+    def _set_config(self, config):
+        """
+        set the config, dealing with defaults
+        """
 
+        self.update(config)
+
+        if 'metacal' not in self:
+            self['metacal'] = DEFAULT_METACAL_PARS
