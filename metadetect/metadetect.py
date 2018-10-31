@@ -1,4 +1,5 @@
 import ngmix
+from . import detect
 from . import fitting
 from . import defaults
 
