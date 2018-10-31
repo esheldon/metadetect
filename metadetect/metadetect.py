@@ -34,15 +34,6 @@ class Metadetect(dict):
 
         self._set_fitter()
 
-    def _set_fitter(self):
-        """
-        set the fitter to be used
-        """
-        self._fitter=fitting.Moments(
-            self,
-            self.rng,
-        )
-
     @property
     def result(self):
         """
@@ -64,12 +55,42 @@ class Metadetect(dict):
         for key, mbobs in odict.items():
             self._result[key] = self._measure(mbobs)
 
+
+    def _set_fitter(self):
+        """
+        set the fitter to be used
+        """
+        self._fitter=fitting.Moments(
+            self,
+            self.rng,
+        )
+
     def _measure(self, mbobs):
         """
         perform measurements on the input mbobs. This involves running
         detection as well as measurements
         """
+
+        mer = self._do_detect(mbobs)
+        mbm=mer.get_multiband_meds()
+
+        mbobs_list = mbm.get_mbobs_list()
+
+        res=self._fitter.go(mbobs_list)
         return {}
+
+    def _do_detect(self, mbobs):
+        """
+        use a MEDSifier to run detection
+        """
+        mer=detect.MEDSifier(
+            mbobs,
+            sx_config=self['sx'],
+            meds_config=self['meds'],
+        )
+        return mer
+
+
 
     def _get_all_metacal(self):
         """
@@ -94,6 +115,9 @@ class Metadetect(dict):
         """
 
         self.update(config)
-
-        if 'metacal' not in self:
-            self['metacal'] = defaults.DEFAULT_METACAL_PARS
+        assert 'metacal' in self, \
+            'metacal setting must be present in config'
+        assert 'sx' in self, \
+            'sx setting must be present in config'
+        assert 'meds' in self, \
+            'meds setting must be present in config'

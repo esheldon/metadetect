@@ -74,7 +74,7 @@ class MEDSInterface(meds.MEDS):
         self._image_types=('image','weight','seg','bmask','noise')
         self._cat=cat
 
-    def get_psf(iobj,icut):
+    def get_psf(self, iobj,icut):
         """
         get an image of the psf
         """
@@ -219,6 +219,22 @@ class MEDSInterface(meds.MEDS):
         obslist.meta['T'] = obs.meta['T']
         return obslist
 
+    def get_ngmix_jacobian(self, iobj, icutout):
+        """
+        get an ngmix.Jacobian representation
+        """
+
+        jd=self.get_jacobian(iobj, icutout)
+
+        return ngmix.Jacobian(
+            row=jd['row0'],
+            col=jd['col0'],
+            dudrow=jd['dudrow'],
+            dudcol=jd['dudcol'],
+            dvdrow=jd['dvdrow'],
+            dvdcol=jd['dvdcol'],
+        )
+
     def get_obs(self, iobj, icutout, weight_type='weight'):
         """
         get an ngmix Observation
@@ -243,7 +259,6 @@ class MEDSInterface(meds.MEDS):
         import ngmix
         im=self.get_cutout(iobj, icutout, type='image')
         bmask=self.get_cutout(iobj, icutout, type='bmask')
-        jd=self.get_jacobian(iobj, icutout)
 
 
         if weight_type=='uberseg':
@@ -259,14 +274,13 @@ class MEDSInterface(meds.MEDS):
         else:
             raise ValueError("bad weight type '%s'" % weight_type)
 
-        jacobian=ngmix.Jacobian(
-            row=jd['row0'],
-            col=jd['col0'],
-            dudrow=jd['dudrow'],
-            dudcol=jd['dudcol'],
-            dvdrow=jd['dvdrow'],
-            dvdcol=jd['dvdcol'],
-        )
+        jacobian = self.get_ngmix_jacobian(iobj, icutout)
+        #print(im.shape)
+        #print(jacobian)
+        #import images
+        #images.multiview(im)
+        #if 'q'==input('hit a key (q to quit): '):
+        #    stop
         c=self._cat
 
         scale=jacobian.get_scale()
@@ -290,12 +304,15 @@ class MEDSInterface(meds.MEDS):
             orig_end_row=c['orig_end_row'][iobj, icutout],
             orig_end_col=c['orig_end_col'][iobj, icutout],
         )
+
+        psf_obs = self.get_psf_obs(iobj, icutout)
         obs = ngmix.Observation(
             im,
             weight=wt,
             bmask=bmask,
             meta=meta,
             jacobian=jacobian,
+            psf=psf_obs,
         )
         if False:
             import images
@@ -304,6 +321,28 @@ class MEDSInterface(meds.MEDS):
                 stop
 
         return obs
+
+    def get_psf_obs(self, iobj, icutout):
+        """
+        get an observation of the PSF for this object
+        """
+        psf_im = self.get_psf(iobj, icutout)
+        # fake the noise
+        noise = psf_im.max()/1000.0
+        weight = psf_im*0 + 1.0/noise**2
+        jacobian = self.get_ngmix_jacobian(iobj, icutout)
+
+        cen=(np.array(psf_im.shape)-1.0)/2.0
+        jacobian.set_cen(
+            row=cen[0],
+            col=cen[1],
+        )
+
+        return ngmix.Observation(
+            psf_im,
+            weight=weight,
+            jacobian=jacobian,
+        )
 
     def get_cseg_weight(self, iobj, icutout, use_canonical_cen=False):
         """
@@ -371,8 +410,8 @@ class MEDSInterface(meds.MEDS):
 class MEDSifier(object):
     def __init__(self,
                  mbobs,
-                 sx_config=None,
-                 meds_config=None):
+                 sx_config,
+                 meds_config):
         """
         very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
@@ -669,26 +708,17 @@ class MEDSifier(object):
 
         return sigma_size
 
-    def _set_sx_config(self, config):
+    def _set_sx_config(self, sx_config_in):
+
         sx_config={}
-        sx_config.update(defaults.DEFAULT_SX_CONFIG)
+        sx_config.update(sx_config_in)
+        sx_config['filter_kernel'] = np.array(sx_config['filter_kernel'])
 
-        if config is not None:
-            sx_config.update(config)
-
-        if 'filter_kernel' in sx_config:
-            sx_config['filter_kernel'] = np.array(sx_config['filter_kernel'])
-
+        # this isn't a keyword
         self.detect_thresh = sx_config.pop('detect_thresh')
         self.sx_config=sx_config
 
-    def _set_meds_config(self, config):
-        meds_config={}
-        meds_config.update(defaults.DEFAULT_MEDS_CONFIG)
-
-        if config is not None:
-            meds_config.update(config)
-
+    def _set_meds_config(self, meds_config):
         self.meds_config=meds_config
 
 

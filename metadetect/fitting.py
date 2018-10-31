@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 import ngmix
+import esutil as eu
 from .util import Namer
 from . import procflags
 
@@ -49,8 +50,14 @@ class Moments(FitterBase):
         for i,mbobs in enumerate(mbobs_list):
 
             if not self._check_flags(mbobs):
-                res={'flags':procflags.IMAGE_FLAGS}
-                pres={'flags':procflags.NO_ATTEMPT}
+                res={
+                    'flags':procflags.IMAGE_FLAGS,
+                    'flagstr':procflags.get_name(procflags.IMAGE_FLAGS),
+                }
+                pres={
+                    'flags':procflags.NO_ATTEMPT,
+                    'flagstr':procflags.get_name(procflags.NO_ATTEMPT),
+                }
             else:
 
                 obs=self._do_coadd_maybe(mbobs)
@@ -59,12 +66,10 @@ class Moments(FitterBase):
                 res   = self._measure_moments(obs)
 
             if res['flags'] != 0:
-                logger.debug("        moments failed: %s" % res['flags'])
-                print(res)
+                logger.debug("        moments failed: %s" % res['flagstr'])
 
             if pres['flags'] != 0:
-                logger.debug("        psf moments failed: %s" % pres['flags'])
-                print(pres)
+                logger.debug("        psf moments failed: %s" % pres['flagstr'])
 
             fit_data = self._get_output(res, pres)
 
@@ -177,8 +182,10 @@ class Moments(FitterBase):
     def _get_dtype(self, model, npars):
         n=Namer(front=model)
         dt = [
+            ('psf_flags','i4'),
             ('psf_g','f8',2),
             ('psf_T','f8'),
+            (n('flags'),'i4'),
             (n('s2n'),'f8'),
             (n('pars'),'f8',npars),
             #(n('pars_cov'),'f8',(npars,npars)),
