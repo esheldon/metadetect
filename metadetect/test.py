@@ -3,6 +3,7 @@ test with super simple sim.  The purpose here is not
 to make sure it gets the right answer or anything, just
 to test all the moving parts
 """
+import time
 import numpy as np
 import ngmix
 from . import detect
@@ -270,8 +271,6 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
-    import time
-
     rng=np.random.RandomState()
 
     tm0 = time.time()
@@ -313,9 +312,6 @@ def test_metadetect(ntrial=1):
     """
     test full metadetection
     """
-    import biggles
-    import images
-    import time
 
     rng=np.random.RandomState()
 
