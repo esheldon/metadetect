@@ -6,9 +6,9 @@ to test all the moving parts
 import numpy as np
 import ngmix
 from . import detect
-from . import fitting
+from . import metadetect
 
-DEFAULT_CONFIG={
+DEFAULT_SIM_CONFIG={
     'nobj': 4,
     'nband': 3,
     'noises': (0.0005,0.001,0.0015),
@@ -26,9 +26,28 @@ DEFAULT_CONFIG={
     'disk_colors': np.array([1.25, 1.0, 0.75]),
 }
 
+DEFAULT_METADETECT_CONFIG = {
+    'weight': {
+        'fwhm':1.2, # arcsec
+    },
+    # needed for PSF symmetrization
+    'psf': {
+        'model': 'gauss',
+
+        'ntry': 2,
+
+        'lm_pars': {
+            'maxfev': 2000,
+            'ftol': 1.0e-5,
+            'xtol': 1.0e-5,
+        }
+    }
+}
+
+
 class Sim(dict):
     def __init__(self, rng, config=None):
-        self.update(DEFAULT_CONFIG)
+        self.update(DEFAULT_SIM_CONFIG)
 
         if config is not None:
             self.update(config)
@@ -200,7 +219,10 @@ def _show_mbobs(mer):
     )
 
 
-def test(ntrial=1, dim=2000, show=False):
+def test_detect(ntrial=1, show=False):
+    """
+    just test the detection
+    """
     import biggles
     import images
     import time
@@ -234,3 +256,29 @@ def test(ntrial=1, dim=2000, show=False):
     total_time=time.time()-tm0
     print("time per group:",total_time/ntrial)
     print("time per object:",total_time/nobj_meas)
+
+def test_metadetect(ntrial=1):
+    """
+    test full metadetection
+    """
+    import biggles
+    import images
+    import time
+
+    rng=np.random.RandomState()
+
+    tm0 = time.time()
+    nobj_meas = 0
+
+    sim = Sim(rng)
+    config={}
+    config.update(DEFAULT_METADETECT_CONFIG)
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1,ntrial))
+
+        mbobs = sim.get_mbobs()
+        res = metadetect.do_metadetect(config, mbobs, rng)
+
+    total_time=time.time()-tm0
+    print("time per group:",total_time/ntrial)

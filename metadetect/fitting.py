@@ -6,14 +6,6 @@ from . import procflags
 
 logger = logging.getLogger(__name__)
 
-def fit_all_psfs(mbobs, psf_conf):
-    """
-    fit all psfs in the input observations
-    """
-    fitter=AllPSFFitter(mbobs, psf_conf)
-    fitter.go()
-
-
 class FitterBase(dict):
     """
     we don't create a new instance of this for each fit, because
@@ -268,20 +260,15 @@ class Moments(FitterBase):
 
         return isok
 
-
-class AllPSFFitter(object):
+def fit_all_psfs(mbobs, psf_conf, rng):
     """
-    fit all psfs using the specified config
+    fit all psfs in the input observations
     """
-    def __init__(self, mbobs, psf_conf):
-        self.mbobs=mbobs
-        self.psf_conf=psf_conf
 
-    def go(self):
-        for obslist in self.mbobs:
-            for obs in obslist:
-                psf_obs = obs.get_psf()
-                fit_one_psf(psf_obs, self.psf_conf)
+    for obslist in mbobs:
+        for obs in obslist:
+            psf_obs = obs.get_psf()
+            fit_one_psf(psf_obs, psf_conf, rng)
 
 def fit_one_psf(obs, pconf, rng):
     Tguess=4.0*obs.jacobian.get_scale()**2

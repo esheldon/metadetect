@@ -29,6 +29,7 @@ class Metadetect(dict):
     def __init__(self, config, mbobs, rng):
         self._set_config(config)
         self.mbobs=mbobs
+        self.nband = len(mbobs)
         self.rng=rng
 
         self._set_fitter()
@@ -39,7 +40,6 @@ class Metadetect(dict):
         """
         self._fitter=fitting.Moments(
             self,
-            nband,
             self.rng,
         )
 
@@ -82,7 +82,7 @@ class Metadetect(dict):
 
         odict = ngmix.metacal.get_all_metacal(
             self.mbobs,
-            rng=sim.rng,
+            rng=self.rng,
             **self['metacal']
         )
 
