@@ -270,8 +270,6 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
-    import biggles
-    import images
     import time
 
     rng=np.random.RandomState()
