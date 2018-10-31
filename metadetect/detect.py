@@ -3,6 +3,9 @@
 Code to take a set of images, for example coadds in different bands, run
 detection on them and produce a MEDS like interface to get postage stamps
 
+TODO factor out the detection code so we could, for example, drop in the LSST
+DM stack detection
+
 """
 from __future__ import print_function
 import logging
