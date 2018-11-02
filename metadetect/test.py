@@ -33,7 +33,7 @@ TEST_METADETECT_CONFIG = {
     },
 
     'metacal': {
-        'symmetrize_psf': True,
+        'psf': 'fitgauss',
         'types': ['noshear','1p','1m','2p','2m'],
     },
 
