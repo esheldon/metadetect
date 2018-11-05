@@ -1,4 +1,5 @@
 import ngmix
+import esutil as eu
 from . import detect
 from . import fitting
 from . import defaults
@@ -77,7 +78,30 @@ class Metadetect(dict):
         mbobs_list = mbm.get_mbobs_list()
 
         res=self._fitter.go(mbobs_list)
+
+        res = self._add_positions(mer.cat, res)
         return res
+
+    def _add_positions(self, cat, res):
+        """
+        add catalog positions to the result
+        """
+        if cat.size > 0:
+            new_dt = [
+                ('sx_row','f4'),
+                ('sx_col','f4'),
+            ]
+            newres = eu.numpy_util.add_fields(
+                res,
+                new_dt,
+            )
+
+            newres['sx_col'] = cat['x']
+            newres['sx_row'] = cat['y']
+        else:
+            newres = res
+
+        return newres
 
     def _do_detect(self, mbobs):
         """
