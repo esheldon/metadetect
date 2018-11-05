@@ -75,7 +75,8 @@ class Moments(FitterBase):
 
             if res['flags']==0 and pres['flags']==0:
                 self._print_result(fit_data)
-                datalist.append(fit_data)
+
+            datalist.append(fit_data)
 
         output = eu.numpy_util.combine_arrlist(datalist)
         return output
