@@ -77,7 +77,7 @@ class Metadetect(dict):
         mbobs_list = mbm.get_mbobs_list()
 
         res=self._fitter.go(mbobs_list)
-        return {}
+        return res
 
     def _do_detect(self, mbobs):
         """
