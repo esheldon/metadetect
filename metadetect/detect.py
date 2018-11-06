@@ -13,8 +13,8 @@ import numpy as np
 from numpy import pi
 import esutil as eu
 from esutil.numpy_util import between
-import meds
-import ngmix
+
+from ngmix.medsreaders import NGMixMEDS, MultiBandNGMixMEDS
 
 from . import defaults
 
@@ -22,59 +22,19 @@ logger = logging.getLogger(__name__)
 
 FWHM_FAC = 2*np.sqrt(2*np.log(2))
 
-class MultiBandMEDS(object):
-    """
-    Interface to MEDS objects in more than one band.
-    """
-    def __init__(self, mlist):
-        self.mlist=mlist
 
-    @property
-    def size(self):
-        """
-        get number of entries in the catalog
-        """
-        return self.mlist[0].size
-
-    def get_mbobs_list(self, indices=None, weight_type='weight'):
-        """
-        get a list of MultiBandObsList for every object or
-        the specified indices
-        """
-
-        if indices is None:
-            indices = np.arange(self.mlist[0].size)
-
-        list_of_obs=[]
-        for iobj in indices:
-            mbobs=self.get_mbobs(iobj, weight_type=weight_type)
-            list_of_obs.append(mbobs)
-
-        return list_of_obs
-
-    def get_mbobs(self, iobj, weight_type='weight'):
-        """
-        get a multiband obs list
-        """
-        mbobs=ngmix.MultiBandObsList()
-
-        for m in self.mlist:
-            obslist = m.get_obslist(iobj, weight_type=weight_type)
-            mbobs.append(obslist)
-
-        return mbobs
-
-class MEDSInterface(meds.MEDS):
+class MEDSInterface(NGMixMEDS):
     """
     Wrap a full image with a MEDS-like interface
     """
     def __init__(self, obs, seg, cat):
-        self.obs=obs
-        self.seg=seg
-        self._image_types=('image','weight','seg','bmask','noise')
-        self._cat=cat
+        self.obs = obs
+        self.seg = seg
+        self._image_types = (
+            'image', 'weight', 'seg', 'bmask', 'noise')
+        self._cat = cat
 
-    def get_psf(self, iobj,icut):
+    def get_psf(self, iobj, icut):
         """
         get an image of the psf
         """
@@ -101,26 +61,24 @@ class MEDSInterface(meds.MEDS):
 
         self._check_indices(iobj, icutout=icutout)
 
-        if type=='psf':
-            return self.get_psf(iobj,icutout)
+        if type == 'psf':
+            return self.get_psf(iobj, icutout)
 
         im = self._get_type_image(type)
         dims = im.shape
 
-        c=self._cat
-        orow=c['orig_start_row'][iobj,icutout]
-        ocol=c['orig_start_col'][iobj,icutout]
-        erow=c['orig_end_row'][iobj,icutout]
-        ecol=c['orig_end_col'][iobj,icutout]
-        bsize=c['box_size'][iobj]
+        c = self._cat
+        orow = c['orig_start_row'][iobj, icutout]
+        ocol = c['orig_start_col'][iobj, icutout]
+        bsize = c['box_size'][iobj]
 
-        orow_box, row_box = self._get_clipped_boxes(dims[0],orow,bsize)
-        ocol_box, col_box = self._get_clipped_boxes(dims[1],ocol,bsize)
+        orow_box, row_box = self._get_clipped_boxes(dims[0], orow, bsize)
+        ocol_box, col_box = self._get_clipped_boxes(dims[1], ocol, bsize)
 
         read_im = im[orow_box[0]:orow_box[1],
                      ocol_box[0]:ocol_box[1]]
 
-        subim = np.zeros( (bsize, bsize), dtype=im.dtype)
+        subim = np.zeros((bsize, bsize), dtype=im.dtype)
         subim += defaults.DEFAULT_IMAGE_VALUES[type]
 
         subim[row_box[0]:row_box[1],
@@ -132,15 +90,15 @@ class MEDSInterface(meds.MEDS):
         if type not in self._image_types:
             raise ValueError("bad cutout type: '%s'" % type)
 
-        if type=='image':
+        if type == 'image':
             data = self.obs.image
-        elif type=='weight':
+        elif type == 'weight':
             data = self.obs.weight
-        elif type=='bmask':
+        elif type == 'bmask':
             data = self.obs.bmask
-        elif type=='noise':
+        elif type == 'noise':
             data = self.obs.noise
-        elif type=='seg':
+        elif type == 'seg':
             data = self.seg
 
         return data
@@ -182,230 +140,13 @@ class MEDSInterface(meds.MEDS):
             box[0] = 0 - start
 
         im_max = dim
-        diff= im_max - obox[1]
+        diff = im_max - obox[1]
         if diff < 0:
             obox[1] = im_max
             box[1] = box[1] + diff
 
         return obox, box
 
-
-    def get_obslist(self, iobj, weight_type='weight'):
-        """
-        get an ngmix ObsList for all observations
-
-        parameters
-        ----------
-        iobj:
-            Index of the object
-        weight_type: string, optional
-            Weight type. can be one of
-                'weight': the actual weight map
-                'uberseg': uberseg modified weight map
-            Default is 'weight'
-
-        returns
-        -------
-        an ngmix ObsList
-        """
-
-        import ngmix
-        obslist=ngmix.ObsList()
-        for icut in range(self._cat['ncutout'][iobj]):
-            obs=self.get_obs(iobj, icut, weight_type=weight_type)
-            obslist.append(obs)
-
-        obslist.meta['flux'] = obs.meta['flux']
-        obslist.meta['T'] = obs.meta['T']
-        return obslist
-
-    def get_ngmix_jacobian(self, iobj, icutout):
-        """
-        get an ngmix.Jacobian representation
-        """
-
-        jd=self.get_jacobian(iobj, icutout)
-
-        return ngmix.Jacobian(
-            row=jd['row0'],
-            col=jd['col0'],
-            dudrow=jd['dudrow'],
-            dudcol=jd['dudcol'],
-            dvdrow=jd['dvdrow'],
-            dvdcol=jd['dvdcol'],
-        )
-
-    def get_obs(self, iobj, icutout, weight_type='weight'):
-        """
-        get an ngmix Observation
-
-        parameters
-        ----------
-        iobj:
-            Index of the object
-        icutout:
-            Index of the cutout for this object.
-        weight_type: string, optional
-            Weight type. can be one of
-                'weight': the actual weight map
-                'uberseg': uberseg modified weight map
-            Default is 'weight'
-
-        returns
-        -------
-        an ngmix Observation
-        """
-
-        import ngmix
-        im=self.get_cutout(iobj, icutout, type='image')
-        bmask=self.get_cutout(iobj, icutout, type='bmask')
-
-
-        if weight_type=='uberseg':
-            wt=self.get_uberseg(iobj, icutout)
-        elif weight_type=='cweight':
-            wt=self.get_cweight_cutout(iobj, icutout, restrict_to_seg=True)
-        elif weight_type=='weight':
-            wt=self.get_cutout(iobj, icutout, type='weight')
-        elif weight_type=='cseg':
-            wt=self.get_cseg_weight(iobj, icutout)
-        elif weight_type=='cseg-canonical':
-            wt=self.get_cseg_weight(iobj, icutout, use_canonical_cen=True)
-        else:
-            raise ValueError("bad weight type '%s'" % weight_type)
-
-        jacobian = self.get_ngmix_jacobian(iobj, icutout)
-        #print(im.shape)
-        #print(jacobian)
-        #import images
-        #images.multiview(im)
-        #if 'q'==input('hit a key (q to quit): '):
-        #    stop
-        c=self._cat
-
-        scale=jacobian.get_scale()
-        x2=c['x2'][iobj]
-        y2=c['y2'][iobj]
-        T = (x2 + y2)
-        flux = c['flux_auto'][iobj]
-        meta=dict(
-            id=c['id'][iobj],
-            T=T,
-            flux=flux,
-            index=iobj,
-            number=c['number'][iobj],
-            icut=icutout,
-            cutout_index=icutout,
-            file_id=c['file_id'][iobj,icutout],
-            orig_row=c['orig_row'][iobj, icutout],
-            orig_col=c['orig_col'][iobj, icutout],
-            orig_start_row=c['orig_start_row'][iobj, icutout],
-            orig_start_col=c['orig_start_col'][iobj, icutout],
-            orig_end_row=c['orig_end_row'][iobj, icutout],
-            orig_end_col=c['orig_end_col'][iobj, icutout],
-        )
-
-        psf_obs = self.get_psf_obs(iobj, icutout)
-        obs = ngmix.Observation(
-            im,
-            weight=wt,
-            bmask=bmask,
-            meta=meta,
-            jacobian=jacobian,
-            psf=psf_obs,
-        )
-        if False:
-            import images
-            images.view_mosaic( [obs.image, obs.weight], dims=[800,400] )
-            if 'q'==raw_input('hit a key (q to quit): '):
-                stop
-
-        return obs
-
-    def get_psf_obs(self, iobj, icutout):
-        """
-        get an observation of the PSF for this object
-        """
-        psf_im = self.get_psf(iobj, icutout)
-        # fake the noise
-        noise = psf_im.max()/1000.0
-        weight = psf_im*0 + 1.0/noise**2
-        jacobian = self.get_ngmix_jacobian(iobj, icutout)
-
-        cen=(np.array(psf_im.shape)-1.0)/2.0
-        jacobian.set_cen(
-            row=cen[0],
-            col=cen[1],
-        )
-
-        return ngmix.Observation(
-            psf_im,
-            weight=weight,
-            jacobian=jacobian,
-        )
-
-    def get_cseg_weight(self, iobj, icutout, use_canonical_cen=False):
-        """
-        get the largest circular mask (weight > 0) that does not
-        interesect any other objects seg map. If there are no other
-        objects in the scene, the regular weight map is returned
-        """
-        seg = self.get_cutout(iobj, icutout, type='seg')
-        weight = self.get_cutout(iobj, icutout, type='weight')
-        number = self['number'][iobj]
-
-        wother=np.where( (seg != 0) & (seg != number ) )
-        if wother[0].size == 0:
-            # no other objects in the stamp
-            return weight
-
-        if use_canonical_cen:
-            row,col = (np.array(weight.shape)-1.0)/2.0
-        else:
-            row = self['cutout_row'][iobj, icutout]
-            col = self['cutout_col'][iobj, icutout]
-
-        rows, cols = np.mgrid[
-            0:weight.shape[0],
-            0:weight.shape[1],
-        ]
-        
-        rows = rows.astype('f8')
-        cols = cols.astype('f8')
-
-        rows -= row
-        cols -= col
-
-        r2 = rows**2 + cols**2
-
-        minr2 = r2[wother].min()
-
-        # now set the weight to zero for radii larger than that
-        wkeep = np.where(r2 < minr2)
-        new_weight = np.zeros(weight.shape)
-        if wkeep[0].size > 0:
-            new_weight[wkeep] = weight[wkeep]
-
-        return new_weight
-
-    @property
-    def size(self):
-        return self._cat.size
-
-    def _check_indices(self, iobj, icutout=None):
-        if iobj >= self._cat.size:
-            raise ValueError("object index should be within "
-                             "[0,%s)" % self._cat.size)
-
-        ncutout=self._cat['ncutout'][iobj]
-        if ncutout==0:
-            raise ValueError("object %s has no cutouts" % iobj)
-
-        if icutout is not None:
-            if icutout >= ncutout:
-                raise ValueError("requested cutout index %s for "
-                                 "object %s should be in bounds "
-                                 "[0,%s)" % (icutout,iobj,ncutout))
 
 class MEDSifier(object):
     def __init__(self,
@@ -448,7 +189,7 @@ class MEDSifier(object):
             m=self.get_meds(band)
             mlist.append(m)
 
-        return MultiBandMEDS(mlist)
+        return MultiBandNGMixMEDS(mlist)
 
     def get_meds(self, band):
         """
@@ -720,6 +461,3 @@ class MEDSifier(object):
 
     def _set_meds_config(self, meds_config):
         self.meds_config=meds_config
-
-
-
