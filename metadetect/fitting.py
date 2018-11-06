@@ -183,6 +183,7 @@ class Moments(FitterBase):
     def _get_dtype(self, model, npars):
         n=Namer(front=model)
         dt = [
+            ('flags','i4'),
             ('psf_flags','i4'),
             ('psf_g','f8',2),
             ('psf_T','f8'),
@@ -209,22 +210,33 @@ class Moments(FitterBase):
         dt=self._get_dtype(model, npars)
         output=np.zeros(1, dtype=dt)
 
+
         output['psf_flags'] = pres['flags']
         output[n('flags')] = res['flags']
+
+        flags = 0
+        if pres['flags'] != 0:
+            flags |= procflags.PSF_FAILURE
+
+        if res['flags'] != 0:
+            flags |= procflags.OBJ_FAILURE
 
         if pres['flags']==0:
             output['psf_g'] = pres['g']
             output['psf_T'] = pres['T']
 
-            if res['flags']==0:
-                output[n('s2n')] = res['s2n']
-                output[n('pars')] = res['pars']
-                output[n('g')] = res['g']
-                output[n('g_cov')] = res['g_cov']
-                output[n('T')] = res['T']
-                output[n('T_err')] = res['T_err']
+        if res['flags']==0:
+            output[n('s2n')] = res['s2n']
+            output[n('pars')] = res['pars']
+            output[n('g')] = res['g']
+            output[n('g_cov')] = res['g_cov']
+            output[n('T')] = res['T']
+            output[n('T_err')] = res['T_err']
+
+            if pres['flags'] == 0:
                 output[n('T_ratio')] = res['T']/pres['T']
 
+        output['flags'] = flags
         return output
 
     def _set_mompars(self):
