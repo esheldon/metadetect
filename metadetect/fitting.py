@@ -97,6 +97,10 @@ class Moments(FitterBase):
             half_diff = diff // 2
             new_im = np.zeros((size, size), dtype=im.dtype)
             new_im[half_diff:-half_diff, half_diff:-half_diff] = im
+
+            newcen = (size - 1) // 2
+            oldcen = (im.shape[0] - 1) // 2
+            assert new_im[newcen, newcen] == im[oldcen, oldcen]
             return new_im
         else:
             raise ValueError("cannot pad image to a smaller size!")
