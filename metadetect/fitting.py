@@ -81,6 +81,26 @@ class Moments(FitterBase):
         output = eu.numpy_util.combine_arrlist(datalist)
         return output
 
+    def _get_max_psf_size(self, mbobs):
+        sizes = []
+        for obslist in mbobs:
+            for obs in obslist:
+                sizes.append(obs.psf.image.shape[0])
+        return max(sizes)
+
+    def _maybe_zero_pad_image(self, im, size):
+        if im.shape[0] == size:
+            return im
+        elif im.shape[0] < size:
+            diff = size - im.shape[0]
+            assert diff % 2 == 0, "Can only pad images with even padding!"
+            half_diff = diff // 2
+            new_im = np.zeros((size, size), dtype=im.dtype)
+            new_im[half_diff:-half_diff, half_diff:-half_diff] = im
+            return new_im
+        else:
+            raise ValueError("cannot pad image to a smaller size!")
+
     def _do_coadd_maybe(self, mbobs):
         """
         coadd all images and psfs.  Assume perfect registration and
@@ -93,13 +113,16 @@ class Moments(FitterBase):
         if len(mbobs)==1 and len(mbobs[0])==1:
             return new_obs
 
+        max_psf_size = self._get_max_psf_size(mbobs)
+
         first=True
         wsum=0.0
         for obslist in mbobs:
             for obs in obslist:
                 tim = obs.image
                 twt = obs.weight
-                tpsf_im = obs.psf.image
+                tpsf_im = self._maybe_zero_pad_image(
+                    obs.psf.image, max_psf_size)
                 tpsf_wt = obs.psf.weight
 
                 medweight = np.median(twt)
