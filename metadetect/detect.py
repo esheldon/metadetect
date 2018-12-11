@@ -25,20 +25,39 @@ FWHM_FAC = 2*np.sqrt(2*np.log(2))
 
 class MEDSInterface(NGMixMEDS):
     """
-    Wrap a full image with a MEDS-like interface
+    Wrap a full image with a MEDS-like interface.
+
+    Parameters
+    ----------
+    obs: ngmix.observation.Observation
+        The observation with the image to wrap.
+    seg: np.array
+        The segmentation map for the observation.
+    cat: structured np.array
+        The catalog for the MEDS data format.
+    psf_rec: function, optional
+        A function with call signature `psf_rec(row, col)`. If not `None`, then
+        this function will be called to get the PSF image at `(row, col)` for
+        each cutout.
     """
-    def __init__(self, obs, seg, cat):
+    def __init__(self, obs, seg, cat, psf_rec=None):
         self.obs = obs
         self.seg = seg
         self._image_types = (
             'image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
+        self.psf_rec = psf_rec
 
     def get_psf(self, iobj, icut):
         """
         get an image of the psf
         """
-        return self.obs.psf.image.copy()
+        if self.psf_rec is None:
+            return self.obs.psf.image.copy()
+        else:
+            row = self._cat['orig_row'][iobj, icut]
+            col = self._cat['orig_col'][iobj, icut]
+            return self.psf_rec(row, col)
 
     def get_cutout(self, iobj, icutout, type='image'):
         """
@@ -152,7 +171,8 @@ class MEDSifier(object):
     def __init__(self,
                  mbobs,
                  sx_config,
-                 meds_config):
+                 meds_config,
+                 wcs=None):
         """
         very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
@@ -168,10 +188,16 @@ class MEDSifier(object):
             Dict holding sep extract parameters
         meds_config: dict, optional
             Dict holding MEDS parameters
+        wcs: function, optional
+            A function with call signature `wcs(row, col)` that returns a
+            dictionary with keys {'dudrow', 'dudcol', 'dvdrow', 'dvdcol'} and
+            the corresponding values. If `None`, then the jacobian of the
+            input mbobs is used.
         """
         self.mbobs=mbobs
         self.nband=len(mbobs)
         assert len(mbobs[0])==1,'multi-epoch is not supported'
+        self.wcs = wcs
 
         self._set_sx_config(sx_config)
         self._set_meds_config(meds_config)
@@ -331,12 +357,6 @@ class MEDSifier(object):
         cat['fluxerr_auto'] = fluxerr_auto
         cat['flux_radius'] = flux_radius
 
-        jacob=self.mbobs[0][0].jacobian
-        cat['dudrow'][:,0] = jacob.dudrow
-        cat['dudcol'][:,0] = jacob.dudcol
-        cat['dvdrow'][:,0] = jacob.dvdrow
-        cat['dvdcol'][:,0] = jacob.dvdcol
-
         # use the number of pixels in the seg map as the iso area
         for i in range(objs.size):
             w=np.where(seg == (i+1))
@@ -378,6 +398,19 @@ class MEDSifier(object):
             cat['cutout_row'][:,0] = cat['orig_row'][:,0] - cat['orig_start_row'][:,0]
             cat['cutout_col'][:,0] = cat['orig_col'][:,0] - cat['orig_start_col'][:,0]
 
+        if self.wcs is None:
+            jacob = self.mbobs[0][0].jacobian
+            cat['dudrow'][:, 0] = jacob.dudrow
+            cat['dudcol'][:, 0] = jacob.dudcol
+            cat['dvdrow'][:, 0] = jacob.dvdrow
+            cat['dvdcol'][:, 0] = jacob.dvdcol
+        else:
+            for i in range(objs.size):
+                jacob = self.wcs(cat['orig_row'][i, 0], cat['orig_col'][:, 0])
+                cat['dudcol'][i, 0] = jacob['dudcol']
+                cat['dudrow'][i, 0] = jacob['dudrow']
+                cat['dvdcol'][i, 0] = jacob['dvdcol']
+                cat['dvdrow'][i, 0] = jacob['dvdrow']
 
         self.seg=seg
         self.cat=cat

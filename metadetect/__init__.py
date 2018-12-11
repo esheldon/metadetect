@@ -10,4 +10,5 @@ from . import util
 from . import defaults
 from . import procflags
 
-from . import test
+from . import test_metadetect
+from . import test_metadetect_and_cal
