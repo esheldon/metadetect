@@ -1,8 +1,18 @@
 import copy
 import ngmix
+import numpy as np
 import esutil as eu
+import galsim
+
 from . import detect
 from . import fitting
+
+STEP = 0.01
+SHEARS = {
+    '1p': galsim.Shear(g1=STEP, g2=0.0),
+    '1m': galsim.Shear(g1=-STEP, g2=0.0),
+    '2p': galsim.Shear(g1=0.0, g2=STEP),
+    '2m': galsim.Shear(g1=0.0, g2=-STEP)}
 
 
 def do_metadetect_and_cal(
@@ -73,9 +83,19 @@ class MetadetectAndCal(dict):
         detection as well as measurements
         """
 
+        if mcal_step == 'noshear':
+            pos_transform = None
+        else:
+            ainv = np.linalg.inv(SHEARS[mcal_step].getMatrix())
+
+            def pos_transform(x, y):
+                x = np.atleast_1d(x)
+                y = np.atleast_1d(y)
+                return np.dot(ainv, np.vstack([x, y]))
+
         # returns a MultiBandNGMixMEDS interface for the sheared positions
         # on the **original** image
-        mbm, cat = self._do_detect(sheared_mbobs)
+        mbm, cat = self._do_detect(sheared_mbobs, pos_transform=pos_transform)
         mbobs_list = mbm.get_mbobs_list()
 
         # do the desired mcal step
@@ -87,6 +107,7 @@ class MetadetectAndCal(dict):
             mcal_dict = ngmix.metacal.get_all_metacal(
                 mbobs,
                 rng=self.rng,
+                step=STEP,
                 **mcal_config,
             )
             mcal_mbobs_list.append(mcal_dict[mcal_step])
@@ -126,7 +147,7 @@ class MetadetectAndCal(dict):
 
         return newres
 
-    def _do_detect(self, sheared_mbobs):
+    def _do_detect(self, sheared_mbobs, pos_transform=None):
         """
         use a MEDSifier to run detection
         """
@@ -135,6 +156,7 @@ class MetadetectAndCal(dict):
             sx_config=self['sx'],
             meds_config=self['meds'],
             wcs=self.wcs_func,
+            pos_transform=pos_transform,
         )
 
         # now build the meds interface on the **orig** obs
@@ -161,6 +183,7 @@ class MetadetectAndCal(dict):
         odict = ngmix.metacal.get_all_metacal(
             self.mbobs,
             rng=self.rng,
+            step=STEP,
             **self['metacal']
         )
 

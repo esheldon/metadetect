@@ -382,16 +382,9 @@ class MEDSifier(object):
             cat['box_size'] = box_size
 
             if self.pos_transform is not None:
-                x_new = []
-                y_new = []
-                for i in range(objs.size):
-                    _new_pos = self.pos_transform(
-                        cat['x'][i],
-                        cat['y'][i])
-                    x_new.append(_new_pos[0])
-                    y_new.append(_new_pos[1])
-                cat['x'] = x_new
-                cat['y'] = y_new
+                pos_new = self.pos_transform(cat['x'], cat['y'])
+                cat['x'] = pos_new[0]
+                cat['y'] = pos_new[1]
 
             cat['orig_row'][:,0] = cat['y']
             cat['orig_col'][:,0] = cat['x']
