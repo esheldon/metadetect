@@ -87,11 +87,16 @@ class MetadetectAndCal(dict):
             pos_transform = None
         else:
             ainv = np.linalg.inv(SHEARS[mcal_step].getMatrix())
+            dims = sheared_mbobs[0][0].image.shape
+            x_cen = (dims[0] - 1) / 2
+            y_cen = (dims[1] - 1) / 2
 
             def pos_transform(x, y):
-                x = np.atleast_1d(x)
-                y = np.atleast_1d(y)
-                return np.dot(ainv, np.vstack([x, y]))
+                x = np.atleast_1d(x) - x_cen
+                y = np.atleast_1d(y) - y_cen
+                out = np.dot(ainv, np.vstack([x, y]))
+                assert out.shape[1] == x.shape[0]
+                return out[0, :] + x_cen, out[1, :] + y_cen
 
         # returns a MultiBandNGMixMEDS interface for the sheared positions
         # on the **original** image
