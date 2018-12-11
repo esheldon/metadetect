@@ -172,7 +172,8 @@ class MEDSifier(object):
                  mbobs,
                  sx_config,
                  meds_config,
-                 wcs=None):
+                 wcs=None,
+                 pos_transform=None):
         """
         very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
@@ -193,11 +194,17 @@ class MEDSifier(object):
             dictionary with keys {'dudrow', 'dudcol', 'dvdrow', 'dvdcol'} and
             the corresponding values. If `None`, then the jacobian of the
             input mbobs is used.
+        pos_transform : function, optional
+            A function to transform the detected positions. The call signature
+            should be `pos_transform(x, y)` and it should return the new
+            position as `(x_new, y_new)`. If None, then no transformation is
+            done.
         """
         self.mbobs=mbobs
         self.nband=len(mbobs)
         assert len(mbobs[0])==1,'multi-epoch is not supported'
         self.wcs = wcs
+        self.pos_transform = pos_transform
 
         self._set_sx_config(sx_config)
         self._set_meds_config(meds_config)
@@ -373,6 +380,18 @@ class MEDSifier(object):
             maxrow,maxcol=self.detim.shape
 
             cat['box_size'] = box_size
+
+            if self.pos_transform is not None:
+                x_new = []
+                y_new = []
+                for i in range(objs.size):
+                    _new_pos = self.pos_transform(
+                        cat['x'][i],
+                        cat['y'][i])
+                    x_new.append(_new_pos[0])
+                    y_new.append(_new_pos[1])
+                cat['x'] = x_new
+                cat['y'] = y_new
 
             cat['orig_row'][:,0] = cat['y']
             cat['orig_col'][:,0] = cat['x']
