@@ -35,29 +35,29 @@ class MEDSInterface(NGMixMEDS):
         The segmentation map for the observation.
     cat: structured np.array
         The catalog for the MEDS data format.
-    psf_rec: function, optional
-        A function with call signature `psf_rec(row, col)`. If not `None`, then
-        this function will be called to get the PSF image at `(row, col)` for
-        each cutout.
+    psf_rec_func: function, optional
+        A function with call signature `psf_rec_func(row, col)`. If not `None`,
+        then this function will be called to get the PSF image at `(row, col)`
+        for each cutout.
     """
-    def __init__(self, obs, seg, cat, psf_rec=None):
+    def __init__(self, obs, seg, cat, psf_rec_func=None):
         self.obs = obs
         self.seg = seg
         self._image_types = (
             'image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
-        self.psf_rec = psf_rec
+        self.psf_rec_func = psf_rec_func
 
     def get_psf(self, iobj, icut):
         """
         get an image of the psf
         """
-        if self.psf_rec is None:
+        if self.psf_rec_func is None:
             return self.obs.psf.image.copy()
         else:
             row = self._cat['orig_row'][iobj, icut]
             col = self._cat['orig_col'][iobj, icut]
-            return self.psf_rec(row, col)
+            return self.psf_rec_func(row, col)
 
     def get_cutout(self, iobj, icutout, type='image'):
         """
@@ -172,8 +172,8 @@ class MEDSifier(object):
                  mbobs,
                  sx_config,
                  meds_config,
-                 wcs=None,
-                 pos_transform=None):
+                 wcs_jacobian_func=None,
+                 pos_transform_func=None):
         """
         very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
@@ -189,22 +189,22 @@ class MEDSifier(object):
             Dict holding sep extract parameters
         meds_config: dict, optional
             Dict holding MEDS parameters
-        wcs: function, optional
-            A function with call signature `wcs(row, col)` that returns a
-            dictionary with keys {'dudrow', 'dudcol', 'dvdrow', 'dvdcol'} and
-            the corresponding values. If `None`, then the jacobian of the
-            input mbobs is used.
-        pos_transform : function, optional
+        wcs_jacobian_func: function, optional
+            A function with call signature `wcs_jacobian_func(row, col)` that 
+            returns a dictionary with keys {'dudrow', 'dudcol', 
+            'dvdrow', 'dvdcol'} and the corresponding values. If `None`, then 
+            the jacobian of the input mbobs is used.
+        pos_transform_func: function, optional
             A function to transform the detected positions. The call signature
-            should be `pos_transform(x, y)` and it should return the new
+            should be `pos_transform_func(x, y)` and it should return the new
             position as `(x_new, y_new)`. If None, then no transformation is
             done.
         """
         self.mbobs=mbobs
         self.nband=len(mbobs)
         assert len(mbobs[0])==1,'multi-epoch is not supported'
-        self.wcs = wcs
-        self.pos_transform = pos_transform
+        self.wcs_jacobian_func = wcs_jacobian_func
+        self.pos_transform_func = pos_transform_func
 
         self._set_sx_config(sx_config)
         self._set_meds_config(meds_config)
@@ -381,8 +381,8 @@ class MEDSifier(object):
 
             cat['box_size'] = box_size
 
-            if self.pos_transform is not None:
-                pos_new = self.pos_transform(cat['x'], cat['y'])
+            if self.pos_transform_func is not None:
+                pos_new = self.pos_transform_func(cat['x'], cat['y'])
                 cat['x'] = pos_new[0]
                 cat['y'] = pos_new[1]
 
@@ -410,7 +410,7 @@ class MEDSifier(object):
             cat['cutout_row'][:,0] = cat['orig_row'][:,0] - cat['orig_start_row'][:,0]
             cat['cutout_col'][:,0] = cat['orig_col'][:,0] - cat['orig_start_col'][:,0]
 
-        if self.wcs is None:
+        if self.wcs_jacobian_func is None:
             jacob = self.mbobs[0][0].jacobian
             cat['dudrow'][:, 0] = jacob.dudrow
             cat['dudcol'][:, 0] = jacob.dudcol
@@ -418,7 +418,8 @@ class MEDSifier(object):
             cat['dvdcol'][:, 0] = jacob.dvdcol
         else:
             for i in range(objs.size):
-                jacob = self.wcs(cat['orig_row'][i, 0], cat['orig_col'][:, 0])
+                jacob = self.wcs_jacobian_func(
+                    cat['orig_row'][i, 0], cat['orig_col'][:, 0])
                 cat['dudcol'][i, 0] = jacob['dudcol']
                 cat['dudrow'][i, 0] = jacob['dudrow']
                 cat['dvdcol'][i, 0] = jacob['dvdcol']

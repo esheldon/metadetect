@@ -16,12 +16,13 @@ SHEARS = {
 
 
 def do_metadetect_and_cal(
-        config, mbobs, rng, wcs_func=None, psf_rec_funcs=None):
+        config, mbobs, rng, wcs_jacobian_func=None, psf_rec_funcs=None):
     """
     Meta-detect and cal on the multi-band observations.
     """
     md = MetadetectAndCal(
-        config, mbobs, rng, wcs_func=wcs_func, psf_rec_funcs=psf_rec_funcs)
+        config, mbobs, rng,
+        wcs_jacobian_func=wcs_jacobian_func, psf_rec_funcs=psf_rec_funcs)
     md.go()
     return md.result
 
@@ -41,12 +42,14 @@ class MetadetectAndCal(dict):
             mof (if running MOF)
 
     """
-    def __init__(self, config, mbobs, rng, wcs_func=None, psf_rec_funcs=None):
+    def __init__(
+            self, config, mbobs, rng, wcs_jacobian_func=None,
+            psf_rec_funcs=None):
         self._set_config(config)
         self.mbobs = mbobs
         self.nband = len(mbobs)
         self.rng = rng
-        self.wcs_func = wcs_func
+        self.wcs_jacobian_func = wcs_jacobian_func
         if psf_rec_funcs is None:
             self.psf_rec_funcs = [None] * len(mbobs)
         else:
@@ -100,7 +103,8 @@ class MetadetectAndCal(dict):
 
         # returns a MultiBandNGMixMEDS interface for the sheared positions
         # on the **original** image
-        mbm, cat = self._do_detect(sheared_mbobs, pos_transform=pos_transform)
+        mbm, cat = self._do_detect(
+            sheared_mbobs, pos_transform_func=pos_transform)
         mbobs_list = mbm.get_mbobs_list()
 
         # do the desired mcal step
@@ -152,7 +156,7 @@ class MetadetectAndCal(dict):
 
         return newres
 
-    def _do_detect(self, sheared_mbobs, pos_transform=None):
+    def _do_detect(self, sheared_mbobs, pos_transform_func=None):
         """
         use a MEDSifier to run detection
         """
@@ -160,8 +164,8 @@ class MetadetectAndCal(dict):
             sheared_mbobs,
             sx_config=self['sx'],
             meds_config=self['meds'],
-            wcs=self.wcs_func,
-            pos_transform=pos_transform,
+            wcs_jacobian_func=self.wcs_jacobian_func,
+            pos_transform_func=pos_transform_func,
         )
 
         # now build the meds interface on the **orig** obs
@@ -172,7 +176,7 @@ class MetadetectAndCal(dict):
                 obs,
                 sheared_mer.seg,
                 sheared_mer.cat,
-                psf_rec=psf_rec))
+                psf_rec_func=psf_rec))
 
         return detect.MultiBandNGMixMEDS(mlist), sheared_mer.cat
 
