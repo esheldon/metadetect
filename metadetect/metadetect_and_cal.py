@@ -89,17 +89,41 @@ class MetadetectAndCal(dict):
         if mcal_step == 'noshear':
             pos_transform = None
         else:
+            # here we undo the shearing operation
+            # the steps are
+            # 1. take (x, y) to (u, v) using the ngmix jacobian
+            # 2. undo the shear about the canonical image in (u, v)
+            # 3. take the unsheared (u, v) back to (x, y)
+
+            # this is the matrix that undoes shearing in u, v
             ainv = np.linalg.inv(SHEARS[mcal_step].getMatrix())
+
+            # this is the jacobian that deals with the WCS
+            jac = self.mbobs[0][0].jacobian.copy()
+
+            # we need the canonical image center in (u, v) for undoing the
+            # shearing
             dims = sheared_mbobs[0][0].image.shape
             x_cen = (dims[0] - 1) / 2
             y_cen = (dims[1] - 1) / 2
+            v_cen, u_cen = jac.get_vu(row=y_cen, col=x_cen)
 
             def pos_transform(x, y):
-                x = np.atleast_1d(x) - x_cen
-                y = np.atleast_1d(y) - y_cen
-                out = np.dot(ainv, np.vstack([x, y]))
-                assert out.shape[1] == x.shape[0]
-                return out[0, :] + x_cen, out[1, :] + y_cen
+                # apply WCS to get to world coords
+                v, u = jac.get_vu(row=y, col=x)
+
+                # unshear (subtract and then add the canonical center in u, v)
+                u = np.atleast_1d(u) - u_cen
+                v = np.atleast_1d(v) - v_cen
+                out = np.dot(ainv, np.vstack([u, v]))
+                assert out.shape[1] == u.shape[0]
+                u = out[0] + u_cen
+                v = out[1] + v_cen
+
+                # undo the WCS to get to image coords
+                ynew, xnew = jac.get_rowcol(v=v, u=u)
+
+                return xnew, ynew
 
         # returns a MultiBandNGMixMEDS interface for the sheared positions
         # on the **original** image
