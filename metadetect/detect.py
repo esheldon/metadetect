@@ -55,6 +55,7 @@ class MEDSInterface(NGMixMEDS):
         if self.psf_rec_func is None:
             return self.obs.psf.image.copy()
         else:
+            assert icut == 0
             row = self._cat['orig_row'][iobj, icut]
             col = self._cat['orig_col'][iobj, icut]
             return self.psf_rec_func(row, col)
@@ -190,9 +191,9 @@ class MEDSifier(object):
         meds_config: dict, optional
             Dict holding MEDS parameters
         wcs_jacobian_func: function, optional
-            A function with call signature `wcs_jacobian_func(row, col)` that 
-            returns a dictionary with keys {'dudrow', 'dudcol', 
-            'dvdrow', 'dvdcol'} and the corresponding values. If `None`, then 
+            A function with call signature `wcs_jacobian_func(row, col)` that
+            returns a dictionary with keys {'dudrow', 'dudcol',
+            'dvdrow', 'dvdcol'} and the corresponding values. If `None`, then
             the jacobian of the input mbobs is used.
         pos_transform_func: function, optional
             A function to transform the detected positions. The call signature
