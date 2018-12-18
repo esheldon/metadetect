@@ -420,7 +420,7 @@ class MEDSifier(object):
         else:
             for i in range(objs.size):
                 jacob = self.wcs_jacobian_func(
-                    cat['orig_row'][i, 0], cat['orig_col'][:, 0])
+                    cat['orig_row'][i, 0], cat['orig_col'][i, 0])
                 cat['dudcol'][i, 0] = jacob['dudcol']
                 cat['dudrow'][i, 0] = jacob['dudrow']
                 cat['dvdcol'][i, 0] = jacob['dvdcol']
