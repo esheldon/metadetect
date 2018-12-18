@@ -357,6 +357,8 @@ class MEDSifier(object):
             ('dvdrow','f8',ncut),
             ('dvdcol','f8',ncut),
         ]
+        new_dt += [('mcal_x', 'f4'), ('mcal_y', 'f4')]
+
         cat=eu.numpy_util.add_fields(objs, new_dt)
         cat['id'] = np.arange(cat.size)
         cat['number'] = np.arange(1,cat.size+1)
@@ -382,8 +384,10 @@ class MEDSifier(object):
 
             cat['box_size'] = box_size
 
+            cat['mcal_x'] = cat['x'][:]
+            cat['mcal_y'] = cat['y'][:]
             if self.pos_transform_func is not None:
-                pos_new = self.pos_transform_func(cat['x'], cat['y'])
+                pos_new = self.pos_transform_func(cat['mcal_x'], cat['mcal_y'])
                 cat['x'] = pos_new[0]
                 cat['y'] = pos_new[1]
 

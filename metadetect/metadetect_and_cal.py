@@ -142,10 +142,10 @@ class MetadetectAndCal(dict):
         mcal_mbobs_list = []
         if self.buffer_size is not None and self.buffer_size > 0:
             proc_msk = (
-                (cat['y'] >= self.buffer_size) &
-                (cat['y'] < self.image_size - self.buffer_size) &
-                (cat['x'] >= self.buffer_size) &
-                (cat['x'] < self.image_size - self.buffer_size))
+                (cat['mcal_y'] >= self.buffer_size) &
+                (cat['mcal_y'] < self.image_size - self.buffer_size) &
+                (cat['mcal_x'] >= self.buffer_size) &
+                (cat['mcal_x'] < self.image_size - self.buffer_size))
         else:
             proc_msk = np.ones(cat.size).astype(np.bool)
 
@@ -182,7 +182,10 @@ class MetadetectAndCal(dict):
             new_dt = [
                 ('sx_row', 'f4'),
                 ('sx_col', 'f4'),
+                ('mcal_sx_row', 'f4'),
+                ('mcal_sx_col', 'f4')
             ]
+
             newres = eu.numpy_util.add_fields(
                 res,
                 new_dt,
@@ -190,6 +193,8 @@ class MetadetectAndCal(dict):
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
+            newres['mcal_sx_col'] = cat['mcal_x']
+            newres['mcal_sx_row'] = cat['mcal_y']
         else:
             newres = res
 
