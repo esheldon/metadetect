@@ -16,13 +16,15 @@ SHEARS = {
 
 
 def do_metadetect_and_cal(
-        config, mbobs, rng, wcs_jacobian_func=None, psf_rec_funcs=None):
+        config, mbobs, rng, wcs_jacobian_func=None, psf_rec_funcs=None,
+        buffer_size=None):
     """
     Meta-detect and cal on the multi-band observations.
     """
     md = MetadetectAndCal(
         config, mbobs, rng,
-        wcs_jacobian_func=wcs_jacobian_func, psf_rec_funcs=psf_rec_funcs)
+        wcs_jacobian_func=wcs_jacobian_func, psf_rec_funcs=psf_rec_funcs,
+        buffer_size=buffer_size)
     md.go()
     return md.result
 
@@ -44,7 +46,7 @@ class MetadetectAndCal(dict):
     """
     def __init__(
             self, config, mbobs, rng, wcs_jacobian_func=None,
-            psf_rec_funcs=None):
+            psf_rec_funcs=None, buffer_size=None):
         self._set_config(config)
         self.mbobs = mbobs
         self.nband = len(mbobs)
@@ -55,6 +57,8 @@ class MetadetectAndCal(dict):
         else:
             assert len(psf_rec_funcs) == len(mbobs)
             self.psf_rec_funcs = psf_rec_funcs
+        self.buffer_size = buffer_size
+        self.image_size = mbobs[0][0].image.shape[0]
 
         self._set_fitter()
 
@@ -136,7 +140,18 @@ class MetadetectAndCal(dict):
         mcal_config['force_required_types'] = False
         mcal_config['types'] = [mcal_step]
         mcal_mbobs_list = []
-        for mbobs in mbobs_list:
+        if self.buffer_size is not None and self.buffer_size > 0:
+            proc_msk = (
+                (cat['y'] >= self.buffer_size) &
+                (cat['y'] < self.image_size - self.buffer_size) &
+                (cat['x'] >= self.buffer_size) &
+                (cat['x'] < self.image_size - self.buffer_size))
+        else:
+            proc_msk = np.ones(cat.size).astype(np.bool)
+
+        for i, mbobs in enumerate(mbobs_list):
+            if not proc_msk[i]:
+                continue
             mcal_dict = ngmix.metacal.get_all_metacal(
                 mbobs,
                 rng=self.rng,
@@ -145,9 +160,9 @@ class MetadetectAndCal(dict):
             )
             mcal_mbobs_list.append(mcal_dict[mcal_step])
 
-        res = self._fitter.go(mbobs_list)
+        res = self._fitter.go(mcal_mbobs_list)
 
-        res = self._add_positions(cat, res)
+        res = self._add_positions(cat[proc_msk], res)
         return res
 
     def _set_fitter(self):
