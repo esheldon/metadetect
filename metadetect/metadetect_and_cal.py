@@ -227,10 +227,6 @@ class MetadetectAndCal(dict):
         get the sheared versions of the observations
         """
 
-        if self['metacal'].get('symmetrize_psf', False):
-            assert 'psf' in self, 'need psf fitting for symmetrize_psf'
-            fitting.fit_all_psfs(self.mbobs, self['psf'], self.rng)
-
         odict = ngmix.metacal.get_all_metacal(
             self.mbobs,
             rng=self.rng,
@@ -252,3 +248,5 @@ class MetadetectAndCal(dict):
             'sx setting must be present in config'
         assert 'meds' in self, \
             'meds setting must be present in config'
+
+        assert not self['metacal'].get('symmetrize_psf', False)

@@ -1,5 +1,4 @@
 """
-
 Code to take a set of images, for example coadds in different bands, run
 detection on them and produce a MEDS like interface to get postage stamps
 
@@ -9,6 +8,7 @@ DM stack detection
 """
 from __future__ import print_function
 import logging
+import sep
 import numpy as np
 from numpy import pi
 import esutil as eu
@@ -43,8 +43,7 @@ class MEDSInterface(NGMixMEDS):
     def __init__(self, obs, seg, cat, psf_rec_func=None):
         self.obs = obs
         self.seg = seg
-        self._image_types = (
-            'image', 'weight', 'seg', 'bmask', 'noise')
+        self._image_types = ('image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
         self.psf_rec_func = psf_rec_func
 
@@ -124,13 +123,12 @@ class MEDSInterface(NGMixMEDS):
         return data
 
     def _get_clipped_boxes(self, dim, start, bsize):
-        """
-        get clipped boxes for slicing
+        """Get clipped boxes for slicing.
 
         If the box size goes outside the dimensions,
         trim them back
 
-        parameters
+        Parameters
         ----------
         dim: int
             Dimension of this axis
@@ -139,13 +137,11 @@ class MEDSInterface(NGMixMEDS):
         bsize: int
             Size of box
 
-        returns
+        Returns
         -------
-        obox, box
-
-        obox: [start,end]
+        obox: [start, end]
             Start and end slice ranges in the original image
-        box: [start,end]
+        box: [start, end]
             Start and end slice ranges in the output image
         """
         # slice range in the original image
@@ -175,14 +171,13 @@ class MEDSifier(object):
                  meds_config,
                  wcs_jacobian_func=None,
                  pos_transform_func=None):
-        """
-        very simple MEDS maker for images. Assumes the images are perfectly
+        """Very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
 
         The images are added together to make a detection image and sep, the
         SExtractor wrapper, is run
 
-        parameters
+        Parameters
         ----------
         mbobs: ngmix.MultiBandObsList
             The data
@@ -201,9 +196,9 @@ class MEDSifier(object):
             position as `(x_new, y_new)`. If None, then no transformation is
             done.
         """
-        self.mbobs=mbobs
-        self.nband=len(mbobs)
-        assert len(mbobs[0])==1,'multi-epoch is not supported'
+        self.mbobs = mbobs
+        self.nband = len(mbobs)
+        assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
         self.wcs_jacobian_func = wcs_jacobian_func
         self.pos_transform_func = pos_transform_func
 
@@ -218,9 +213,9 @@ class MEDSifier(object):
         get a MultiBandMEDS object holding all bands
         """
 
-        mlist=[]
+        mlist = []
         for band in range(self.nband):
-            m=self.get_meds(band)
+            m = self.get_meds(band)
             mlist.append(m)
 
         return MultiBandNGMixMEDS(mlist)
@@ -229,7 +224,7 @@ class MEDSifier(object):
         """
         get fake MEDS interface to the specified band
         """
-        obslist=self.mbobs[band]
+        obslist = self.mbobs[band]
         obs = obslist[0]
         return MEDSInterface(
             obs,
@@ -238,18 +233,17 @@ class MEDSifier(object):
         )
 
     def _get_image_vars(self):
-        vars=[]
+        vars = []
         for obslist in self.mbobs:
-            obs=obslist[0]
-            weight=obs.weight
-            w=np.where(weight > 0)
-            medw=np.median(weight[w])
+            obs = obslist[0]
+            weight = obs.weight
+            w = np.where(weight > 0)
+            medw = np.median(weight[w])
             vars.append(1/medw)
         return np.array(vars)
 
     def _set_detim(self):
-
-        detim=self.mbobs[0][0].image.copy()
+        detim = self.mbobs[0][0].image.copy()
         detim *= 0
 
         vars = self._get_image_vars()
@@ -259,15 +253,14 @@ class MEDSifier(object):
 
         weights /= wsum
 
-        for i,obslist in enumerate(self.mbobs):
-            obs=obslist[0]
+        for i, obslist in enumerate(self.mbobs):
+            obs = obslist[0]
             detim += obs.image*weights[i]
 
-        self.detim=detim
-        self.detnoise=detnoise
+        self.detim = detim
+        self.detnoise = detnoise
 
     def _run_sep(self):
-        import sep
         objs, seg = sep.extract(
             self.detim,
             self.detect_thresh,
@@ -276,15 +269,15 @@ class MEDSifier(object):
             **self.sx_config
         )
 
-        flux_auto=np.zeros(objs.size)-9999.0
-        fluxerr_auto=np.zeros(objs.size)-9999.0
-        flux_radius=np.zeros(objs.size)-9999.0
-        kron_radius=np.zeros(objs.size)-9999.0
+        flux_auto = np.zeros(objs.size)-9999.0
+        fluxerr_auto = np.zeros(objs.size)-9999.0
+        flux_radius = np.zeros(objs.size)-9999.0
+        kron_radius = np.zeros(objs.size)-9999.0
 
-        w,=np.where(
-              (objs['a'] >= 0.0)
-            & (objs['b'] >= 0.0)
-            & between(objs['theta'], -pi/2., pi/2., type='[]')
+        w, = np.where(
+              (objs['a'] >= 0.0) &
+              (objs['b'] >= 0.0) &
+              between(objs['theta'], -pi/2., pi/2., type='[]')
         )
 
         if w.size > 0:
@@ -331,37 +324,37 @@ class MEDSifier(object):
             )
             objs['flag'][w] |= frflag  # combine flags into 'flag'
 
-        ncut=2 # need this to make sure array
-        new_dt=[
-            ('id','i8'),
-            ('number','i4'),
-            ('ncutout','i4'),
-            ('kron_radius','f4'),
-            ('flux_auto','f4'),
-            ('fluxerr_auto','f4'),
-            ('flux_radius','f4'),
-            ('isoarea_image','f4'),
-            ('iso_radius','f4'),
-            ('box_size','i4'),
-            ('file_id','i8',ncut),
-            ('orig_row','f4',ncut),
-            ('orig_col','f4',ncut),
-            ('orig_start_row','i8',ncut),
-            ('orig_start_col','i8',ncut),
-            ('orig_end_row','i8',ncut),
-            ('orig_end_col','i8',ncut),
-            ('cutout_row','f4',ncut),
-            ('cutout_col','f4',ncut),
-            ('dudrow','f8',ncut),
-            ('dudcol','f8',ncut),
-            ('dvdrow','f8',ncut),
-            ('dvdcol','f8',ncut),
+        ncut = 2  # need this to make sure array comes back out w/ same shape
+        new_dt = [
+            ('id', 'i8'),
+            ('number', 'i4'),
+            ('ncutout', 'i4'),
+            ('kron_radius', 'f4'),
+            ('flux_auto', 'f4'),
+            ('fluxerr_auto', 'f4'),
+            ('flux_radius', 'f4'),
+            ('isoarea_image', 'f4'),
+            ('iso_radius', 'f4'),
+            ('box_size', 'i4'),
+            ('file_id', 'i8', ncut),
+            ('orig_row', 'f4', ncut),
+            ('orig_col', 'f4', ncut),
+            ('orig_start_row', 'i8', ncut),
+            ('orig_start_col', 'i8', ncut),
+            ('orig_end_row', 'i8', ncut),
+            ('orig_end_col', 'i8', ncut),
+            ('cutout_row', 'f4', ncut),
+            ('cutout_col', 'f4', ncut),
+            ('dudrow', 'f8', ncut),
+            ('dudcol', 'f8', ncut),
+            ('dvdrow', 'f8', ncut),
+            ('dvdcol', 'f8', ncut),
         ]
         new_dt += [('mcal_x', 'f4'), ('mcal_y', 'f4')]
 
-        cat=eu.numpy_util.add_fields(objs, new_dt)
+        cat = eu.numpy_util.add_fields(objs, new_dt)
         cat['id'] = np.arange(cat.size)
-        cat['number'] = np.arange(1,cat.size+1)
+        cat['number'] = np.arange(1, cat.size+1)
         cat['ncutout'] = 1
         cat['flux_auto'] = flux_auto
         cat['fluxerr_auto'] = fluxerr_auto
@@ -369,19 +362,15 @@ class MEDSifier(object):
 
         # use the number of pixels in the seg map as the iso area
         for i in range(objs.size):
-            w=np.where(seg == (i+1))
+            w = np.where(seg == (i+1))
             cat['isoarea_image'][i] = w[0].size
 
         cat['iso_radius'] = np.sqrt(cat['isoarea_image'].clip(min=1)/np.pi)
 
         if cat.size > 0:
-
-            box_size=self._get_box_sizes(cat)
-
-            half_box_size = box_size//2
-
-            maxrow,maxcol=self.detim.shape
-
+            box_size = self._get_box_sizes(cat)
+            half_box_size = box_size // 2
+            maxrow, maxcol = self.detim.shape
             cat['box_size'] = box_size
 
             cat['mcal_x'] = cat['x'][:]
@@ -391,29 +380,26 @@ class MEDSifier(object):
                 cat['x'] = pos_new[0]
                 cat['y'] = pos_new[1]
 
-            cat['orig_row'][:,0] = cat['y']
-            cat['orig_col'][:,0] = cat['x']
+            cat['orig_row'][:, 0] = cat['y']
+            cat['orig_col'][:, 0] = cat['x']
 
-            orow = cat['orig_row'][:,0].astype('i4')
-            ocol = cat['orig_col'][:,0].astype('i4')
+            orow = cat['orig_row'][:, 0].astype('i4')
+            ocol = cat['orig_col'][:, 0].astype('i4')
 
+            # the +1 here gets the object center near the canonical center
+            # of the image
             ostart_row = orow - half_box_size + 1
             ostart_col = ocol - half_box_size + 1
-            oend_row   = orow + half_box_size + 1 # plus one for slices
-            oend_col   = ocol + half_box_size + 1
-
-            ostart_row.clip(min=0, out=ostart_row)
-            ostart_col.clip(min=0, out=ostart_col)
-            oend_row.clip(max=maxrow, out=oend_row)
-            oend_col.clip(max=maxcol, out=oend_col)
 
             # could result in smaller than box_size above
-            cat['orig_start_row'][:,0] = ostart_row
-            cat['orig_start_col'][:,0] = ostart_col
-            cat['orig_end_row'][:,0] = oend_row
-            cat['orig_end_col'][:,0] = oend_col
-            cat['cutout_row'][:,0] = cat['orig_row'][:,0] - cat['orig_start_row'][:,0]
-            cat['cutout_col'][:,0] = cat['orig_col'][:,0] - cat['orig_start_col'][:,0]
+            cat['orig_start_row'][:, 0] = ostart_row
+            cat['orig_start_col'][:, 0] = ostart_col
+            cat['orig_end_row'][:, 0] = -9999  # leave these unset
+            cat['orig_end_col'][:, 0] = -9999
+            cat['cutout_row'][:, 0] = (
+                cat['orig_row'][:, 0] - cat['orig_start_row'][:, 0])
+            cat['cutout_col'][:, 0] = (
+                cat['orig_col'][:, 0] - cat['orig_start_col'][:, 0])
 
         if self.wcs_jacobian_func is None:
             jacob = self.mbobs[0][0].jacobian
@@ -430,8 +416,8 @@ class MEDSifier(object):
                 cat['dvdcol'][i, 0] = jacob['dvdcol']
                 cat['dvdrow'][i, 0] = jacob['dvdrow']
 
-        self.seg=seg
-        self.cat=cat
+        self.seg = seg
+        self.cat = cat
 
     def _get_box_sizes(self, cat):
         if cat.size == 0:
@@ -439,20 +425,21 @@ class MEDSifier(object):
 
         mconf = self.meds_config
 
-        box_type=mconf['box_type']
-        if box_type=='sigma_size':
+        box_type = mconf['box_type']
+        if box_type == 'sigma_size':
             sigma_size = self._get_sigma_size(cat)
             row_size = cat['ymax'] - cat['ymin'] + 1
             col_size = cat['xmax'] - cat['xmin'] + 1
 
             # get max of all three
-            box_size = np.vstack((col_size,row_size,sigma_size)).max(axis=0)
+            box_size = np.vstack(
+                (col_size, row_size, sigma_size)).max(axis=0)
 
-        elif box_type=='iso_radius':
-            rad_min = mconf['rad_min'] # for box size calculations
+        elif box_type == 'iso_radius':
+            rad_min = mconf['rad_min']  # for box size calculations
             rad_fac = mconf['rad_fac']
 
-            box_padding=mconf['box_padding']
+            box_padding = mconf['box_padding']
             rad = cat['iso_radius'].clip(min=rad_min)
 
             box_rad = rad_fac*rad
@@ -476,7 +463,7 @@ class MEDSifier(object):
         if bins[-1] != mconf['max_box_size']:
             bins.append(mconf['max_box_size'])
 
-        bin_inds = np.digitize(box_size,bins,right=True)
+        bin_inds = np.digitize(box_size, bins, right=True)
         bins = np.array(bins)
 
         box_sizes = bins[bin_inds]
@@ -496,19 +483,19 @@ class MEDSifier(object):
         drad = sigma*mconf['sigma_fac']
         drad = drad*(1.0 + ellipticity)
         drad = np.ceil(drad)
-        sigma_size = 2*drad.astype('i4') # sigma size is twice the radius
+        sigma_size = 2*drad.astype('i4')  # sigma size is twice the radius
 
         return sigma_size
 
     def _set_sx_config(self, sx_config_in):
 
-        sx_config={}
+        sx_config = {}
         sx_config.update(sx_config_in)
         sx_config['filter_kernel'] = np.array(sx_config['filter_kernel'])
 
         # this isn't a keyword
         self.detect_thresh = sx_config.pop('detect_thresh')
-        self.sx_config=sx_config
+        self.sx_config = sx_config
 
     def _set_meds_config(self, meds_config):
-        self.meds_config=meds_config
+        self.meds_config = meds_config
