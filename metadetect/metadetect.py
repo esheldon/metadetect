@@ -88,9 +88,12 @@ class Metadetect(dict):
         """
         if cat.size > 0:
             new_dt = [
-                ('sx_row','f4'),
-                ('sx_col','f4'),
+                ('sx_row', 'f4'),
+                ('sx_col', 'f4'),
+                ('mcal_sx_row', 'f4'),
+                ('mcal_sx_col', 'f4')
             ]
+
             newres = eu.numpy_util.add_fields(
                 res,
                 new_dt,
@@ -98,6 +101,8 @@ class Metadetect(dict):
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
+            newres['mcal_sx_col'] = cat['mcal_x']
+            newres['mcal_sx_row'] = cat['mcal_y']
         else:
             newres = res
 
