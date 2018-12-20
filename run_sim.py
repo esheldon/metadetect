@@ -61,7 +61,7 @@ def _fit_m(prr, mrr):
     return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
-def _run_sim(seed):
+def _run_sim_mdet(seed):
     rng = np.random.RandomState(seed=seed)
     mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
     md = Metadetect(config, mbobs, rng)
@@ -77,6 +77,22 @@ def _run_sim(seed):
     return pres, mres
 
 
+def _run_sim_mdetcal(seed):
+    rng = np.random.RandomState(seed=seed)
+    mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
+    md = MetadetectAndCal(config, mbobs, rng)
+    md.go()
+    pres = _meas_shear(md.result)
+
+    rng = np.random.RandomState(seed=seed)
+    mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
+    md = MetadetectAndCal(config, mbobs, rng)
+    md.go()
+    mres = _meas_shear(md.result)
+
+    return pres, mres
+
+
 config = {}
 config.update(TEST_METADETECT_CONFIG)
 
@@ -84,7 +100,7 @@ config.update(TEST_METADETECT_CONFIG)
 offset = 12
 n_sims = int(sys.argv[1])
 
-sims = [joblib.delayed(_run_sim)(i + offset) for i in range(n_sims)]
+sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=10,
     n_jobs=int(os.environ.get('OMP_NUM_THREADS', 1)),
