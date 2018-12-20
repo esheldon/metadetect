@@ -1,5 +1,7 @@
-import numpy as np
 import os
+import sys
+
+import numpy as np
 from scipy.optimize import curve_fit
 import joblib
 
@@ -64,7 +66,7 @@ config.update(TEST_METADETECT_CONFIG)
 
 
 offset = 12
-n_sims = 10
+n_sims = int(sys.argv[1])
 
 sims = [joblib.delayed(_run_sim)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
