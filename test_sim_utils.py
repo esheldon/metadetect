@@ -13,7 +13,7 @@ DEFAULT_SIM_CONFIG = {
     'dims': (225, 225),
     'flux_low': 50,
     'flux_high': 60,
-    'r50_low': 1.5,
+    'r50_low': 2,
     'r50_high': 2,
     'g_std': 0.2,
     'fracdev_low': 0.000,
