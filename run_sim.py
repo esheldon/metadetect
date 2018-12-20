@@ -113,7 +113,7 @@ offset = rank * n_sims
 
 sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
-    verbose=10,
+    verbose=20,
     n_jobs=-1,
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(sims)
