@@ -103,7 +103,7 @@ n_sims = int(sys.argv[1])
 sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=10,
-    n_jobs=int(os.environ.get('OMP_NUM_THREADS', 1)),
+    n_jobs=-1,
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(sims)
 
