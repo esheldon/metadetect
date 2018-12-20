@@ -25,6 +25,18 @@ def _meas_shear(res):
     return g1p, g1m, g1
 
 
+def _cut(prr, mrr):
+    prr_keep = []
+    mrr_keep = []
+    for pr, mr in zip(prr, mrr):
+        if (np.any([len(pr[i]) == 0 for i in range(3)]) or
+                np.any([len(mr[i]) == 0 for i in range(3)])):
+            continue
+        prr_keep.append(pr)
+        mrr_keep.append(mr)
+    return prr_keep, mrr_keep
+
+
 def _get_stuff(rr):
     g1p = np.array([np.mean(r[0]) for r in rr])
     g1m = np.array([np.mean(r[1]) for r in rr])
@@ -81,6 +93,9 @@ outputs = joblib.Parallel(
 
 pres, mres = zip(*outputs)
 
+pres, mres = _cut(pres, mres)
+
+print('# of sims:', len(pres))
 print("m: %f +/- %f" % _fit_m(pres, mres))
 
 g1, R11 = _get_stuff(pres)
