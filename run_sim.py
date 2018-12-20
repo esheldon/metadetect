@@ -1,4 +1,3 @@
-import os
 import sys
 
 import numpy as np
@@ -7,6 +6,18 @@ import joblib
 from test_sim_utils import Sim, TEST_METADETECT_CONFIG
 from metadetect.metadetect_and_cal import MetadetectAndCal
 from metadetect.metadetect import Metadetect
+
+
+try:
+    from mpi4py import MPI
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    n_ranks = comm.Get_size()
+except Exception:
+    n_ranks = 1
+    rank = 0
+    comm = None
 
 
 def _meas_shear(res):
@@ -97,8 +108,8 @@ config = {}
 config.update(TEST_METADETECT_CONFIG)
 
 
-offset = 12
 n_sims = int(sys.argv[1])
+offset = rank * n_sims
 
 sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
@@ -111,14 +122,30 @@ pres, mres = zip(*outputs)
 
 pres, mres = _cut(pres, mres)
 
-print('# of sims:', len(pres))
-print("m: %f +/- %f" % _fit_m(pres, mres))
+if comm is not None:
+    if rank == 0:
+        n_recv = 0
+        while n_recv < n_ranks - 1:
+            status = MPI.Status()
+            data = comm.recv(
+                source=MPI.ANY_SOURCE,
+                tag=MPI.ANY_TAG,
+                status=status)
+            n_recv += 1
+            pres.extend(data[0])
+            mres.extend(data[1])
+    else:
+        comm.send((pres, mres), dest=0, tag=0)
 
-g1, R11 = _get_stuff(pres)
-rng = np.random.RandomState(seed=100)
-mvals = []
-for _ in range(10000):
-    ind = rng.choice(len(g1), replace=True, size=len(g1))
-    mvals.append(np.mean(g1[ind]) / np.mean(R11[ind]) - 1)
+if rank == 0:
+    print('# of sims:', len(pres))
+    print("m: %f +/- %f" % _fit_m(pres, mres))
 
-print('m: %f +/- %f' % (np.mean(g1) / np.mean(R11) - 1, np.std(mvals)))
+    g1, R11 = _get_stuff(pres)
+    rng = np.random.RandomState(seed=100)
+    mvals = []
+    for _ in range(10000):
+        ind = rng.choice(len(g1), replace=True, size=len(g1))
+        mvals.append(np.mean(g1[ind]) / np.mean(R11[ind]) - 1)
+
+    print('m: %f +/- %f' % (np.mean(g1) / np.mean(R11) - 1, np.std(mvals)))
