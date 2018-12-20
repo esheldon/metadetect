@@ -1,4 +1,5 @@
 import sys
+import pickle
 
 import numpy as np
 import joblib
@@ -19,6 +20,8 @@ except Exception:
     rank = 0
     comm = None
 
+
+DO_COMM = False
 
 def _meas_shear(res):
     op = res['1p']
@@ -113,7 +116,7 @@ offset = rank * n_sims
 
 sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
-    verbose=100,
+    verbose=20,
     n_jobs=-1,
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(sims)
@@ -122,7 +125,7 @@ pres, mres = zip(*outputs)
 
 pres, mres = _cut(pres, mres)
 
-if comm is not None:
+if comm is not None and DO_COMM:
     if rank == 0:
         n_recv = 0
         while n_recv < n_ranks - 1:
@@ -137,8 +140,21 @@ if comm is not None:
             mres.extend(data[1])
     else:
         comm.send((pres, mres), dest=0, tag=0)
+else:
+    if rank > 0:
+        with open('data%d.pkl' % rank, 'wb') as fp:
+            pickle.dump((pres, mres), fp)
+
+comm.Barrier()
 
 if rank == 0:
+    if not DO_COMM:
+        for i in range(1, n_ranks):
+            with open('data%d.pkl' % i, 'rb') as fp:
+                data = pickle.load(fp)
+                pres.extend(data[0])
+                mres.extend(data[1])
+
     print('# of sims:', len(pres))
     print("m: %f +/- %f" % _fit_m(pres, mres))
 
