@@ -5,7 +5,7 @@
 #SBATCH -N 8
 #SBATCH --ntasks-per-node=1
 #SBATCH -o myjob.oe
-#SBATCH -t 08:00:00
+#SBATCH -t 02:00:00
 
 source activate lcrc
 
