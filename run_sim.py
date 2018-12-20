@@ -132,6 +132,7 @@ if comm is not None:
                 tag=MPI.ANY_TAG,
                 status=status)
             n_recv += 1
+            print(n_recv, flush=True)
             pres.extend(data[0])
             mres.extend(data[1])
     else:
