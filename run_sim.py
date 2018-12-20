@@ -2,7 +2,6 @@ import os
 import sys
 
 import numpy as np
-from scipy.optimize import curve_fit
 import joblib
 
 from test_sim_utils import Sim, TEST_METADETECT_CONFIG
@@ -41,8 +40,13 @@ def _fit_m(prr, mrr):
     x = R11p + R11m
     y = g1p - g1m
 
-    fres = curve_fit(lambda x, m: (1 + m) * x, x, y, [0])
-    return fres[0][0], np.sqrt(fres[1][0, 0])
+    rng = np.random.RandomState(seed=100)
+    mvals = []
+    for _ in range(10000):
+        ind = rng.choice(len(y), replace=True, size=len(y))
+        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
+
+    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
 def _run_sim(seed):
@@ -78,3 +82,12 @@ outputs = joblib.Parallel(
 pres, mres = zip(*outputs)
 
 print("m: %f +/- %f" % _fit_m(pres, mres))
+
+g1, R11 = _get_stuff(pres)
+rng = np.random.RandomState(seed=100)
+mvals = []
+for _ in range(10000):
+    ind = rng.choice(len(g1), replace=True, size=len(g1))
+    mvals.append(np.mean(g1[ind]) / np.mean(R11[ind]) - 1)
+
+print('m: %f +/- %f' % (np.mean(g1) / np.mean(R11) - 1, np.std(mvals)))
