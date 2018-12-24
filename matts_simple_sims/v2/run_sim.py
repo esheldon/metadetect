@@ -21,6 +21,7 @@ except Exception:
 
 
 DO_COMM = False
+DO_MDET = False
 
 
 def _meas_shear(res):
@@ -75,46 +76,58 @@ def _fit_m(prr, mrr):
     return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
-def _run_sim_mdet(seed):
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
-    md = Metadetect(config, mbobs, rng)
-    md.go()
-    pres = _meas_shear(md.result)
+if DO_MDET:
+    def _run_sim_mdet(seed):
+        rng = np.random.RandomState(seed=seed)
+        mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
+        md = Metadetect(config, mbobs, rng)
+        md.go()
+        pres = _meas_shear(md.result)
 
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
-    md = Metadetect(config, mbobs, rng)
-    md.go()
-    mres = _meas_shear(md.result)
+        rng = np.random.RandomState(seed=seed)
+        mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
+        md = Metadetect(config, mbobs, rng)
+        md.go()
+        mres = _meas_shear(md.result)
 
-    return pres, mres
+        return pres, mres
 
+    kind = 'mdet'
+    _func = _run_sim_mdet
+else:
+    def _run_sim_mdetcal(seed):
+        rng = np.random.RandomState(seed=seed)
+        sim = Sim(rng, config={'g1': 0.02})
+        mbobs = sim.get_mbobs()
+        jac_func = sim.get_wcs_jac_func()
+        md = MetadetectAndCal(
+            config, mbobs, rng,
+            wcs_jacobian_func=jac_func)
+        md.go()
+        pres = _meas_shear(md.result)
 
-def _run_sim_mdetcal(seed):
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
-    md = MetadetectAndCal(config, mbobs, rng)
-    md.go()
-    pres = _meas_shear(md.result)
+        rng = np.random.RandomState(seed=seed)
+        sim = Sim(rng, config={'g1': -0.02})
+        mbobs = sim.get_mbobs()
+        jac_func = sim.get_wcs_jac_func()
+        md = MetadetectAndCal(
+            config, mbobs, rng,
+            wcs_jacobian_func=jac_func)
+        md.go()
+        mres = _meas_shear(md.result)
 
-    rng = np.random.RandomState(seed=seed)
-    mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
-    md = MetadetectAndCal(config, mbobs, rng)
-    md.go()
-    mres = _meas_shear(md.result)
+        return pres, mres
 
-    return pres, mres
-
+    kind = 'mdetcal'
+    _func = _run_sim_mdetcal
 
 config = {}
 config.update(TEST_METADETECT_CONFIG)
 
-
 n_sims = int(sys.argv[1])
 offset = rank * n_sims
 
-sims = [joblib.delayed(_run_sim_mdetcal)(i + offset) for i in range(n_sims)]
+sims = [joblib.delayed(_func)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=-1,
@@ -135,7 +148,6 @@ if comm is not None and DO_COMM:
                 tag=MPI.ANY_TAG,
                 status=status)
             n_recv += 1
-            print(n_recv, flush=True)
             pres.extend(data[0])
             mres.extend(data[1])
     else:
@@ -155,14 +167,13 @@ if rank == 0:
                 pres.extend(data[0])
                 mres.extend(data[1])
 
-    print('# of sims:', len(pres))
-    print("m: %f +/- %f" % _fit_m(pres, mres))
+    mn, msd = _fit_m(pres, mres)
 
-    g1, R11 = _get_stuff(pres)
-    rng = np.random.RandomState(seed=100)
-    mvals = []
-    for _ in range(10000):
-        ind = rng.choice(len(g1), replace=True, size=len(g1))
-        mvals.append(np.mean(g1[ind]) / np.mean(R11[ind]) - 1)
-
-    print('m: %f +/- %f' % (np.mean(g1) / np.mean(R11) - 1, np.std(mvals)))
+    print("""\
+# of sims: {n_sims}
+run: {kind}
+m: {mn:f} +/- {msd:f}""".format(
+        n_sims=len(pres),
+        kind=kind,
+        mn=mn,
+        msd=msd), flush=True)
