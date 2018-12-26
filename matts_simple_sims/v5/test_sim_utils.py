@@ -271,8 +271,8 @@ class Sim(dict):
                 obj = galsim.Convolve(
                     obj,
                     self._psf.getPSF(
-                        galsim.PositionD(x=self._im_cen[0]+1,
-                                         y=self._im_cen[1]+1)))
+                        galsim.PositionD(x=self._im_cen[1]+1,
+                                         y=self._im_cen[0]+1)))
                 band_objs.append(obj)
 
             all_band_obj.append(band_objs)
@@ -289,8 +289,8 @@ class Sim(dict):
         for _ in range(self['nband']):
 
             def _func(row, col):
-                x = self._im_cen[0]
-                y = self._im_cen[1]
+                x = self._im_cen[1]
+                y = self._im_cen[0]
                 galsim_jac = self._get_loacal_jacobian(x=x, y=y)
                 psf_im = self._psf.getPSF(
                     galsim.PositionD(x=x+1, y=y+1)).drawImage(
@@ -305,8 +305,8 @@ class Sim(dict):
         return funcs
 
     def _render_psf(self):
-        x = self._im_cen[0]
-        y = self._im_cen[1]
+        x = self._im_cen[1]
+        y = self._im_cen[0]
 
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
