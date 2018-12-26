@@ -180,9 +180,7 @@ class Sim(dict):
                 weight=wt,
                 bmask=bmask,
                 jacobian=jac,
-                psf=self._render_psf(
-                    x=self._im_cen[1],
-                    y=self._im_cen[0]),
+                psf=self._render_psf(),
                 noise=noise,
             )
 
@@ -225,7 +223,9 @@ class Sim(dict):
         return np.array(self._gpdf.sample2d()) * self['shape_scale']
 
     def _get_dxdy(self):
-        return np.zeros(2) + self._im_cen
+        return self._rng.uniform(
+            low=-0.5, high=0.5, size=2
+        ) + self._im_cen
 
     def _get_band_objects(self):
         all_band_obj = []
@@ -268,8 +268,11 @@ class Sim(dict):
                     flux_bulge*self['bulge_colors'][band])
 
                 obj = galsim.Sum(band_disk, band_bulge)
-                obj = galsim.Convolve(obj, self._psf.getPSF(
-                    galsim.PositionD(x=pos[0]+1, y=pos[1]+1)))
+                obj = galsim.Convolve(
+                    obj,
+                    self._psf.getPSF(
+                        galsim.PositionD(x=self._im_cen[0]+1,
+                                         y=self._im_cen[1]+1)))
                 band_objs.append(obj)
 
             all_band_obj.append(band_objs)
@@ -286,9 +289,11 @@ class Sim(dict):
         for _ in range(self['nband']):
 
             def _func(row, col):
-                galsim_jac = self._get_loacal_jacobian(x=col, y=row)
+                x = self._im_cen[0]
+                y = self._im_cen[1]
+                galsim_jac = self._get_loacal_jacobian(x=x, y=y)
                 psf_im = self._psf.getPSF(
-                    galsim.PositionD(x=col+1, y=row+1)).drawImage(
+                    galsim.PositionD(x=x+1, y=y+1)).drawImage(
                         nx=33,
                         ny=33,
                         wcs=galsim_jac,
@@ -299,7 +304,10 @@ class Sim(dict):
 
         return funcs
 
-    def _render_psf(self, *, x, y):
+    def _render_psf(self):
+        x = self._im_cen[0]
+        y = self._im_cen[1]
+
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
         psf_im = self._psf.getPSF(
