@@ -12,4 +12,4 @@ source activate lcrc
 echo `which python`
 
 export I_MPI_FABRICS=shm:tmi
-srun python run_sim.py 1250
+srun python run_sim.py 5000
