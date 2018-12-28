@@ -151,9 +151,9 @@ class Sim(dict):
                 nrow=self['dims'][0],
                 ncol=self['dims'][1],
                 wcs=self._wcs)
-            for obj, (x, y) in zip(band_objects, obj_im_pos):
-                dx = x - self._im_cen[0]
-                dy = y - self._im_cen[1]
+            for obj, (y, x) in zip(band_objects, obj_im_pos):
+                dx = x - self._im_cen[1]
+                dy = y - self._im_cen[0]
                 obj.drawImage(
                     image=im,
                     offset=galsim.PositionD(x=dx, y=dy),
@@ -273,7 +273,7 @@ class Sim(dict):
 
                 obj = galsim.Sum(band_disk, band_bulge)
                 obj = galsim.Convolve(obj, self._psf.getPSF(
-                    galsim.PositionD(x=pos[0]+1, y=pos[1]+1)))
+                    galsim.PositionD(x=pos[1]+1, y=pos[0]+1)))
                 band_objs.append(obj)
 
             all_band_obj.append(band_objs)
