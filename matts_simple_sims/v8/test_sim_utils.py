@@ -24,7 +24,7 @@ WCS_HEADER = {
 }
 
 DEFAULT_SIM_CONFIG = {
-    'nobj': 1,
+    'nobj': 4,
     'nband': 3,
     'noises': (0.0005, 0.001, 0.0015),
     'psf_fwhm': 0.9,
@@ -125,7 +125,7 @@ class Sim(dict):
             self.update(config)
 
         # only fill the middle part of the image
-        self['pos_width'] = 0.5
+        self['pos_width'] = self['dims'][0]/2.0 * 0.5
         self._rng = rng
         self._im_cen = (np.array(self['dims']) - 1) / 2
 
