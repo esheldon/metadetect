@@ -150,9 +150,9 @@ class Sim(dict):
                 nrow=self['dims'][0],
                 ncol=self['dims'][1],
                 wcs=self._wcs)
-            for obj, (x, y) in zip(band_objects, obj_im_pos):
-                dx = x - self._im_cen[0]
-                dy = y - self._im_cen[1]
+            for obj, (y, x) in zip(band_objects, obj_im_pos):
+                dx = x - self._im_cen[1]
+                dy = y - self._im_cen[0]
                 obj.drawImage(
                     image=im,
                     offset=galsim.PositionD(x=dx, y=dy),

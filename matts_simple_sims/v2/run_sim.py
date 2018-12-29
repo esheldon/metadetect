@@ -14,14 +14,17 @@ try:
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     n_ranks = comm.Get_size()
+    HAVE_MPI = True
 except Exception:
     n_ranks = 1
     rank = 0
     comm = None
 
+    HAVE_MPI = False
+
 
 DO_COMM = False
-DO_MDET = False
+DO_MDET = True
 
 
 def _meas_shear(res):
@@ -121,6 +124,8 @@ else:
     kind = 'mdetcal'
     _func = _run_sim_mdetcal
 
+print('running measurement: %s' % kind, flush=True)
+
 config = {}
 config.update(TEST_METADETECT_CONFIG)
 
@@ -157,7 +162,8 @@ else:
         with open('data%d.pkl' % rank, 'wb') as fp:
             pickle.dump((pres, mres), fp)
 
-comm.Barrier()
+if HAVE_MPI:
+    comm.Barrier()
 
 if rank == 0:
     if not DO_COMM:
