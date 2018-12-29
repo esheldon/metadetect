@@ -128,6 +128,8 @@ else:
     kind = 'mdetcal'
     _func = _run_sim_mdetcal
 
+print('running measurement: %s' % kind, flush=True)
+
 config = {}
 config.update(TEST_METADETECT_CONFIG)
 
