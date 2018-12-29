@@ -182,8 +182,8 @@ class Sim(dict):
                 bmask=bmask,
                 jacobian=jac,
                 psf=self._render_psf(
-                    x=self._im_cen[1],
-                    y=self._im_cen[0]),
+                    x=0,
+                    y=0),
                 noise=noise,
             )
 
