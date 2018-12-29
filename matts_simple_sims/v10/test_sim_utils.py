@@ -181,7 +181,7 @@ class Sim(dict):
                 weight=wt,
                 bmask=bmask,
                 jacobian=jac,
-                psf=self._render_psf(
+                psf=self._render_psf_gauss(
                     x=0,
                     y=0),
                 noise=noise,
@@ -308,6 +308,31 @@ class Sim(dict):
 
         psf_im = self._psf.getPSF(
             galsim.PositionD(x=x+1, y=x+1)).drawImage(
+                nx=33,
+                ny=33,
+                wcs=galsim_jac).array
+
+        noise = psf_im.max()/1000.0
+        weight = psf_im + 1.0/noise**2
+        psf_im += self._rng.normal(
+            scale=noise,
+            size=psf_im.shape
+        )
+
+        cen = (np.array(psf_im.shape)-1.0)/2.0
+        j = ngmix.jacobian.Jacobian(row=cen[0], col=cen[1], wcs=galsim_jac)
+
+        psf_obs = ngmix.Observation(
+            psf_im,
+            weight=weight,
+            jacobian=j
+        )
+        return psf_obs
+
+    def _render_psf_gauss(self, *, x, y):
+        galsim_jac = self._get_loacal_jacobian(x=x, y=y)
+
+        psf_im = galsim.Gaussian(fwhm=0.85).drawImage(
                 nx=33,
                 ny=33,
                 wcs=galsim_jac).array
