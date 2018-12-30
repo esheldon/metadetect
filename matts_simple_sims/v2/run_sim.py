@@ -24,7 +24,7 @@ except Exception:
 
 
 DO_COMM = False
-DO_MDET = True
+DO_MDET = False
 
 
 def _meas_shear(res):
