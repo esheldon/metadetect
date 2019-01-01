@@ -9,7 +9,9 @@ from fit_des_psf import ShpPSF
 sns.set()
 
 psf = ShpPSF('shp_psf.fit')
+pex = None
 # psf = galsim.des.DES_PSFEx('psfcat.psf', wcs=galsim.PixelScale(0.263))
+# pex = galsim.des.DES_PSFEx('psfcat.psf', wcs=galsim.PixelScale(0.263))
 
 y, x = np.mgrid[0:1000:50, 0:1000:50]
 x = x.ravel()
@@ -24,12 +26,32 @@ for _x, _y in zip(x, y):
     img = psf.getPSF(galsim.PositionD(x=_x, y=_y)).drawImage(
         nx=33,
         ny=33,
-        scale='0.263')
+        scale=0.263)
     admom = galsim.hsm.FindAdaptiveMom(img)
-    g1.append(admom.observed_shape.g1)
-    g2.append(admom.observed_shape.g2)
-    sigma.append(admom.moments_sigma)
-    fwhm.append(img.calculateFWHM())
+
+    if pex is not None:
+        pex_img = pex.getPSF(galsim.PositionD(x=_x, y=_y)).drawImage(
+            nx=33,
+            ny=33)
+        pex_admom = galsim.hsm.FindAdaptiveMom(pex_img)
+        g1.append(admom.observed_shape.g1 - pex_admom.observed_shape.g1)
+        g2.append(admom.observed_shape.g2 - pex_admom.observed_shape.g2)
+        sigma.append(admom.moments_sigma - pex_admom.moments_sigma)
+        fwhm.append(img.calculateFWHM() - pex_img.calculateFWHM())
+
+        plt.figure()
+        ax = plt.gca()
+        ax.grid(False)
+        sns.heatmap(np.arcsinh(img.array - pex_img.array), ax=ax)
+        plt.show()
+
+        import pdb
+        pdb.set_trace()
+    else:
+        g1.append(admom.observed_shape.g1)
+        g2.append(admom.observed_shape.g2)
+        sigma.append(admom.moments_sigma)
+        fwhm.append(img.calculateFWHM())
 
 sigma = np.array(sigma)
 g1 = np.array(g1)
