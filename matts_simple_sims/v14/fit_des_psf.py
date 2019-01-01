@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 import fitsio
 
 PIXSCALE = galsim.PixelScale(0.263)
-ORDER = 5
+ORDER = 4
 
 
 def _get_terms_three(_x, _y):
@@ -17,8 +17,15 @@ def _get_terms_three(_x, _y):
 
 
 class ShpPSF(object):
-    def __init__(self, fname):
+    def __init__(self, fname, nx=None, ny=None):
         self.data = fitsio.read(fname)
+        self._bval_cache = {}
+
+        # cache once if desired
+        if nx is not None and ny is not None:
+            bvec = self._get_bvec(0, 0)
+            for i in range(bvec.shape[0]):
+                self._get_bval(i, nx, ny)
 
     def getPSF(self, pos):
         _x = np.atleast_1d(pos.x-1)
@@ -27,22 +34,29 @@ class ShpPSF(object):
         return galsim.Shapelet(
             self.data['sigma'][0], self.data['order'][0], bvec=bvec)
 
+    def _get_bval(self, i, nx, ny):
+        if (i, nx, ny) not in self._bval_cache:
+            # get polynomial terms for weights
+            _y, _x = np.mgrid[:ny, :nx]
+            _y = _y.ravel()
+            _x = _x.ravel()
+            pterms = self._get_terms_str(
+                _x=_x,
+                _y=_y,
+                mx=self.data['mx'][0],
+                rx=self.data['rx'][0],
+                my=self.data['my'][0],
+                ry=self.data['ry'][0],
+                ostr=self.data['ostr'][0].decode('ascii').strip())
+            self._bval_cache[(i, nx, ny)] = np.dot(
+                pterms, self.data['coeffs'][0][:, i:i+1])[:, 0]
+            self._bval_cache[(i, nx, ny)] \
+                = self._bval_cache[(i, nx, ny)].reshape(ny, nx)
+        return self._bval_cache[(i, nx, ny)]
+
     def convolve_and_render(self, obj, nx, ny, wcs):
         # get a bvec to get dimensions
         bvec = self._get_bvec(0, 0)
-
-        # get polynomial terms for weights
-        _y, _x = np.mgrid[:ny, :nx]
-        _y = _y.ravel()
-        _x = _x.ravel()
-        pterms = self._get_terms_str(
-            _x=_x,
-            _y=_y,
-            mx=self.data['mx'][0],
-            rx=self.data['rx'][0],
-            my=self.data['my'][0],
-            ry=self.data['ry'][0],
-            ostr=self.data['ostr'][0].decode('ascii').strip())
 
         # accumulate the image
         img = np.zeros((ny, nx))
@@ -55,8 +69,7 @@ class ShpPSF(object):
                 nx=nx,
                 ny=ny,
                 wcs=wcs).array
-            bval = np.dot(pterms, self.data['coeffs'][0][:, i:i+1])[:, 0]
-            img += conv * bval.reshape(ny, nx)
+            img += conv * self._get_bval(i, nx, ny)
 
         return img
 

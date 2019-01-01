@@ -120,7 +120,7 @@ TEST_METADETECT_CONFIG = {
 
 
 class Sim(dict):
-    def __init__(self, rng, config=None):
+    def __init__(self, rng, config=None, psf=None):
         self.update(DEFAULT_SIM_CONFIG)
 
         if config is not None:
@@ -132,7 +132,10 @@ class Sim(dict):
 
         self._wcs = galsim.FitsWCS(header=WCS_HEADER)
         # stores the PSFEx PSF in world coords
-        self._psf = ShpPSF('shp_psf.fit')
+        if psf is None:
+            self._psf = ShpPSF('shp_psf.fit')
+        else:
+            self._psf = psf
 
         self['pos_width'] = (
             self['dims'][0]/2.0 *
