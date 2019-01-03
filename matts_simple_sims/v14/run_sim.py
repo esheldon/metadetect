@@ -4,11 +4,9 @@ import pickle
 import numpy as np
 import joblib
 
-from test_sim_utils import Sim, TEST_METADETECT_CONFIG, DEFAULT_SIM_CONFIG
+from test_sim_utils import Sim, TEST_METADETECT_CONFIG
 from metadetect.metadetect_and_cal import MetadetectAndCal
 from metadetect.metadetect import Metadetect
-
-from fit_des_psf import ShpPSF
 
 try:
     from mpi4py import MPI
@@ -82,15 +80,15 @@ def _fit_m(prr, mrr):
 
 
 if DO_MDET:
-    def _run_sim_mdet(seed, psf):
+    def _run_sim_mdet(seed):
         rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': 0.02}, psf=psf).get_mbobs()
+        mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         pres = _meas_shear(md.result)
 
         rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': -0.02}, psf=psf).get_mbobs()
+        mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         mres = _meas_shear(md.result)
@@ -100,9 +98,9 @@ if DO_MDET:
     kind = 'mdet'
     _func = _run_sim_mdet
 else:
-    def _run_sim_mdetcal(seed, psf):
+    def _run_sim_mdetcal(seed):
         rng = np.random.RandomState(seed=seed)
-        sim = Sim(rng, config={'g1': 0.02}, psf=psf)
+        sim = Sim(rng, config={'g1': 0.02})
         mbobs = sim.get_mbobs()
         jac_func = sim.get_wcs_jac_func()
         psf_rec_funcs = sim.get_psf_rec_funcs()
@@ -114,7 +112,7 @@ else:
         pres = _meas_shear(md.result)
 
         rng = np.random.RandomState(seed=seed)
-        sim = Sim(rng, config={'g1': -0.02}, psf=psf)
+        sim = Sim(rng, config={'g1': -0.02})
         mbobs = sim.get_mbobs()
         jac_func = sim.get_wcs_jac_func()
         psf_rec_funcs = sim.get_psf_rec_funcs()
@@ -138,12 +136,7 @@ config.update(TEST_METADETECT_CONFIG)
 n_sims = int(sys.argv[1])
 offset = rank * n_sims
 
-psf = ShpPSF(
-    'shp_psf.fit',
-    nx=DEFAULT_SIM_CONFIG['dims'][1],
-    ny=DEFAULT_SIM_CONFIG['dims'][0])
-
-sims = [joblib.delayed(_func)(i + offset, psf) for i in range(n_sims)]
+sims = [joblib.delayed(_func)(i + offset) for i in range(n_sims)]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=-1,
