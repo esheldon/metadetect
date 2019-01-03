@@ -5,23 +5,7 @@ import galsim
 import galsim.des
 from metadetect import metadetect_and_cal
 
-WCS_HEADER = {
-    'NAXIS': 2,
-    'NAXIS1': 10000,
-    'NAXIS2': 10000,
-    'CTYPE1': 'RA---TAN',
-    'CTYPE2': 'DEC--TAN',
-    'CRPIX1': 5000.5,
-    'CRPIX2': 5000.5,
-    'CD1_1': -7.305555555556E-05,
-    'CD1_2': 0.0,
-    'CD2_1': 0.0,
-    'CD2_2': 7.305555555556E-05,
-    'CUNIT1': 'deg     ',
-    'CUNIT2': 'deg     ',
-    'CRVAL1': 86.176841,
-    'CRVAL2': -22.827778,
-}
+PIXSCALE = 0.263
 
 DEFAULT_SIM_CONFIG = {
     'nobj': 4,
@@ -41,6 +25,7 @@ DEFAULT_SIM_CONFIG = {
     'g1': 0.02,
     'g2': 0.0,
     'shape_scale': 0.0,
+    'shear_scene': True,
 }
 
 TEST_METADETECT_CONFIG = {
@@ -128,18 +113,10 @@ class Sim(dict):
         self._rng = rng
         self._im_cen = (np.array(self['dims']) - 1) / 2
 
-        self._wcs = galsim.FitsWCS(header=WCS_HEADER)
-        # stores the PSFEx PSF in world coords
+        self._wcs = galsim.PixelScale(PIXSCALE)
         self._psf = galsim.Gaussian(fwhm=self['psf_fwhm'])
 
-        self['pos_width'] = (
-            self['dims'][0]/2.0 *
-            0.5 *
-            self._wcs.maxLinearScale(
-                image_pos=galsim.PositionD(
-                    x=self._im_cen[1]+1,
-                    y=self._im_cen[0]+1)))
-
+        self['pos_width'] = self['dims'][0]/2.0 * 0.5 * PIXSCALE
         self._gpdf = ngmix.priors.GPriorBA(
             self['g_std'],
             rng=self._rng,
@@ -149,18 +126,24 @@ class Sim(dict):
         """
         get a simulated MultiBandObsList
         """
-        all_band_obj = self._get_band_objects()
+        all_band_obj, offsets = self._get_band_objects()
 
         mbobs = ngmix.MultiBandObsList()
         for band in range(self['nband']):
             band_objects = [o[band] for o in all_band_obj]
 
-            obj = galsim.Sum(band_objects).shear(g1=self['g1'], g2=self['g2'])
-            obj = galsim.Convolve(obj, self._psf)
-            im = obj.drawImage(
-                nx=self['dims'][1],
-                ny=self['dims'][0],
-                wcs=self._wcs).array
+            # render objects in loop and sum into final image
+            im = galsim.ImageD(
+                ncol=self['dims'][1],
+                nrow=self['dims'][0],
+                wcs=self._wcs)
+            for obj, offset in zip(band_objects, offsets):
+                obj.drawImage(
+                    image=im,
+                    offset=offset,
+                    add_to_image=True
+                )
+            im = im.array.copy()
 
             im += self._rng.normal(scale=self['noises'][band], size=im.shape)
             wt = im*0 + 1.0/self['noises'][band]**2
@@ -225,7 +208,7 @@ class Sim(dict):
     def _get_g(self):
         return np.array(self._gpdf.sample2d()) * self['shape_scale']
 
-    def _get_dudv(self):
+    def _get_dxdy(self):
         return self._rng.uniform(
             low=-self['pos_width'],
             high=self['pos_width'],
@@ -233,6 +216,7 @@ class Sim(dict):
 
     def _get_band_objects(self):
         all_band_obj = []
+        offsets = []
 
         for i in range(self['nobj']):
             r50 = self._get_r50()
@@ -242,7 +226,7 @@ class Sim(dict):
             g1d, g2d = self._get_g()
             g1b = 0.5*g1d
             g2b = 0.5*g2d
-            du, dv = self._get_dudv()
+            dx, dy = self._get_dxdy()
 
             flux_bulge = fracdev*flux
             flux_disk = (1-fracdev)*flux
@@ -260,19 +244,32 @@ class Sim(dict):
                 g1=g1d, g2=g2d
             )
 
+            # compute the final image position
+            if self['shear_scene']:
+                shear_mat = galsim.Shear(
+                    g1=self['g1'], g2=self['g2']).getMatrix()
+                sdx, sdy = np.dot(shear_mat, np.array([dx, dy]) / PIXSCALE)
+            else:
+                sdx = dx
+                sdy = dy
+
+            offset = galsim.PositionD(x=sdx, y=sdy)
+            offsets.append(offset)
+
             band_objs = []
             for band in range(self['nband']):
                 band_disk = disk_obj.withFlux(
                     flux_disk*self['disk_colors'][band])
                 band_bulge = bulge_obj.withFlux(
                     flux_bulge*self['bulge_colors'][band])
-
-                obj = galsim.Sum(band_disk, band_bulge).shift(dx=du, dy=dv)
+                obj = galsim.Sum(band_disk, band_bulge).shear(
+                    g1=self['g1'], g2=self['g2'])
+                obj = galsim.Convolve(obj, self._psf)
                 band_objs.append(obj)
 
             all_band_obj.append(band_objs)
 
-        return all_band_obj
+        return all_band_obj, offsets
 
     def _get_loacal_jacobian(self, *, x, y):
         return self._wcs.jacobian(
@@ -285,16 +282,13 @@ class Sim(dict):
             def _func(row, col):
                 galsim_jac = self._get_loacal_jacobian(x=col, y=row)
                 psf_im = self._psf.drawImage(
-                        nx=33,
-                        ny=33,
-                        wcs=galsim_jac).array
-
+                    nx=33,
+                    ny=33,
+                    wcs=galsim_jac).array
                 noise = psf_im.max()/1000.0
                 psf_im += self._rng.normal(
                     scale=noise,
-                    size=psf_im.shape
-                )
-
+                    size=psf_im.shape)
                 return psf_im
 
             funcs.append(_func)
@@ -305,9 +299,9 @@ class Sim(dict):
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
         psf_im = self._psf.drawImage(
-                nx=33,
-                ny=33,
-                wcs=galsim_jac).array
+            nx=33,
+            ny=33,
+            wcs=galsim_jac).array
 
         noise = psf_im.max()/1000.0
         weight = psf_im + 1.0/noise**2
