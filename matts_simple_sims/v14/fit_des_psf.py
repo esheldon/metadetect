@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 import fitsio
 
 PIXSCALE = galsim.PixelScale(0.263)
-ORDER = 4
+ORDER = 5
 
 
 def _get_terms_three(_x, _y):
@@ -35,7 +35,8 @@ class ShpPSF(object):
             self.data['sigma'][0], self.data['order'][0], bvec=bvec)
 
     def _get_bval(self, i, nx, ny):
-        if (i, nx, ny) not in self._bval_cache:
+        key = (i, nx, ny)
+        if key not in self._bval_cache:
             # get polynomial terms for weights
             _y, _x = np.mgrid[:ny, :nx]
             _y = _y.ravel()
@@ -48,30 +49,10 @@ class ShpPSF(object):
                 my=self.data['my'][0],
                 ry=self.data['ry'][0],
                 ostr=self.data['ostr'][0].decode('ascii').strip())
-            self._bval_cache[(i, nx, ny)] = np.dot(
+            self._bval_cache[key] = np.dot(
                 pterms, self.data['coeffs'][0][:, i:i+1])[:, 0]
-            self._bval_cache[(i, nx, ny)] \
-                = self._bval_cache[(i, nx, ny)].reshape(ny, nx)
-        return self._bval_cache[(i, nx, ny)]
-
-    def convolve_and_render(self, obj, nx, ny, wcs):
-        # get a bvec to get dimensions
-        bvec = self._get_bvec(0, 0)
-
-        # accumulate the image
-        img = np.zeros((ny, nx))
-        for i in range(bvec.shape[0]):
-            _bvec = np.zeros_like(bvec)
-            _bvec[i] = 1.0
-            shp = galsim.Shapelet(
-                self.data['sigma'][0], self.data['order'][0], bvec=bvec)
-            conv = galsim.Convolve(obj, shp).drawImage(
-                nx=nx,
-                ny=ny,
-                wcs=wcs).array
-            img += conv * self._get_bval(i, nx, ny)
-
-        return img
+            self._bval_cache[key] = self._bval_cache[key].reshape(ny, nx)
+        return self._bval_cache[key]
 
     def _get_terms_str(self, *, _x, _y, mx, rx, my, ry, ostr):
         x = (_x - mx) / rx  # noqa

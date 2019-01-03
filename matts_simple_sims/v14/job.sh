@@ -2,7 +2,7 @@
 #SBATCH -J run-tiles
 #SBATCH -A metashear
 #SBATCH -p bdwall
-#SBATCH -N 16
+#SBATCH -N 64
 #SBATCH --ntasks-per-node=1
 #SBATCH -o myjob.oe
 #SBATCH -t 02:00:00
