@@ -8,7 +8,7 @@ import numpy as np
 def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
-    for pr, mr in zip(prr, mrr):
+    for pr, mr in tqdm.tqdm(zip(prr, mrr)):
         if pr is None or mr is None:
             continue
         prr_keep.append(pr)
@@ -34,14 +34,14 @@ def _fit_m(prr, mrr):
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in range(10000):
+    for _ in tqdm.trange(10000):
         ind = rng.choice(len(y), replace=True, size=len(y))
         mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
 
     return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
-n_files = len(glob.glob('data*.pkl'))
+n_files = len(glob.glob('data*.pkl')) + 1
 
 pres = []
 mres = []
