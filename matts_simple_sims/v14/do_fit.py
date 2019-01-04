@@ -53,6 +53,7 @@ for i in tqdm.trange(1, n_files):
         pres.extend(data[0])
         mres.extend(data[1])
 
+pres, mres = _cut(pres, mres)
 mn, msd = _fit_m(pres, mres)
 
 kind = 'mdetcal'
