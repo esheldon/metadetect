@@ -8,7 +8,7 @@ import numpy as np
 def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
-    for pr, mr in tqdm.tqdm(zip(prr, mrr)):
+    for pr, mr in zip(prr, mrr):
         if pr is None or mr is None:
             continue
         prr_keep.append(pr)
