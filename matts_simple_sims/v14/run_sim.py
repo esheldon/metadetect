@@ -30,25 +30,30 @@ DO_MDET = False
 def _meas_shear(res):
     op = res['1p']
     q = (op['flags'] == 0) & (op['wmom_s2n'] > 10) & (op['wmom_T_ratio'] > 1.2)
+    if not np.any(q):
+        return None
     g1p = op['wmom_g'][q, 0]
 
     om = res['1m']
     q = (om['flags'] == 0) & (om['wmom_s2n'] > 10) & (om['wmom_T_ratio'] > 1.2)
+    if not np.any(q):
+        return None
     g1m = om['wmom_g'][q, 0]
 
     o = res['noshear']
     q = (o['flags'] == 0) & (o['wmom_s2n'] > 10) & (o['wmom_T_ratio'] > 1.2)
+    if not np.any(q):
+        return None
     g1 = o['wmom_g'][q, 0]
 
-    return g1p, g1m, g1
+    return np.mean(g1p), np.mean(g1m), np.mean(g1)
 
 
 def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
     for pr, mr in zip(prr, mrr):
-        if (np.any([len(pr[i]) == 0 for i in range(3)]) or
-                np.any([len(mr[i]) == 0 for i in range(3)])):
+        if prr is None or mrr is None:
             continue
         prr_keep.append(pr)
         mrr_keep.append(mr)
@@ -56,9 +61,10 @@ def _cut(prr, mrr):
 
 
 def _get_stuff(rr):
-    g1p = np.array([np.mean(r[0]) for r in rr])
-    g1m = np.array([np.mean(r[1]) for r in rr])
-    g1 = np.array([np.mean(r[2]) for r in rr])
+    _a = np.vstack(rr)
+    g1p = _a[:, 0]
+    g1m = _a[:, 1]
+    g1 = _a[:, 2]
 
     return g1, (g1p - g1m) / 2 / 0.01 * 0.02
 
