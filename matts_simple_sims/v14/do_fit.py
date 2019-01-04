@@ -1,13 +1,26 @@
-import sys
+import glob
 import os
 import pickle
 import tqdm
 import numpy as np
 
+
+def _cut(prr, mrr):
+    prr_keep = []
+    mrr_keep = []
+    for pr, mr in zip(prr, mrr):
+        if pr is None or mr is None:
+            continue
+        prr_keep.append(pr)
+        mrr_keep.append(mr)
+    return prr_keep, mrr_keep
+
+
 def _get_stuff(rr):
-    g1p = np.array([np.mean(r[0]) for r in rr])
-    g1m = np.array([np.mean(r[1]) for r in rr])
-    g1 = np.array([np.mean(r[2]) for r in rr])
+    _a = np.vstack(rr)
+    g1p = _a[:, 0]
+    g1m = _a[:, 1]
+    g1 = _a[:, 2]
 
     return g1, (g1p - g1m) / 2 / 0.01 * 0.02
 
@@ -21,23 +34,25 @@ def _fit_m(prr, mrr):
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in tqdm.trange(10000):
+    for _ in range(10000):
         ind = rng.choice(len(y), replace=True, size=len(y))
         mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
 
     return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
+n_files = len(glob.glob('data*.pkl'))
+
 pres = []
 mres = []
-for i in tqdm.trange(1, 3):
+for i in tqdm.trange(1, n_files):
     if not os.path.exists('data%d.pkl' % i):
         continue
     with open('data%d.pkl' % i, 'rb') as fp:
         data = pickle.load(fp)
         pres.extend(data[0])
         mres.extend(data[1])
-        
+
 mn, msd = _fit_m(pres, mres)
 
 kind = 'mdetcal'
