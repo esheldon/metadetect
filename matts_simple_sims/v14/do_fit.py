@@ -34,7 +34,7 @@ def _fit_m(prr, mrr):
 
     rng = np.random.RandomState(seed=100)
     mvals = []
-    for _ in tqdm.trange(10000):
+    for _ in tqdm.trange(1000):
         ind = rng.choice(len(y), replace=True, size=len(y))
         mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
 
