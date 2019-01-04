@@ -168,9 +168,8 @@ if comm is not None and DO_COMM:
     else:
         comm.send((pres, mres), dest=0, tag=0)
 else:
-    if rank > 0:
-        with open('data%d.pkl' % rank, 'wb') as fp:
-            pickle.dump((pres, mres), fp)
+    with open('data%d.pkl' % rank, 'wb') as fp:
+        pickle.dump((pres, mres), fp)
 
 if HAVE_MPI:
     comm.Barrier()

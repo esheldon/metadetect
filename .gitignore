@@ -108,3 +108,4 @@ venv.bak/
 *.txt
 *.pkl
 *.pdf
+*matched_cosmos_cat_25.2.fits*
