@@ -53,7 +53,7 @@ def _cut(prr, mrr):
     prr_keep = []
     mrr_keep = []
     for pr, mr in zip(prr, mrr):
-        if prr is None or mrr is None:
+        if pr is None or mr is None:
             continue
         prr_keep.append(pr)
         mrr_keep.append(mr)
