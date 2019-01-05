@@ -73,8 +73,23 @@ def _fit_m(prr, mrr):
     g1p, R11p = _get_stuff(prr)
     g1m, R11m = _get_stuff(mrr)
 
-    x = R11p + R11m
-    y = g1p - g1m
+    x = (R11p + R11m)/2
+    y = (g1p - g1m)/2
+
+    rng = np.random.RandomState(seed=100)
+    mvals = []
+    for _ in range(10000):
+        ind = rng.choice(len(y), replace=True, size=len(y))
+        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
+
+    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
+
+
+def _fit_m_single(prr):
+    g1p, R11p = _get_stuff(prr)
+
+    x = R11p
+    y = g1p
 
     rng = np.random.RandomState(seed=100)
     mvals = []
@@ -183,6 +198,17 @@ if rank == 0:
                 mres.extend(data[1])
 
     mn, msd = _fit_m(pres, mres)
+
+    print("""\
+# of sims: {n_sims}
+run: {kind}
+m: {mn:f} +/- {msd:f}""".format(
+        n_sims=len(pres),
+        kind=kind,
+        mn=mn,
+        msd=msd), flush=True)
+
+    mn, msd = _fit_m_single(pres)
 
     print("""\
 # of sims: {n_sims}
