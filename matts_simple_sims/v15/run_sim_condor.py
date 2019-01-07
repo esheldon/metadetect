@@ -149,7 +149,7 @@ seeds = np.random.RandomState(seed).randint(
     size=n_sims)
 
 with tqdm.tqdm(seeds) as sitr:
-    outputs = [_func(seed) for seed in sitr]
+    outputs = [_func(s) for s in sitr]
 
 pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
