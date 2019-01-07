@@ -19,7 +19,8 @@ echo `which python`
 
 # about 1 to 1.6 hours per job
 # args are nsims, seed, odir
-python run_sim_condor.py $1 $2 $3 >& ${tmpdir}/log_$2.oe
+python run_sim_condor.py $1 $2 ${tmpdir} >& ${tmpdir}/log_${2}.oe
 
 mkdir -p $3/logs
-mv ${tmpdir}/log_$2.oe $3/logs/.
+mv ${tmpdir}/log_${2}.oe $3/logs/.
+mv ${tmpdir}/data_*${2}.pkl $3/.
