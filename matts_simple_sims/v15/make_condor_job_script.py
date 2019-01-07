@@ -39,7 +39,7 @@ Image_Size       =  1000000
 def _append_job(fp, num, output_dir):
     fp.write("""\
 +job_name = "sim-{num:05d}"
-Arguments = 2 {num} {output_dir}
+Arguments = 100 {num} {output_dir}
 Queue
 
 """.format(num=num, output_dir=output_dir))
