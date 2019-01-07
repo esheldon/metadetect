@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export OMP_NUM_THREADS=1
+
 source activate bnl
 
 echo `which python`

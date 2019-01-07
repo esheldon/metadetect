@@ -154,5 +154,5 @@ with tqdm.tqdm(seeds) as sitr:
 pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
 
-with open(os.path.join(odir, 'data_%d.pkl' % seed), 'wb') as fp:
+with open(os.path.join(odir, 'data_%05d.pkl' % seed), 'wb') as fp:
     pickle.dump((pres, mres), fp)
