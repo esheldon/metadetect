@@ -1,6 +1,7 @@
 import os
 import sys
 import pickle
+import joblib
 
 import numpy as np
 
@@ -147,10 +148,12 @@ seeds = np.random.RandomState(seed).randint(
     high=2**30,
     size=n_sims)
 
-outputs = []
-for s in seeds:
-    print("sim %d" % seed, flush=True)
-    outputs.append(_func(s))
+sims = [joblib.delayed(_func)(s) for s in seeds]
+outputs = joblib.Parallel(
+    verbose=100,
+    n_jobs=1,
+    pre_dispatch='1',
+    max_nbytes=None)(sims)
 
 pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
