@@ -1,7 +1,6 @@
 import os
 import sys
 import pickle
-import tqdm
 
 import numpy as np
 
@@ -148,8 +147,10 @@ seeds = np.random.RandomState(seed).randint(
     high=2**30,
     size=n_sims)
 
-with tqdm.tqdm(seeds) as sitr:
-    outputs = [_func(s) for s in sitr]
+outputs = []
+for s in seeds:
+    print("sim %d" % seed, flush=True)
+    outputs.append(_func(s))
 
 pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
