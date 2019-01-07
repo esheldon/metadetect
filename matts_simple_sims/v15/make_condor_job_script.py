@@ -9,7 +9,8 @@ PREAMBLE = """\
 Universe        = vanilla
 kill_sig        = SIGINT
 +Experiment     = "astro"
-GetEnv          = True       # copy env. variables to the job
+# copy env. variables to the job
+GetEnv          = True
 
 #
 # options below you can change safely
@@ -35,14 +36,13 @@ Image_Size       =  1000000
 """
 
 
-def _append_job(script, num, output_dir):
-    script += """\
+def _append_job(fp, num, output_dir):
+    fp.write("""\
 +job_name = "sim-{num:05d}"
 Arguments = 2 {num} {output_dir}
 Queue
 
-""".format(num=num, output_dir=output_dir)
-    return script
+""".format(num=num, output_dir=output_dir))
 
 
 cwd = ("/astro/u/beckermr/workarea/des_y3_shear/metadetect/"
@@ -52,8 +52,7 @@ output_dir = os.path.join(cwd, "outputs")
 
 script = PREAMBLE.format(script_name=script_name)
 
-for num in range(int(sys.argv[1])):
-    script = _append_job(script, num, output_dir)
-
 with open('condor_job.desc', 'w') as fp:
     fp.write(script)
+    for num in range(int(sys.argv[1])):
+        _append_job(fp, num, output_dir)
