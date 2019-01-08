@@ -111,3 +111,4 @@ venv.bak/
 *matched_cosmos_cat_25.2.fits*
 *.desc
 *.desc.submitted
+*.#*
