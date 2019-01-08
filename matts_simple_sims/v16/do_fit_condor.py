@@ -57,9 +57,12 @@ def _fit_m_single(prr):
 
 
 def _func(fname):
-    with open(fname, 'rb') as fp:
-        data = pickle.load(fp)
-    return data
+    try:
+        with open(fname, 'rb') as fp:
+            data = pickle.load(fp)
+        return data
+    except Exception:
+        return (None, None)
 
 
 files = glob.glob('outputs/data*.pkl')
