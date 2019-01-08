@@ -66,7 +66,7 @@ files = glob.glob('outputs/data*.pkl')
 
 io = [joblib.delayed(_func)(fname) for fname in files]
 outputs = joblib.Parallel(
-    verbose=20,
+    verbose=10,
     n_jobs=-1,
     pre_dispatch='2*n_jobs',
     max_nbytes=None)(io)
