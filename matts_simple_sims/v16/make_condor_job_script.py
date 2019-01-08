@@ -50,7 +50,7 @@ n_jobs_per_script = 500
 n_scripts = n_jobs // 500
 
 cwd = ("/astro/u/beckermr/workarea/des_y3_shear/metadetect/"
-       "matts_simple_sims/v15")
+       "matts_simple_sims/v16")
 script_name = os.path.join(cwd, "job_condor.sh")
 output_dir = os.path.join(cwd, "outputs")
 
