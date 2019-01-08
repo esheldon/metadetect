@@ -9,7 +9,7 @@ if [[ -n $_CONDOR_SCRATCH_DIR ]]; then
     export TMPDIR=$tmpdir
 else
     # otherwise use the TMPDIR
-    tmpdir=$TMPDIR
+    tmpdir='.'
     mkdir -p $tmpdir
 fi
 
