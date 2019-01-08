@@ -2,6 +2,7 @@ import glob
 import pickle
 import tqdm
 import numpy as np
+import joblib
 
 
 def _cut(prr, mrr):
@@ -40,20 +41,53 @@ def _fit_m(prr, mrr):
     return np.mean(y) / np.mean(x) - 1, np.std(mvals)
 
 
-files = glob.glob('outputs/data*.pkl')
+def _fit_m_single(prr):
+    g1p, R11p = _get_stuff(prr)
 
-pres = []
-mres = []
-for fname in tqdm.tqdm(files):
+    x = R11p
+    y = g1p
+
+    rng = np.random.RandomState(seed=100)
+    mvals = []
+    for _ in range(10000):
+        ind = rng.choice(len(y), replace=True, size=len(y))
+        mvals.append(np.mean(y[ind]) / np.mean(x[ind]) - 1)
+
+    return np.mean(y) / np.mean(x) - 1, np.std(mvals)
+
+
+def _func(fname):
     with open(fname, 'rb') as fp:
         data = pickle.load(fp)
-        pres.extend(data[0])
-        mres.extend(data[1])
+    return data
+
+
+files = glob.glob('outputs/data*.pkl')
+
+io = [joblib.delayed(_func)(fname) for fname in files]
+outputs = joblib.Parallel(
+    verbose=20,
+    n_jobs=-1,
+    pre_dispatch='2*n_jobs',
+    max_nbytes=None)(io)
+
+pres, mres = zip(*outputs)
 
 pres, mres = _cut(pres, mres)
 mn, msd = _fit_m(pres, mres)
 
 kind = 'mdetcal'
+
+print("""\
+# of sims: {n_sims}
+run: {kind}
+m: {mn:f} +/- {msd:f}""".format(
+    n_sims=len(pres),
+    kind=kind,
+    mn=mn,
+    msd=msd), flush=True)
+
+mn, msd = _fit_m_single(pres)
 
 print("""\
 # of sims: {n_sims}
