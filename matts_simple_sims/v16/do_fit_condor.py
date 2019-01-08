@@ -76,7 +76,7 @@ pres, mres = zip(*outputs)
 pres, mres = _cut(pres, mres)
 mn, msd = _fit_m(pres, mres)
 
-kind = 'mdetcal'
+kind = 'mdet'
 
 print("""\
 # of sims: {n_sims}
