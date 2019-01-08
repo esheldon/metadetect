@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import os
-import sys
 
 PREAMBLE = """\
 #
@@ -39,11 +38,16 @@ Image_Size       =  1000000
 def _append_job(fp, num, output_dir):
     fp.write("""\
 +job_name = "sim-{num:05d}"
-Arguments = 100 {num} {output_dir}
+Arguments = 200 {num} {output_dir}
 Queue
 
 """.format(num=num, output_dir=output_dir))
 
+
+n_patches = 10_000_000
+n_jobs = n_patches // 200
+n_jobs_per_script = 500
+n_scripts = n_jobs // 500
 
 cwd = ("/astro/u/beckermr/workarea/des_y3_shear/metadetect/"
        "matts_simple_sims/v15")
@@ -52,7 +56,11 @@ output_dir = os.path.join(cwd, "outputs")
 
 script = PREAMBLE.format(script_name=script_name)
 
-with open('condor_job.desc', 'w') as fp:
-    fp.write(script)
-    for num in range(int(sys.argv[1])):
-        _append_job(fp, num, output_dir)
+job_ind = 1
+for snum in range(n_scripts):
+    with open('condor_job_%05d.desc' % snum, 'w') as fp:
+        fp.write(script)
+        for num in range(job_ind, job_ind + 500):
+            _append_job(fp, num, output_dir)
+
+    job_ind += 500
