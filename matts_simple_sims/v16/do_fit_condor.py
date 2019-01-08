@@ -67,9 +67,9 @@ def _func(fname):
         return (None, None)
 
 
-with tempfile.TemoraryDirectory() as tmpdir:
+with tempfile.TemporaryDirectory() as tmpdir:
     os.system('cp -r outputs/data*.pkl %s' % tmpdir)
-    files = glob.glob('%s/data*.pkl')
+    files = glob.glob('%s/data*.pkl' % tmpdir)
     io = [joblib.delayed(_func)(fname) for fname in files]
     outputs = joblib.Parallel(
         verbose=10,
