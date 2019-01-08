@@ -21,6 +21,5 @@ echo `which python`
 # args are nsims, seed, odir
 python run_sim_condor.py $1 $2 ${tmpdir} >& ${tmpdir}/log_${2}.oe
 
-mkdir -p $3/logs
 mv ${tmpdir}/log_${2}.oe $3/logs/.
 mv ${tmpdir}/data_*${2}.pkl $3/.
