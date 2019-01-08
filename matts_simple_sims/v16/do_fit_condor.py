@@ -67,15 +67,14 @@ def _func(fname):
         return (None, None)
 
 
-with tempfile.TemporaryDirectory() as tmpdir:
-    os.system('cp -r outputs/ %s/' % tmpdir)
-    files = glob.glob('%s/data*.pkl' % tmpdir)
-    io = [joblib.delayed(_func)(fname) for fname in files]
-    outputs = joblib.Parallel(
-        verbose=10,
-        n_jobs=-1,
-        pre_dispatch='2*n_jobs',
-        max_nbytes=None)(io)
+tmpdir = 'outputs'
+files = glob.glob('%s/data*.pkl' % tmpdir)
+io = [joblib.delayed(_func)(fname) for fname in files]
+outputs = joblib.Parallel(
+    verbose=10,
+    n_jobs=-1,
+    pre_dispatch='2*n_jobs',
+    max_nbytes=None)(io)
 
 pres, mres = zip(*outputs)
 
