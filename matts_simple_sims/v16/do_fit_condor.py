@@ -1,4 +1,6 @@
+import os
 import glob
+import tempfile
 import pickle
 import tqdm
 import numpy as np
@@ -65,14 +67,15 @@ def _func(fname):
         return (None, None)
 
 
-files = glob.glob('outputs/data*.pkl')
-
-io = [joblib.delayed(_func)(fname) for fname in files]
-outputs = joblib.Parallel(
-    verbose=10,
-    n_jobs=-1,
-    pre_dispatch='2*n_jobs',
-    max_nbytes=None)(io)
+with tempfile.TemoraryDirectory() as tmpdir:
+    os.system('cp -r outputs/data*.pkl %s' % tmpdir)
+    files = glob.glob('%s/data*.pkl')
+    io = [joblib.delayed(_func)(fname) for fname in files]
+    outputs = joblib.Parallel(
+        verbose=10,
+        n_jobs=-1,
+        pre_dispatch='2*n_jobs',
+        max_nbytes=None)(io)
 
 pres, mres = zip(*outputs)
 
