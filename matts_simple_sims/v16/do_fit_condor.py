@@ -1,6 +1,4 @@
-import os
 import glob
-import tempfile
 import pickle
 import tqdm
 import numpy as np
