@@ -231,8 +231,8 @@ class Sim(dict):
                     g1=self['g1'], g2=self['g2']).getMatrix()
                 sdx, sdy = np.dot(shear_mat, np.array([dx, dy]) / PIXSCALE)
             else:
-                sdx = dx
-                sdy = dy
+                sdx = dx / PIXSCALE
+                sdy = dy / PIXSCALE
 
             offset = galsim.PositionD(x=sdx, y=sdy)
             psf_offset = galsim.PositionD(
