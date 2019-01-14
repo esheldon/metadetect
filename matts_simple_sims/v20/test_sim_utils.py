@@ -265,16 +265,12 @@ class Sim(dict):
 
             def _func(row, col):
                 galsim_jac = self._get_loacal_jacobian(x=col, y=row)
-                image = galsim.ImageD(ncol=33, nrow=33, wcs=galsim_jac)
+                image = galsim.ImageD(ncol=17, nrow=17, wcs=galsim_jac)
                 image = self._psf.draw(
                     x=int(col+1+0.5),
                     y=int(row+1+0.5),
                     image=image)
                 psf_im = image.array
-                noise = psf_im.max()/1000.0
-                psf_im += self._rng.normal(
-                    scale=noise,
-                    size=psf_im.shape)
                 return psf_im
 
             funcs.append(_func)
@@ -284,19 +280,18 @@ class Sim(dict):
     def _render_psf(self, *, x, y):
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
-        image = galsim.ImageD(ncol=33, nrow=33, wcs=galsim_jac)
+        image = galsim.ImageD(ncol=17, nrow=17, wcs=galsim_jac)
         image = self._psf.draw(
             x=int(x+0.5+1),
             y=int(y+0.5+1),
             image=image)
         psf_im = image.array
 
-        noise = psf_im.max()/1000.0
+        noise = np.std(np.concatenate(
+            [psf_im[:, 0].ravel(), psf_im[0, -1].ravel()]))
         weight = psf_im + 1.0/noise**2
-        psf_im += self._rng.normal(
-            scale=noise,
-            size=psf_im.shape
-        )
+
+        print('s2n:', np.sqrt(np.sum(psf_im ** 2) / noise / noise))
 
         cen = (np.array(psf_im.shape)-1.0)/2.0
         j = ngmix.jacobian.Jacobian(row=cen[0], col=cen[1], wcs=galsim_jac)
