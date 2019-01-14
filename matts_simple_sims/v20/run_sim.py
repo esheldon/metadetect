@@ -1,6 +1,6 @@
 import sys
 import pickle
-
+import glob
 import numpy as np
 import joblib
 
@@ -101,15 +101,15 @@ def _fit_m_single(prr):
 
 
 if DO_MDET:
-    def _run_sim_mdet(seed):
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
+    def _run_sim_mdet(seed, pifffile):
+        rng = np.random.RandomState(seed=seed + 1000000)
+        mbobs = Sim(rng, pifffile, config={'g1': 0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         pres = _meas_shear(md.result)
 
-        rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
+        rng = np.random.RandomState(seed=seed + 1000000)
+        mbobs = Sim(rng, pifffile, config={'g1': -0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         mres = _meas_shear(md.result)
@@ -157,7 +157,14 @@ config.update(TEST_METADETECT_CONFIG)
 n_sims = int(sys.argv[1])
 offset = rank * n_sims
 
-sims = [joblib.delayed(_func)(i + offset) for i in range(n_sims)]
+piffs = glob.glob('piffs/*.fits')
+inds = np.random.RandomState(rank + 1000000).choice(
+    len(piffs),
+    size=n_sims,
+    replace=True)
+
+sims = [joblib.delayed(_func)(i + offset, piffs[pi])
+        for pi, i in zip(inds, range(n_sims))]
 outputs = joblib.Parallel(
     verbose=20,
     n_jobs=-1,

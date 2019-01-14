@@ -112,3 +112,4 @@ venv.bak/
 *.desc
 *.desc.submitted
 *.#*
+*piffs*

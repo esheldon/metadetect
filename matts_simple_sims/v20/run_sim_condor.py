@@ -1,4 +1,5 @@
 import os
+import glob
 import sys
 import pickle
 import joblib
@@ -86,15 +87,15 @@ def _fit_m_single(prr):
 
 
 if DO_MDET:
-    def _run_sim_mdet(seed):
+    def _run_sim_mdet(seed, pifffile):
         rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': 0.02}).get_mbobs()
+        mbobs = Sim(rng, pifffile, config={'g1': 0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         pres = _meas_shear(md.result)
 
         rng = np.random.RandomState(seed=seed)
-        mbobs = Sim(rng, config={'g1': -0.02}).get_mbobs()
+        mbobs = Sim(rng, pifffile, config={'g1': -0.02}).get_mbobs()
         md = Metadetect(config, mbobs, rng)
         md.go()
         mres = _meas_shear(md.result)
@@ -147,8 +148,13 @@ seeds = np.random.RandomState(seed).randint(
     low=0,
     high=2**30,
     size=n_sims)
+piffs = glob.glob('piffs/*.fits')
+inds = np.random.RandomState(seed).choice(
+    len(piffs),
+    size=n_sims,
+    replace=True)
 
-sims = [joblib.delayed(_func)(s) for s in seeds]
+sims = [joblib.delayed(_func)(s, piffs[i]) for i, s in zip(inds, seeds)]
 outputs = joblib.Parallel(
     verbose=100,
     n_jobs=1,

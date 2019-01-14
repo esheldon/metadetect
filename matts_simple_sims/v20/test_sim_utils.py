@@ -97,8 +97,9 @@ TEST_METADETECT_CONFIG = {
 
 
 class Sim(dict):
-    def __init__(self, rng, config=None):
+    def __init__(self, rng, pifffile, config=None):
         self.update(DEFAULT_SIM_CONFIG)
+        print('psf:', pifffile, flush=True)
 
         if config is not None:
             self.update(config)
@@ -109,7 +110,7 @@ class Sim(dict):
 
         self._wcs = galsim.PixelScale(PIXSCALE)
         # stores the PSFEx PSF in world coords
-        self._psf = piff.PSF.read("piff.fits")
+        self._psf = piff.PSF.read(pifffile)
 
         self._cmcsampler = CMCSampler(rng=self._rng)
 
