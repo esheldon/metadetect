@@ -28,7 +28,7 @@ for i in inds:
     expnum, ccd = good_ones[i]
     psf = (
         "/astro/u/mjarvis/work/y3_piff/y3a1-v29/{exp:d}/"
-        "D{exp:08d}_*_c{ccd:d}_*_piff.fits").format(
+        "D{exp:08d}_*_c{ccd:02d}_*_piff.fits").format(
             exp=expnum,
             ccd=ccd
         )
