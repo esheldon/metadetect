@@ -67,6 +67,9 @@ def _func(fname):
 
 tmpdir = 'outputs'
 files = glob.glob('%s/data*.pkl' % tmpdir)
+
+print('found %d outputs' % len(files))
+
 io = [joblib.delayed(_func)(fname) for fname in files]
 outputs = joblib.Parallel(
     verbose=10,
