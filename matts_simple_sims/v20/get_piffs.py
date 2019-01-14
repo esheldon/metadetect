@@ -27,8 +27,8 @@ inds = rng.choice(len(good_ones), size=1000, replace=False)
 for i in inds:
     expnum, ccd = good_ones[i]
     psf = (
-        "/astro/u/mjarvis/work/y3_piff/y3a1-v29/{exp:%d}/"
-        "D{exp:%08d}_r_c{ccd:%d}_*_piff.fits").format(
+        "/astro/u/mjarvis/work/y3_piff/y3a1-v29/{exp:d}/"
+        "D{exp:08d}_r_c{ccd:d}_*_piff.fits").format(
             exp=expnum,
             ccd=ccd
         )
