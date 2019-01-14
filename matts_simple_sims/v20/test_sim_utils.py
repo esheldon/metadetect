@@ -298,8 +298,6 @@ class Sim(dict):
             size=psf_im.shape
         )
 
-        print('s2n:', np.sqrt(np.sum(psf_im**2) / noise / noise), flush=True)
-
         cen = (np.array(psf_im.shape)-1.0)/2.0
         j = ngmix.jacobian.Jacobian(row=cen[0], col=cen[1], wcs=galsim_jac)
 
