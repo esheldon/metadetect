@@ -29,7 +29,7 @@ for i in inds:
     psf = (
         "/astro/u/mjarvis/work/y3_piff/y3a1-v29/{exp}/"
         "D{exp}_r_c{ccd}_*_piff.fits").format(
-            exp="%08" % expnum,
+            exp="%08d" % expnum,
             ccd="%d" % ccd
         )
     fname = glob.glob(psf)[0]
