@@ -32,11 +32,13 @@ class DESPSF(object):
         lm, ls = _getlogmnsigma(0.9, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
 
-        lm, ls = _getlogmnsigma(0.1, 0.01)
-        self._fwhm_x = np.exp(self._rng.normal() * ls + lm)
-
-        lm, ls = _getlogmnsigma(0.1, 0.01)
-        self._fwhm_y = np.exp(self._rng.normal() * ls + lm)
+        ls = 0.001
+        lm = 0.01 / 5
+        self._fwhm_x = self._rng.normal() * ls + lm
+        self._fwhm_y = self._rng.normal() * ls + lm
+        self._fwhm_xx = self._rng.normal() * ls + lm / 10
+        self._fwhm_xy = self._rng.normal() * ls + lm / 10
+        self._fwhm_yy = self._rng.normal() * ls + lm / 10
 
         # these are all properly normalized to an RMS abberation of 0.26
         # >>> vals = np.array(
@@ -56,10 +58,15 @@ class DESPSF(object):
     def _get_atm(self, x, y):
         g1, g2 = self._ps.getShear((x, y))
         mu = self._ps.getMagnification((x, y))
+        xs = x * self._x_scale
+        ys = y * self._x_scale
         fwhm = (
             self._fwhm_central +
-            x * self._x_scale * self._fwhm_x +
-            y * self._x_scale * self._fwhm_y)
+            xs * self._fwhm_x +
+            ys * self._fwhm_y +
+            xs * xs * self._fwhm_xx +
+            xs * ys * self._fwhm_xy +
+            ys * ys * self._fwhm_yy)
         psf = galsim.Moffat(
             beta=2.5,
             fwhm=fwhm).lens(g1=g1, g2=g2, mu=mu)

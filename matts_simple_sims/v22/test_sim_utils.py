@@ -109,7 +109,7 @@ class Sim(dict):
 
         self._wcs = galsim.PixelScale(PIXSCALE)
         # stores the PSFEx PSF in world coords
-        self._psf = DESPSF(self._rng, self['dims'][0] * PIXSCALE)
+        self._psf = DESPSF(self._rng, 2 * self['dims'][0] * PIXSCALE)
 
         self._cmcsampler = CMCSampler(rng=self._rng)
 
