@@ -1,41 +1,27 @@
 import numpy as np
-import scipy.interpolate
 import galsim
 
 
 class DESPSF(object):
-    def __init__(self, rng, im_width):
+    def __init__(self, rng, im_width, trunc=10):
         self._rng = rng
+        self._x_scale = 2.0 / im_width
 
         # set the power spectrum and PSF params
         # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
         def _pf(k):
-            return (k**2 + (1./180)**2)**(-11./6.)
+            return (k**2 + (1./180)**2)**(-11./6.) * np.exp(-(k*trunc)**2)
         self._ps = galsim.PowerSpectrum(
             e_power_function=_pf,
-            b_power_function=_pf,
-            units='arcsec')
+            b_power_function=_pf)
         ng = 64
-        gs = max(im_width // ng, 1)
-        g1, g2, kappa = self._ps.buildGrid(
+        gs = max(im_width / ng, 1)
+        self._ps.buildGrid(
             grid_spacing=gs,
             ngrid=ng,
             get_convergence=True,
             variance=0.01**2,
             rng=galsim.BaseDeviate(self._rng.randint(1, 2**30)))
-        g1_r, g2_r, mu = galsim.lensing_ps.theoryToObserved(g1, g2, kappa)
-
-        min_gs = (-ng/2 + 0.5) * gs
-        max_gs = (ng/2 - 0.5) * gs
-        y_gs, x_gs = np.meshgrid(
-            np.arange(min_gs, max_gs+gs, gs),
-            np.arange(min_gs, max_gs+gs, gs))
-        x_gs = x_gs.ravel()
-        y_gs = y_gs.ravel()
-
-        self._g1_r = scipy.interpolate.interp2d(x_gs, y_gs, g1_r.ravel())
-        self._g2_r = scipy.interpolate.interp2d(x_gs, y_gs, g2_r.ravel())
-        self._mu = scipy.interpolate.interp2d(x_gs, y_gs, mu.ravel())
 
         def _getlogmnsigma(mean, sigma):
             logmean = np.log(mean) - 0.5*np.log(1 + sigma**2/mean**2)
@@ -45,6 +31,12 @@ class DESPSF(object):
 
         lm, ls = _getlogmnsigma(0.9, 0.1)
         self._fwhm_central = np.exp(self._rng.normal() * ls + lm)
+
+        lm, ls = _getlogmnsigma(0.1, 0.01)
+        self._fwhm_x = np.exp(self._rng.normal() * ls + lm)
+
+        lm, ls = _getlogmnsigma(0.1, 0.01)
+        self._fwhm_y = np.exp(self._rng.normal() * ls + lm)
 
         # these are all properly normalized to an RMS abberation of 0.26
         # >>> vals = np.array(
@@ -62,12 +54,15 @@ class DESPSF(object):
             spher=self._rng.normal() * 0.03)
 
     def _get_atm(self, x, y):
-        g1 = self._g1_r(x, y)
-        g2 = self._g2_r(x, y)
-        mu = self._mu(x, y)
+        g1, g2 = self._ps.getShear((x, y))
+        mu = self._ps.getMagnification((x, y))
+        fwhm = (
+            self._fwhm_central +
+            x * self._x_scale * self._fwhm_x +
+            y * self._x_scale * self._fwhm_y)
         psf = galsim.Moffat(
             beta=2.5,
-            fwhm=self._fwhm_central).lens(g1=g1, g2=g2, mu=mu)
+            fwhm=fwhm).lens(g1=g1, g2=g2, mu=mu)
         return psf
 
     def _get_opt(self):
@@ -82,7 +77,4 @@ class DESPSF(object):
         return psf
 
     def getPSF(self, pos):
-
-        return galsim.Convolve(
-            self._get_atm(pos.x, pos.y),
-            self._get_opt())
+        return self._get_atm(pos.x, pos.y)

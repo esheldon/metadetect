@@ -6,6 +6,7 @@ import galsim.des
 from metadetect import metadetect_and_cal
 
 from cmcsampler import CMCSampler
+from des_psf import DESPSF
 
 PIXSCALE = 0.263
 
@@ -108,7 +109,7 @@ class Sim(dict):
 
         self._wcs = galsim.PixelScale(PIXSCALE)
         # stores the PSFEx PSF in world coords
-        self._psf = galsim.des.DES_PSFEx('psfcat.psf', wcs=self._wcs)
+        self._psf = DESPSF(self._rng, self['dims'][0] * PIXSCALE)
 
         self._cmcsampler = CMCSampler(rng=self._rng)
 
@@ -149,7 +150,6 @@ class Sim(dict):
                     image=im,
                     offset=offset,
                     add_to_image=True,
-                    method='no_pixel',
                 )
             im = im.array.copy()
 
@@ -236,7 +236,7 @@ class Sim(dict):
 
             offset = galsim.PositionD(x=sdx, y=sdy)
             psf_offset = galsim.PositionD(
-                x=sdx + self._im_cen[1] + 1, y=sdy + self._im_cen[0] + 1)
+                x=sdx * PIXSCALE, y=sdy * PIXSCALE)
             offsets.append(offset)
 
             band_objs = []
@@ -262,12 +262,13 @@ class Sim(dict):
 
             def _func(row, col):
                 galsim_jac = self._get_loacal_jacobian(x=col, y=row)
+                dx = PIXSCALE * (col - self._im_cen[1])
+                dy = PIXSCALE * (row - self._im_cen[0])
                 psf_im = self._psf.getPSF(
-                    galsim.PositionD(x=col+1, y=row+1)).drawImage(
-                        nx=33,
-                        ny=33,
-                        wcs=galsim_jac,
-                        method='no_pixel').array
+                    galsim.PositionD(x=dx, y=dy)).drawImage(
+                        nx=17,
+                        ny=17,
+                        wcs=galsim_jac).array
                 return psf_im
 
             funcs.append(_func)
@@ -277,12 +278,14 @@ class Sim(dict):
     def _render_psf(self, *, x, y):
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
+        dx = PIXSCALE * (x - self._im_cen[1])
+        dy = PIXSCALE * (y - self._im_cen[0])
+
         psf_im = self._psf.getPSF(
-            galsim.PositionD(x=x+1, y=x+1)).drawImage(
-                nx=33,
-                ny=33,
-                wcs=galsim_jac,
-                method='no_pixel').array
+            galsim.PositionD(x=dx, y=dy)).drawImage(
+                nx=17,
+                ny=17,
+                wcs=galsim_jac).array
 
         snr = 500
         noise = np.sqrt(np.sum(psf_im ** 2)) / snr
