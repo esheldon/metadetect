@@ -18,14 +18,14 @@ SHEARS = {
 
 def do_metadetect_and_cal(
         config, mbobs, rng, wcs_jacobian_func=None, psf_rec_funcs=None,
-        buffer_size=None):
+        buffer_size=None, force_mdet_psf=False):
     """
     Meta-detect and cal on the multi-band observations.
     """
     md = MetadetectAndCal(
         config, mbobs, rng,
         wcs_jacobian_func=wcs_jacobian_func, psf_rec_funcs=psf_rec_funcs,
-        buffer_size=buffer_size)
+        buffer_size=buffer_size, force_mdet_psf=force_mdet_psf)
     md.go()
     return md.result
 
@@ -47,7 +47,7 @@ class MetadetectAndCal(dict):
     """
     def __init__(
             self, config, mbobs, rng, wcs_jacobian_func=None,
-            psf_rec_funcs=None, buffer_size=None):
+            psf_rec_funcs=None, buffer_size=None, force_mdet_psf=False):
         self._set_config(config)
         self.mbobs = mbobs
         self.nband = len(mbobs)
@@ -60,6 +60,7 @@ class MetadetectAndCal(dict):
             self.psf_rec_funcs = psf_rec_funcs
         self.buffer_size = buffer_size
         self.image_size = mbobs[0][0].image.shape[0]
+        self.force_mdet_psf = force_mdet_psf
 
         self._set_fitter()
 
@@ -137,6 +138,8 @@ class MetadetectAndCal(dict):
         mcal_config = copy.deepcopy(self['metacal'])
         mcal_config['force_required_types'] = False
         mcal_config['types'] = [mcal_step]
+        if self.force_mdet_psf:
+            mcal_config['reconv_psfs'] = self._get_mbobs_psfs(sheared_mbobs)
         mcal_mbobs_list = []
         if self.buffer_size is not None and self.buffer_size > 0:
             proc_msk = (
@@ -162,6 +165,13 @@ class MetadetectAndCal(dict):
 
         res = self._add_positions(cat[proc_msk], res)
         return res
+
+    def _get_mbobs_psfs(self, mbobs):
+        _psfs = []
+        for olist in mbobs:
+            _psfs.append([])
+            for o in olist:
+                _psfs[-1].append(eval(repr(o.psf.galsim_obj)))
 
     def _set_fitter(self):
         """
