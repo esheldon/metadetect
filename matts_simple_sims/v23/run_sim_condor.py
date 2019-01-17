@@ -113,7 +113,8 @@ else:
         md = MetadetectAndCal(
             config, mbobs, rng,
             wcs_jacobian_func=jac_func,
-            psf_rec_funcs=psf_rec_funcs)
+            psf_rec_funcs=psf_rec_funcs,
+            force_mdet_psf=True)
         md.go()
         pres = _meas_shear(md.result)
 
@@ -125,7 +126,8 @@ else:
         md = MetadetectAndCal(
             config, mbobs, rng,
             wcs_jacobian_func=jac_func,
-            psf_rec_funcs=psf_rec_funcs)
+            psf_rec_funcs=psf_rec_funcs,
+            force_mdet_psf=True)
         md.go()
         mres = _meas_shear(md.result)
 
