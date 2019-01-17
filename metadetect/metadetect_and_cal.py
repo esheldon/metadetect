@@ -139,7 +139,7 @@ class MetadetectAndCal(dict):
         mcal_config['force_required_types'] = False
         mcal_config['types'] = [mcal_step]
         if self.force_mdet_psf:
-            mcal_config['reconv_psfs'] = self._get_mbobs_psfs(sheared_mbobs)
+            mcal_config['reconv_psf'] = self._get_mbobs_psfs(sheared_mbobs)
         mcal_mbobs_list = []
         if self.buffer_size is not None and self.buffer_size > 0:
             proc_msk = (
@@ -171,7 +171,8 @@ class MetadetectAndCal(dict):
         for olist in mbobs:
             _psfs.append([])
             for o in olist:
-                _psfs[-1].append(eval(repr(o.psf.galsim_obj)))
+                _psfs[-1].append(o.psf.galsim_obj)
+        return _psfs
 
     def _set_fitter(self):
         """

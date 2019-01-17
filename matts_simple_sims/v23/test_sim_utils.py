@@ -5,7 +5,7 @@ import galsim
 import galsim.des
 from metadetect import metadetect_and_cal
 
-from fit_des_psf import ShpPSF
+from des_psf import DESPSF
 from cmcsampler import CMCSampler
 
 PIXSCALE = 0.263
@@ -31,6 +31,7 @@ TEST_METADETECT_CONFIG = {
         'psf': 'fitgauss',
         'types': ['noshear', '1p', '1m', '2p', '2m'],
         'use_noise_image': True,
+        'dilation_fudge': 1.05,
     },
 
     'sx': {
@@ -109,7 +110,7 @@ class Sim(dict):
 
         self._wcs = galsim.PixelScale(PIXSCALE)
         # stores the PSFEx PSF in world coords
-        self._psf = ShpPSF('shp_psf.fit')
+        self._psf = DESPSF(self._rng, 2 * self['dims'][0] * PIXSCALE)
 
         self._cmcsampler = CMCSampler(rng=self._rng)
 
@@ -236,7 +237,7 @@ class Sim(dict):
 
             offset = galsim.PositionD(x=sdx, y=sdy)
             psf_offset = galsim.PositionD(
-                x=sdx + self._im_cen[1], y=sdy + self._im_cen[0])
+                x=sdx * PIXSCALE, y=sdy * PIXSCALE)
             offsets.append(offset)
 
             band_objs = []
@@ -244,7 +245,8 @@ class Sim(dict):
                 band_disk = disk_obj.withFlux(flux)
                 obj = band_disk.shear(
                     g1=self['g1'], g2=self['g2'])
-                obj = galsim.Convolve(obj, self._psf.getPSF(psf_offset))
+                _psf = self._psf.getPSF(psf_offset)
+                obj = galsim.Convolve(obj, _psf)
                 band_objs.append(obj)
 
             all_band_obj.append(band_objs)
@@ -253,7 +255,7 @@ class Sim(dict):
 
     def _get_loacal_jacobian(self, *, x, y):
         return self._wcs.jacobian(
-            image_pos=galsim.PositionD(x=x+1, y=x+1))
+            image_pos=galsim.PositionD(x=x+1, y=y+1))
 
     def get_psf_rec_funcs(self):
         funcs = []
@@ -261,15 +263,13 @@ class Sim(dict):
 
             def _func(row, col):
                 galsim_jac = self._get_loacal_jacobian(x=col, y=row)
+                dx = PIXSCALE * (col - self._im_cen[1])
+                dy = PIXSCALE * (row - self._im_cen[0])
                 psf_im = self._psf.getPSF(
-                    galsim.PositionD(x=col+1, y=row+1)).drawImage(
+                    galsim.PositionD(x=dx, y=dy)).drawImage(
                         nx=33,
                         ny=33,
                         wcs=galsim_jac).array
-                noise = psf_im.max()/1000.0
-                psf_im += self._rng.normal(
-                    scale=noise,
-                    size=psf_im.shape)
                 return psf_im
 
             funcs.append(_func)
@@ -279,18 +279,18 @@ class Sim(dict):
     def _render_psf(self, *, x, y):
         galsim_jac = self._get_loacal_jacobian(x=x, y=y)
 
+        dx = PIXSCALE * (x - self._im_cen[1])
+        dy = PIXSCALE * (y - self._im_cen[0])
+
         psf_im = self._psf.getPSF(
-            galsim.PositionD(x=x+1, y=x+1)).drawImage(
+            galsim.PositionD(x=dx, y=dy)).drawImage(
                 nx=33,
                 ny=33,
                 wcs=galsim_jac).array
 
-        noise = psf_im.max()/1000.0
+        snr = 500
+        noise = np.sqrt(np.sum(psf_im ** 2)) / snr
         weight = psf_im + 1.0/noise**2
-        psf_im += self._rng.normal(
-            scale=noise,
-            size=psf_im.shape
-        )
 
         cen = (np.array(psf_im.shape)-1.0)/2.0
         j = ngmix.jacobian.Jacobian(row=cen[0], col=cen[1], wcs=galsim_jac)
