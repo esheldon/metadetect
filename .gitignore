@@ -113,3 +113,4 @@ venv.bak/
 *.desc.submitted
 *.#*
 *piff.fits
+*.png
