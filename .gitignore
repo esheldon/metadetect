@@ -114,3 +114,4 @@ venv.bak/
 *.#*
 *piff.fits
 *.png
+*.fits.fz
