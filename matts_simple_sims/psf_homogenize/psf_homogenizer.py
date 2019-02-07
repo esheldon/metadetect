@@ -197,17 +197,22 @@ class PSFHomogenizer(object):
                 else:
                     assert self._psf_im_shape == psf_im.shape
 
+                hsmpars = galsim.hsm.HSMParams(
+                    max_mom2_iter=1000)
                 gim = galsim.ImageD(psf_im, wcs=galsim.PixelScale(1))
-                moms = galsim.hsm.FindAdaptiveMom(gim)
-                fac = gim.calculateFWHM() * (
-                    1.0 + 2.0 * np.sqrt(
-                        moms.observed_shape.g1**2 +
-                        moms.observed_shape.g2**2))
-                if (self._target_psf_size is None or
-                        fac > self._target_psf_size):
-                    self._target_psf_size = fac
-                    self._target_psf_image = psf_im
-                    self._target_psf_loc = (row, col)
+                try:
+                    moms = galsim.hsm.FindAdaptiveMom(gim, hsmparams=hsmpars)
+                    fac = gim.calculateFWHM() * (
+                        1.0 + 2.0 * np.sqrt(
+                            moms.observed_shape.g1**2 +
+                            moms.observed_shape.g2**2))
+                    if (self._target_psf_size is None or
+                            fac > self._target_psf_size):
+                        self._target_psf_size = fac
+                        self._target_psf_image = psf_im
+                        self._target_psf_loc = (row, col)
+                except galsim.errors.GalSimHSMError:
+                    pass
 
         # the final PSF is an interpolated image convolved with the Gaussian
         # smoothing kernel
