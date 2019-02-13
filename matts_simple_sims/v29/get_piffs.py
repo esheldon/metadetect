@@ -22,7 +22,7 @@ good_ones = list(d_set - bl_set)
 seed = 190
 rng = np.random.RandomState(seed=seed)
 
-inds = rng.choice(len(good_ones), size=1000, replace=False)
+inds = rng.choice(len(good_ones), size=10000, replace=False)
 
 for i in inds:
     expnum, ccd = good_ones[i]
