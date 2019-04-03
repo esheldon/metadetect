@@ -34,6 +34,9 @@ class MEDSInterface(NGMixMEDS):
             'image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
 
+    def has_psf(self):
+        return True
+
     def get_psf(self, iobj, icut):
         """
         get an image of the psf
@@ -308,6 +311,7 @@ class MEDSifier(object):
             ('flux_radius','f4'),
             ('isoarea_image','f4'),
             ('iso_radius','f4'),
+            ('iso_radius_arcsec','f4'),
             ('box_size','i4'),
             ('file_id','i8',ncut),
             ('orig_row','f4',ncut),
@@ -343,6 +347,8 @@ class MEDSifier(object):
             cat['isoarea_image'][i] = w[0].size
 
         cat['iso_radius'] = np.sqrt(cat['isoarea_image'].clip(min=1)/np.pi)
+        cat['iso_radius_arcsec'] = (
+            cat['iso_radius'] * self.mbobs[0][0].jacobian.get_scale())
 
         if cat.size > 0:
 
