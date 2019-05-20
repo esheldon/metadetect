@@ -61,11 +61,17 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
-        odict = self._get_all_metacal()
+        try:
+            odict = self._get_all_metacal()
+        except BootPSFFailure:
+            odict = None
 
-        self._result = {}
-        for key, mbobs in odict.items():
-            self._result[key] = self._measure(mbobs)
+        if odict is None:
+            self._result=None
+        else:
+            self._result = {}
+            for key, mbobs in odict.items():
+                self._result[key] = self._measure(mbobs)
 
     def _set_fitter(self):
         """
