@@ -67,6 +67,18 @@ class Metadetect(dict):
 
         self.ormask = ormask
 
+        wstar = np.where((ormask & self['star_flags']) != 0)
+        wtapebump = np.where((ormask & self['tapebump_flags']) != 0)
+        wspline_interp = np.where((ormask & self['spline_interp_flags']) != 0)
+        wnoise_interp = np.where((ormask & self['noise_interp_flags']) != 0)
+        wimperfect = np.where((ormask & self['imperfect_flags']) != 0)
+
+        self.star_frac = wstar[0].size/ormask.size
+        self.tapebump_frac = wtapebump[0].size/ormask.size
+        self.noise_interp_frac = wnoise_interp[0].size/ormask.size
+        self.spline_interp_frac = wspline_interp[0].size/ormask.size
+        self.imperfect_frac = wimperfect[0].size/ormask.size
+
     @property
     def result(self):
         """
@@ -131,6 +143,11 @@ class Metadetect(dict):
             ('sx_row_noshear', 'f4'),
             ('sx_col_noshear', 'f4'),
             ('ormask', 'i4'),
+            ('star_frac', 'f4'),  # these are for the whole image, redundant
+            ('tapebump_frac', 'f4'),
+            ('spline_interp_frac', 'f4'),
+            ('noise_interp_frac', 'f4'),
+            ('imperfect_frac', 'f4'),
         ]
         newres = eu.numpy_util.add_fields(
             res,
@@ -141,6 +158,11 @@ class Metadetect(dict):
         newres['psfrec_g'][:, 0] = self.psf_stats['g1']
         newres['psfrec_g'][:, 1] = self.psf_stats['g2']
         newres['psfrec_T'][:] = self.psf_stats['T']
+        newres['star_frac'][:] = self.star_frac
+        newres['tapebump_frac'][:] = self.tapebump_frac
+        newres['spline_interp_frac'][:] = self.spline_interp_frac
+        newres['noise_interp_frac'][:] = self.noise_interp_frac
+        newres['imperfect_frac'][:] = self.imperfect_frac
 
         if cat.size > 0:
             obs = self.mbobs[0][0]
