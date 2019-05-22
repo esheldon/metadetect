@@ -1,3 +1,4 @@
+# flake8: noqa
 from .metadetect import (
     do_metadetect,
     Metadetect,
