@@ -1,9 +1,11 @@
+import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
 from . import detect
 from . import fitting
 from . import procflags
+from . import shearpos
 
 
 def do_metadetect(config, mbobs, rng):
@@ -45,6 +47,26 @@ class Metadetect(dict):
 
         self._set_fitter()
 
+        self._set_ormask()
+
+    def _set_ormask(self):
+        """
+        set the ormask, ored from all ormasks
+        """
+
+        for band, obslist in enumerate(self.mbobs):
+            nepoch = len(obslist)
+            assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
+
+            obs = obslist[0]
+
+            if band == 0:
+                ormask = obs.ormask.copy()
+            else:
+                ormask |= obs.ormask
+
+        self.ormask = ormask
+
     @property
     def result(self):
         """
@@ -67,11 +89,11 @@ class Metadetect(dict):
             odict = None
 
         if odict is None:
-            self._result=None
+            self._result = None
         else:
             self._result = {}
-            for key, mbobs in odict.items():
-                self._result[key] = self._measure(mbobs)
+            for shear_str, mbobs in odict.items():
+                self._result[shear_str] = self._measure(mbobs, shear_str)
 
     def _set_fitter(self):
         """
@@ -82,7 +104,7 @@ class Metadetect(dict):
             self.rng,
         )
 
-    def _measure(self, mbobs):
+    def _measure(self, mbobs, shear_str):
         """
         perform measurements on the input mbobs. This involves running
         detection as well as measurements
@@ -95,10 +117,10 @@ class Metadetect(dict):
 
         res = self._fitter.go(mbobs_list)
 
-        res = self._add_positions_and_psf(medsifier.cat, res)
+        res = self._add_positions_and_psf(medsifier.cat, res, shear_str)
         return res
 
-    def _add_positions_and_psf(self, cat, res):
+    def _add_positions_and_psf(self, cat, res, shear_str):
         """
         add catalog positions to the result
         """
@@ -109,9 +131,14 @@ class Metadetect(dict):
         res['psfrec_T'][:] = self.psf_stats['T']
 
         if cat.size > 0:
+            obs = self.mbobs[0][0]
+
             new_dt = [
                 ('sx_row', 'f4'),
                 ('sx_col', 'f4'),
+                ('sx_row_noshear', 'f4'),
+                ('sx_col_noshear', 'f4'),
+                ('ormask', 'i4'),
             ]
             newres = eu.numpy_util.add_fields(
                 res,
@@ -120,6 +147,23 @@ class Metadetect(dict):
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
+
+            rows_noshear, cols_noshear = shearpos.unshear_positions(
+                newres['sx_row'],
+                newres['sx_col'],
+                shear_str,
+                obs,  # an example for jacobian and image shape
+            )
+
+            newres['sx_row_noshear'] = rows_noshear
+            newres['sx_col_noshear'] = cols_noshear
+
+            dims = obs.image.shape
+            rclip = _clip_and_round(rows_noshear, dims[0])
+            cclip = _clip_and_round(cols_noshear, dims[1])
+
+            newres['ormask'] = self.ormask[rclip, cclip]
+
         else:
             newres = res
 
@@ -208,3 +252,16 @@ class Metadetect(dict):
             'g2': g2,
             'T': T,
         }
+
+
+def _clip_and_round(vals_in, dim):
+    """
+    clip values and round to nearest integer
+    """
+
+    vals = vals_in.copy()
+
+    vals.clip(min=0, max=dim-1, out=vals)
+    np.rint(vals, out=vals)
+
+    return vals.astype('i4')
