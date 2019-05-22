@@ -1,13 +1,14 @@
-# flake8: noqa
-from .metadetect import (
+__version__ = '0.2.0'
+
+from .metadetect import (  # noqa
     do_metadetect,
     Metadetect,
 )
-from . import detect
-from . import metadetect
-from . import fitting
+from . import detect  # noqa
+from . import metadetect  # noqa
+from . import fitting  # noqa
 
-from . import util
-from . import defaults
-from . import procflags
-from . import shearpos
+from . import util  # noqa
+from . import defaults  # noqa
+from . import procflags  # noqa
+from . import shearpos  # noqa
