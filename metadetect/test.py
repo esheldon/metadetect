@@ -133,11 +133,13 @@ class Sim(dict):
             im += self.rng.normal(scale=self['noises'][band], size=im.shape)
             wt = im*0 + 1.0/self['noises'][band]**2
             bmask = np.zeros(im.shape, dtype='i4')
+            ormask = np.zeros(im.shape, dtype='i4')
 
             obs = ngmix.Observation(
                 im,
                 weight=wt,
                 bmask=bmask,
+                ormask=ormask,
                 jacobian=self._jacobian,
                 psf=self._psf_obs.copy(),
             )
