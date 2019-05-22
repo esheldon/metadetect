@@ -45,27 +45,22 @@ def shear_positions(rows, cols, shear_str, obs, step=0.01):
 
     v_cen, u_cen = jac.get_vu(row=row_cen, col=col_cen)
 
-    def _shearpos(row, col):
-        # apply WCS to get to world coords
-        v, u = jac.get_vu(row=row, col=col)
+    # apply WCS to get to world coords
+    v, u = jac.get_vu(row=rows, col=cols)
 
-        # unshear (subtract and then add the canonical center in u, v)
-        u = np.atleast_1d(u) - u_cen
-        v = np.atleast_1d(v) - v_cen
-        out = np.dot(a, np.vstack([u, v]))
-        assert out.shape[1] == u.shape[0]
-        u_sheared = out[0] + u_cen
-        v_sheared = out[1] + v_cen
+    # unshear (subtract and then add the canonical center in u, v)
+    u = np.atleast_1d(u) - u_cen
+    v = np.atleast_1d(v) - v_cen
 
-        # undo the WCS to get to image coords
-        row_sheared, col_sheared = jac.get_rowcol(v=v_sheared, u=u_sheared)
-        return row_sheared[0], col_sheared[0]
+    pos = np.vstack((u, v))
 
-    rows_sheared = np.zeros(rows.size)
-    cols_sheared = np.zeros(rows.size)
+    out = np.dot(a, pos)
+    assert out.shape[1] == u.shape[0]
+    u_sheared = out[0, :] + u_cen
+    v_sheared = out[1, :] + v_cen
 
-    for i in range(rows.size):
-        rows_sheared[i], cols_sheared[i] = _shearpos(rows[i], cols[i])
+    # undo the WCS to get to image coords
+    rows_sheared, cols_sheared = jac.get_rowcol(v=v_sheared, u=u_sheared)
 
     return rows_sheared, cols_sheared
 
@@ -113,28 +108,23 @@ def unshear_positions(rows, cols, shear_str, obs, step=0.01):
 
     v_cen, u_cen = jac.get_vu(row=row_cen, col=col_cen)
 
-    def _unshearpos(row, col):
-        # apply WCS to get to world coords
-        v, u = jac.get_vu(row=row, col=col)
+    # apply WCS to get to world coords
+    v, u = jac.get_vu(row=rows, col=cols)
 
-        # unshear (subtract and then add the canonical center in u, v)
-        u = np.atleast_1d(u) - u_cen
-        v = np.atleast_1d(v) - v_cen
-        out = np.dot(ainv, np.vstack([u, v]))
-        assert out.shape[1] == u.shape[0]
-        u_unsheared = out[0] + u_cen
-        v_unsheared = out[1] + v_cen
+    # unshear (subtract and then add the canonical center in u, v)
+    u = np.atleast_1d(u) - u_cen
+    v = np.atleast_1d(v) - v_cen
 
-        # undo the WCS to get to image coords
-        row_unsheared, col_unsheared = jac.get_rowcol(v=v_unsheared, u=u_unsheared)
+    pos = np.vstack((u, v))
 
-        return row_unsheared[0], col_unsheared[0]
+    out = np.dot(ainv, pos)
+    assert out.shape[1] == u.shape[0]
+    u_unsheared = out[0] + u_cen
+    v_unsheared = out[1] + v_cen
 
-    rows_unsheared = np.zeros(rows.size)
-    cols_unsheared = np.zeros(rows.size)
-
-    for i in range(rows.size):
-        rows_unsheared[i], cols_unsheared[i] = _unshearpos(rows[i], cols[i])
+    # undo the WCS to get to image coords
+    rows_unsheared, cols_unsheared = \
+        jac.get_rowcol(v=v_unsheared, u=u_unsheared)
 
     return rows_unsheared, cols_unsheared
 
