@@ -1,3 +1,4 @@
+import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
@@ -158,8 +159,8 @@ class Metadetect(dict):
             newres['sx_col_noshear'] = cols_noshear
 
             dims = obs.image.shape
-            rclip = rows_noshear.clip(min=0, max=dims[0]-1).astype('i4')
-            cclip = cols_noshear.clip(min=0, max=dims[1]-1).astype('i4')
+            rclip = _clip_and_round(rows_noshear, dims[0])
+            cclip = _clip_and_round(cols_noshear, dims[1])
 
             newres['ormask'] = self.ormask[rclip, cclip]
 
@@ -251,3 +252,16 @@ class Metadetect(dict):
             'g2': g2,
             'T': T,
         }
+
+
+def _clip_and_round(vals_in, dim):
+    """
+    clip values and round to nearest integer
+    """
+
+    vals = vals_in.copy()
+
+    vals.clip(min=0, max=dim-1, out=vals)
+    np.rint(vals, out=vals)
+
+    return vals.astype('i4')
