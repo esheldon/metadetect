@@ -62,16 +62,22 @@ class Metadetect(dict):
 
             if band == 0:
                 ormask = obs.ormask.copy()
+                bmask = obs.bmask.copy()
             else:
                 ormask |= obs.ormask
+                bmask |= obs.bmask
 
         self.ormask = ormask
+        self.bmask = bmask
 
+        # calculated from ormask
         wstar = np.where((ormask & self['star_flags']) != 0)
         wtapebump = np.where((ormask & self['tapebump_flags']) != 0)
-        wspline_interp = np.where((ormask & self['spline_interp_flags']) != 0)
-        wnoise_interp = np.where((ormask & self['noise_interp_flags']) != 0)
         wimperfect = np.where((ormask & self['imperfect_flags']) != 0)
+
+        # calculated from bmask
+        wspline_interp = np.where((bmask & self['spline_interp_flags']) != 0)
+        wnoise_interp = np.where((bmask & self['noise_interp_flags']) != 0)
 
         self.star_frac = wstar[0].size/ormask.size
         self.tapebump_frac = wtapebump[0].size/ormask.size
@@ -143,6 +149,7 @@ class Metadetect(dict):
             ('sx_row_noshear', 'f4'),
             ('sx_col_noshear', 'f4'),
             ('ormask', 'i4'),
+            ('bmask', 'i4'),
             ('star_frac', 'f4'),  # these are for the whole image, redundant
             ('tapebump_frac', 'f4'),
             ('spline_interp_frac', 'f4'),
@@ -185,6 +192,7 @@ class Metadetect(dict):
             cclip = _clip_and_round(cols_noshear, dims[1])
 
             newres['ormask'] = self.ormask[rclip, cclip]
+            newres['bmask'] = self.bmask[rclip, cclip]
 
         return newres
 

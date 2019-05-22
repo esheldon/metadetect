@@ -101,10 +101,10 @@ TEST_METADETECT_CONFIG = {
     'tapebump_flags': 16384,
 
     # things interpolated using the spline
-    'spline_interp_flags': 3155,
+    'spline_interp_flags': 268435456,
 
     # replaced with noise
-    'noise_interp_flags': 908,
+    'noise_interp_flags': 536870912,
 
     # pixels will have these flag set in the ormask if they were interpolated
     # plus adding in tapebump and star
