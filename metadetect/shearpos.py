@@ -16,6 +16,8 @@ def shear_positions(rows, cols, shear_str, obs, step=0.01):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+    step: float
+        shear step for metacal, default 0.01
 
     Returns
     -------
@@ -82,6 +84,8 @@ def unshear_positions(rows, cols, shear_str, obs, step=0.01):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+    step: float
+        shear step for metacal, default 0.01
 
     Returns
     -------
