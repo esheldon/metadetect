@@ -16,6 +16,11 @@ def shear_positions(rows, cols, shear_str, obs, step=0.01):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+
+    Returns
+    -------
+    rows_sheared, cols_sheared:
+        rows and cols in the sheared coordinates
     """
 
     if shear_str == 'noshear':
@@ -77,6 +82,11 @@ def unshear_positions(rows, cols, shear_str, obs, step=0.01):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+
+    Returns
+    -------
+    rows_unsheared, cols_unsheared:
+        rows and cols in the unsheared coordinates
     """
 
     if shear_str == 'noshear':
