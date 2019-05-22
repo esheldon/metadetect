@@ -390,7 +390,7 @@ def test_shear_pos(show=False):
             _show_pos(rows, cols, crows, ccols, title=sstr+' unsheared')
 
         assert np.allclose(rows, crows), 'checking rows inverse works'
-        assert np.allclose(cols, ccols), 'checking rows inverse works'
+        assert np.allclose(cols, ccols), 'checking cols inverse works'
 
 
 def _show_pos(rows, cols, srows, scols, **kw):
