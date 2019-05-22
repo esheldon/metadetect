@@ -125,25 +125,25 @@ class Metadetect(dict):
         add catalog positions to the result
         """
 
-        res['psfrec_flags'][:] = self.psf_stats['flags']
-        res['psfrec_g'][:, 0] = self.psf_stats['g1']
-        res['psfrec_g'][:, 1] = self.psf_stats['g2']
-        res['psfrec_T'][:] = self.psf_stats['T']
+        new_dt = [
+            ('sx_row', 'f4'),
+            ('sx_col', 'f4'),
+            ('sx_row_noshear', 'f4'),
+            ('sx_col_noshear', 'f4'),
+            ('ormask', 'i4'),
+        ]
+        newres = eu.numpy_util.add_fields(
+            res,
+            new_dt,
+        )
+
+        newres['psfrec_flags'][:] = self.psf_stats['flags']
+        newres['psfrec_g'][:, 0] = self.psf_stats['g1']
+        newres['psfrec_g'][:, 1] = self.psf_stats['g2']
+        newres['psfrec_T'][:] = self.psf_stats['T']
 
         if cat.size > 0:
             obs = self.mbobs[0][0]
-
-            new_dt = [
-                ('sx_row', 'f4'),
-                ('sx_col', 'f4'),
-                ('sx_row_noshear', 'f4'),
-                ('sx_col_noshear', 'f4'),
-                ('ormask', 'i4'),
-            ]
-            newres = eu.numpy_util.add_fields(
-                res,
-                new_dt,
-            )
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
@@ -163,9 +163,6 @@ class Metadetect(dict):
             cclip = _clip_and_round(cols_noshear, dims[1])
 
             newres['ormask'] = self.ormask[rclip, cclip]
-
-        else:
-            newres = res
 
         return newres
 
