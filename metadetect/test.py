@@ -92,6 +92,24 @@ TEST_METADETECT_CONFIG = {
 
     # check for an edge hit
     'bmask_flags': 2**30,
+
+    # fraction of slice where STAR or TRAIL was set.  We may cut objects detected
+    # there
+    'star_flags': 96,
+
+    # we don't interpolate over tapebumps
+    'tapebump_flags': 16384,
+
+    # things interpolated using the spline
+    'spline_interp_flags': 3155,
+
+    # replaced with noise
+    'noise_interp_flags': 908,
+
+    # pixels will have these flag set in the ormask if they were interpolated
+    # plus adding in tapebump and star
+    'imperfect_flags': 20479,
+
 }
 
 
