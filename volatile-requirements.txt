@@ -2,4 +2,3 @@
 # a lot and usually we need master
 git+https://github.com/esheldon/ngmix.git@master
 git+https://github.com/esheldon/meds.git@master
-git+https://github.com/esheldon/desmeds.git@master
