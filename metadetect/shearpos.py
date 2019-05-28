@@ -1,6 +1,8 @@
 import numpy as np
 import galsim
 
+SKIP_SHEARS = ['noshear', '1p_psf', '1m_psf', '2p_psf', '2m_psf']
+
 
 def shear_positions(rows, cols, shear_str, obs, step=0.01):
     """
@@ -25,7 +27,7 @@ def shear_positions(rows, cols, shear_str, obs, step=0.01):
         rows and cols in the sheared coordinates
     """
 
-    if shear_str == 'noshear':
+    if shear_str in SKIP_SHEARS:
         return rows, cols
 
     shear = get_galsim_shear(shear_str, step)
@@ -88,7 +90,7 @@ def unshear_positions(rows, cols, shear_str, obs, step=0.01):
         rows and cols in the unsheared coordinates
     """
 
-    if shear_str == 'noshear':
+    if shear_str in SKIP_SHEARS:
         return rows, cols
 
     shear = get_galsim_shear(shear_str, step)
