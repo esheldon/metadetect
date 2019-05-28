@@ -3,6 +3,7 @@ import galsim
 
 SKIP_SHEARS = ['noshear', '1p_psf', '1m_psf', '2p_psf', '2m_psf']
 
+
 def shear_positions(rows, cols, shear_str, obs, step=0.01):
     """
     unshear the input row and column positions
