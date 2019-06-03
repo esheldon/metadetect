@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
@@ -6,6 +7,8 @@ from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
+
+logger = logging.getLogger(__name__)
 
 
 def do_metadetect(config, mbobs, rng):
@@ -26,9 +29,10 @@ class Metadetect(dict):
     ----------
     config: dict
         Configuration dictionary. Possible entries are
+
             metacal
             weight (if calculating weighted moments)
-            max: (if running a max like fitter)
+            max (if running a max like fitter)
             fofs (if running MOF)
             mof (if running MOF)
 
@@ -184,7 +188,27 @@ class Metadetect(dict):
             rclip = _clip_and_round(rows_noshear, dims[0])
             cclip = _clip_and_round(cols_noshear, dims[1])
 
-            newres['ormask'] = self.ormask[rclip, cclip]
+            if 'ormask_region' in self and self['ormask_region'] > 1:
+                logger.debug('ormask_region: %s' % self['ormask_region'])
+                for ind in range(cat.size):
+                    lr = int(min(
+                        dims[0]-1,
+                        max(0, rclip[ind] - self['ormask_region'])))
+                    ur = int(min(
+                        dims[0]-1,
+                        max(0, rclip[ind] + self['ormask_region'])))
+
+                    lc = int(min(
+                        dims[1]-1,
+                        max(0, cclip[ind] - self['ormask_region'])))
+                    uc = int(min(
+                        dims[1]-1,
+                        max(0, cclip[ind] + self['ormask_region'])))
+
+                    newres['ormask'][ind] = np.bitwise_or.reduce(
+                        self.ormask[lr:ur+1, lc:uc+1], axis=None)
+            else:
+                newres['ormask'] = self.ormask[rclip, cclip]
 
         return newres
 
@@ -280,7 +304,7 @@ def _clip_and_round(vals_in, dim):
 
     vals = vals_in.copy()
 
-    vals.clip(min=0, max=dim-1, out=vals)
     np.rint(vals, out=vals)
+    vals.clip(min=0, max=dim-1, out=vals)
 
     return vals.astype('i4')
