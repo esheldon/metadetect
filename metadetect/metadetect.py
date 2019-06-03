@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
@@ -6,6 +7,8 @@ from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
+
+logger = logging.getLogger(__name__)
 
 
 def do_metadetect(config, mbobs, rng):
@@ -186,6 +189,7 @@ class Metadetect(dict):
             cclip = _clip_and_round(cols_noshear, dims[1])
 
             if 'ormask_region' in self and self['ormask_region'] > 1:
+                logger.debug('ormask_region: %s' % self['ormask_region'])
                 for ind in range(cat.size):
                     lr = int(min(
                         dims[0]-1,
