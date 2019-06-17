@@ -4,6 +4,7 @@ DEFAULT_IMAGE_VALUES = {
     'weight': 0.0,
     'seg': 0,
     'bmask': BMASK_EDGE,
+    'noise': 0.0,
 }
 
 ALLOWED_BOX_SIZES = [
