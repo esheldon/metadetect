@@ -390,9 +390,9 @@ class MEDSifier(object):
             cat['cutout_col'][:, 0] = \
                 cat['orig_col'][:, 0] - cat['orig_start_col'][:, 0]
 
-            psf_cen = (self.mbobs[0][0].psf.image.shape[0] - 1)/2
-            cat['psf_cutout_row'][:, 0] = psf_cen
-            cat['psf_cutout_col'][:, 0] = psf_cen
+            psf_cen = (np.array(self.mbobs[0][0].psf.image.shape) - 1)/2
+            cat['psf_cutout_row'][:, 0] = psf_cen[0]
+            cat['psf_cutout_col'][:, 0] = psf_cen[1]
 
         self.seg = seg
         self.cat = cat
