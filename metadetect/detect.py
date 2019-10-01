@@ -15,6 +15,7 @@ import esutil as eu
 from esutil.numpy_util import between
 
 from ngmix.medsreaders import NGMixMEDS, MultiBandNGMixMEDS
+from meds.util import get_image_info_struct
 
 from . import defaults
 
@@ -33,6 +34,9 @@ class MEDSInterface(NGMixMEDS):
         self._image_types = (
             'image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
+
+    def _make_image_info(self):
+        self._image_info = get_image_info_struct(1, 20)
 
     def has_psf(self):
         return True
