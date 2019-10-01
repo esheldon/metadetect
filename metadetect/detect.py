@@ -34,8 +34,6 @@ class MEDSInterface(NGMixMEDS):
         self._image_types = (
             'image', 'weight', 'seg', 'bmask', 'noise')
         self._cat = cat
-
-    def _make_image_info(self):
         self._image_info = get_image_info_struct(1, 20)
 
     def has_psf(self):
@@ -170,7 +168,7 @@ class MEDSifier(object):
         parameters
         ----------
         mbobs: ngmix.MultiBandObsList
-            The data
+            The data with the psf set.
         sx_config: dict, optional
             Dict holding sep extract parameters
         meds_config: dict, optional
@@ -326,6 +324,8 @@ class MEDSifier(object):
             ('orig_end_col', 'i8', ncut),
             ('cutout_row', 'f4', ncut),
             ('cutout_col', 'f4', ncut),
+            ('psf_cutout_row', 'f4', ncut),
+            ('psf_cutout_col', 'f4', ncut),
             ('dudrow', 'f8', ncut),
             ('dudcol', 'f8', ncut),
             ('dvdrow', 'f8', ncut),
@@ -389,6 +389,10 @@ class MEDSifier(object):
                 cat['orig_row'][:, 0] - cat['orig_start_row'][:, 0]
             cat['cutout_col'][:, 0] = \
                 cat['orig_col'][:, 0] - cat['orig_start_col'][:, 0]
+
+            psf_cen = (self.mbobs[0][0].psf.image.shape[0] - 1)/2
+            cat['psf_cutout_row'][:, 0] = psf_cen
+            cat['psf_cutout_col'][:, 0] = psf_cen
 
         self.seg = seg
         self.cat = cat
