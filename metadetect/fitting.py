@@ -297,6 +297,10 @@ class Moments(FitterBase):
         isok = True
         if flags is not None:
             for obslist in mbobs:
+                if len(obslist) == 0:
+                    isok = False
+                    break
+
                 for obs in obslist:
                     w = np.where((obs.bmask & flags) != 0)
                     if w[0].size > 0:
