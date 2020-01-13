@@ -119,7 +119,9 @@ class MBObsExtractor(object):
             mbobs.append(obslist)
 
         if len(mbobs[0]) > 0:
-            self.log.debug('    stamp shape: %s' % str(mbobs[0][0].image.shape))
+            self.log.debug(
+                '    stamp shape: %s' % str(mbobs[0][0].image.shape)
+            )
 
         return mbobs
 
@@ -160,11 +162,11 @@ class MBObsExtractor(object):
         max_radius = sconf['max_stamp_size']/2
 
         quad = rec.getShape()
-        T = quad.getIxx() + quad.getIyy()
-        if np.isnan(T):
-            T = 4.0
+        T = quad.getIxx() + quad.getIyy()  # noqa
+        if np.isnan(T):  # noqa
+            T = 4.0  # noqa
 
-        sigma = np.sqrt(T/2.0)
+        sigma = np.sqrt(T/2.0)  # noqa
         radius = sconf['sigma_factor']*sigma
 
         if radius < min_radius:
@@ -280,10 +282,10 @@ class MBObsExtractor(object):
             self.log.debug('falling back on integer location')
             # fall back to integer pixel location
             peak = rec.getFootprint().getPeaks()[0]
-            orig_cenI = peak.getI()
+            orig_cen_i = peak.getI()
             orig_cen = geom.Point2D(
-                x=orig_cenI.getX(),
-                y=orig_cenI.getY(),
+                x=orig_cen_i.getX(),
+                y=orig_cen_i.getY(),
             )
             # x, y = peak.getIx(), peak.getIy()
 
@@ -348,7 +350,8 @@ class MBObsExtractor(object):
             medvar = np.median(var_image[wuse])
             weight[:, :] = 1.0/medvar
         else:
-            self.log.debug('    weight is all zero, found none that passed cuts')
+            self.log.debug('    weight is all zero, found '
+                           'none that passed cuts')
             # _print_bits(maskobj, bitnames_to_ignore)
 
         bitnames_to_null = self.config['stamps']['bits_to_null']
@@ -414,9 +417,12 @@ def _get_padded_sub_image(original, bbox):
         # result.image.array[:, :] = float("nan")
         result.image.array[:, :] = 0.0
         result.variance.array[:, :] = float("inf")
-        result.mask.array[:, :] = np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
-        sub_in = afw_image.MaskedImageF(original.maskedImage, bbox=bbox2,
-                                        origin=afw_image.PARENT, deep=False)
+        result.mask.array[:, :] = \
+            np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
+        sub_in = afw_image.MaskedImageF(
+            original.maskedImage, bbox=bbox2,
+            origin=afw_image.PARENT, deep=False
+        )
         result.maskedImage.assign(sub_in, bbox=bbox2, origin=afw_image.PARENT)
     elif isinstance(original, afw_image.ImageI):
         result.array[:, :] = 0
