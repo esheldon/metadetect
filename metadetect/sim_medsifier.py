@@ -9,7 +9,7 @@ from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 
 import ngmix
 from .detect import MEDSifier
-from .mbobs_extractor import MBObsExtractor
+from .lsst_mbobs_extractor import MBObsExtractor
 
 LOGGER = logging.getLogger(__name__)
 
