@@ -247,6 +247,9 @@ class MBObsExtractor(object):
         coadded psfs are generally not square, so we will
         trim it to be square and preserve the center to
         be at the new canonical center
+
+        TODO: should we really trim the psf to be even?  will this
+        cause a shift due being off-center?
         """
         try:
             psfobj = stamp.getPsf()
