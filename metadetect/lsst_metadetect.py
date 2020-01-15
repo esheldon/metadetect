@@ -3,6 +3,9 @@ import numpy as np
 from .metadetect import Metadetect
 import esutil as eu
 import lsst.log
+from lsst.meas.algorithms import KernelPsf
+from lsst.afw.math import FixedKernel
+import lsst.afw.image as afw_image
 from .lsst_medsifier import LSSTMEDSifier
 
 
@@ -16,7 +19,8 @@ class LSSTMetadetect(Metadetect):
         """
         get the sheared versions of the observations
 
-        call the parent and then add in the stack exposure with image copied in
+        call the parent and then add in the stack exposure with image copied in,
+        modify the variance and set the new psf
         """
         orig_mbobs = self.mbobs
         odict = super()._get_all_metacal()
@@ -33,10 +37,14 @@ class LSSTMetadetect(Metadetect):
                     exp = copy.deepcopy(orig_obs.coadd_exp)
                     exp.image.array[:, :] = obs.image
                     exp.variance.array[:, :] = exp.variance.array[:, :]*2
-                    # print('orig exp wcs is:', orig_obs.coadd_exp.getWcs())
-                    # print('exp wcs is:', exp.getWcs())
-                    # TODO:  also set the new psf
 
+                    psf_image = obs.psf.image
+                    stack_psf = KernelPsf(
+                        FixedKernel(
+                            afw_image.ImageD(psf_image.astype(np.float))
+                        )
+                    )
+                    exp.setPsf(stack_psf)
                     obs.exposure = exp
 
         return odict
