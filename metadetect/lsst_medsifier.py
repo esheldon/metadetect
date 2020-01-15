@@ -2,6 +2,12 @@ import logging
 import lsst.afw.table as afw_table
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
+from lsst.meas.base import (
+    SingleFrameMeasurementConfig,
+    SingleFrameMeasurementTask,
+    NoiseReplacerConfig,
+    NoiseReplacer,
+)
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
@@ -67,6 +73,31 @@ class LSSTMEDSifier(MEDSifier):
         # to algorithms that make additional measurents.
         schema = afw_table.SourceTable.makeMinimalSchema()
 
+        # Setup algorithms to run
+        meas_config = SingleFrameMeasurementConfig()
+        meas_config.plugins.names = [
+            "base_SdssCentroid",
+            "base_PsfFlux",
+            "base_SkyCoord",
+            # "base_SdssShape",
+            # "base_LocalBackground",
+        ]
+
+        # set these slots to none because we aren't running these algorithms
+        meas_config.slots.apFlux = None
+        meas_config.slots.gaussianFlux = None
+        meas_config.slots.calibFlux = None
+        meas_config.slots.modelFlux = None
+
+        # goes with SdssShape above
+        meas_config.slots.shape = None
+
+        meas_task = SingleFrameMeasurementTask(
+            config=meas_config,
+            schema=schema,
+        )
+
+        # setup detection config
         detection_config = SourceDetectionConfig()
         detection_config.reEstimateBackground = False
         detection_config.thresholdValue = 10
@@ -82,5 +113,42 @@ class LSSTMEDSifier(MEDSifier):
 
         # run the deblender
         deblend_task.run(exposure, sources)
+
+        # Run on deblended images
+        noise_replacer_config = NoiseReplacerConfig()
+        footprints = {
+            record.getId(): (record.getParent(), record.getFootprint())
+            for record in result.sources
+        }
+
+        # This constructor will replace all detected pixels with noise in the
+        # image
+        replacer = NoiseReplacer(
+            noise_replacer_config,
+            exposure=exposure,
+            footprints=footprints,
+        )
+
+        for record in result.sources:
+
+            # Skip parent objects where all children are inserted
+            # if record.get('deblend_nChild') != 0:
+            #     continue
+
+            # This will insert a single source into the image
+            replacer.insertSource(record.getId())    # Get the peak as before
+
+            # peak = record.getFootprint().getPeaks()[0]
+
+            # The bounding box will be for the parent object
+            # bbox = record.getFootprint().getBBox()
+
+            meas_task.callMeasure(record, exposure)
+
+            # Remove object
+            replacer.removeSource(record.getId())
+
+        # Insert all objects back into image
+        replacer.end()
 
         self.sources = sources
