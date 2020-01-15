@@ -19,8 +19,8 @@ class LSSTMetadetect(Metadetect):
         """
         get the sheared versions of the observations
 
-        call the parent and then add in the stack exposure with image copied in,
-        modify the variance and set the new psf
+        call the parent and then add in the stack exposure with image copied
+        in, modify the variance and set the new psf
         """
         orig_mbobs = self.mbobs
         odict = super()._get_all_metacal()
