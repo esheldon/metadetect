@@ -1,8 +1,5 @@
 import logging
 import lsst.afw.table as afw_table
-import lsst.afw.image as afw_image
-import lsst.geom as geom
-from lsst.afw.geom import makeSkyWcs, makeCdMatrix
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 
@@ -87,32 +84,3 @@ class LSSTMEDSifier(MEDSifier):
         deblend_task.run(exposure, sources)
 
         self.sources = sources
-
-
-def get_exposure_from_obs(obs):
-    ny, nx = obs.image.shape
-
-    scale = obs.jacobian.scale
-    masked_image = afw_image.MaskedImageF(nx, ny)
-    masked_image.image.array[:] = obs.image
-
-    # assuming constant noise
-    var = 1.0/obs.weight[0, 0]
-    masked_image.variance.array[:] = var
-    masked_image.mask.array[:] = 0
-
-    exp = afw_image.ExposureF(masked_image)
-
-    # set WCS
-    orientation = 0*geom.degrees
-
-    cd_matrix = makeCdMatrix(
-        scale=scale*geom.arcseconds,
-        orientation=orientation,
-    )
-    crpix = geom.Point2D(nx/2, ny/2)
-    crval = geom.SpherePoint(0, 0, geom.degrees)
-    wcs = makeSkyWcs(crpix=crpix, crval=crval, cdMatrix=cd_matrix)
-    exp.setWcs(wcs)
-
-    return exp
