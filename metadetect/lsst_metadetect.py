@@ -32,6 +32,7 @@ class LSSTMetadetect(Metadetect):
 
                     exp = copy.deepcopy(orig_obs.coadd_exp)
                     exp.image.array[:, :] = obs.image
+                    exp.variance.array[:, :] = exp.variance.array[:, :]*2
                     # print('orig exp wcs is:', orig_obs.coadd_exp.getWcs())
                     # print('exp wcs is:', exp.getWcs())
                     # TODO:  also set the new psf
