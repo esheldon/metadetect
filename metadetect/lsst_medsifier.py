@@ -1,4 +1,3 @@
-import logging
 import lsst.afw.table as afw_table
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
@@ -8,11 +7,10 @@ from lsst.meas.base import (
     NoiseReplacerConfig,
     NoiseReplacer,
 )
+import lsst.log
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
-
-LOGGER = logging.getLogger(__name__)
 
 
 class LSSTMEDSifier(MEDSifier):
@@ -25,17 +23,15 @@ class LSSTMEDSifier(MEDSifier):
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
         self._set_meds_config(meds_config)
+        self.log = lsst.log.Log.getLogger("LSSTMEDSifier")
 
-        # LOGGER.info('setting detection image')
-        # self._set_detim()
-
-        LOGGER.info('setting detection exposure')
+        self.log.debug('setting detection exposure')
         self._set_detim_exposure()
 
-        LOGGER.info('detecting and deblending')
+        self.log.debug('detecting and deblending')
         self._detect_and_deblend()
 
-        LOGGER.info('setting exposure and psf lists')
+        self.log.debug('setting exposure and psf lists')
         self._set_exposures_and_psfs()
 
     def get_multiband_meds(self):
@@ -92,6 +88,9 @@ class LSSTMEDSifier(MEDSifier):
         # goes with SdssShape above
         meas_config.slots.shape = None
 
+        # fix odd issue where it things things are near the edge
+        meas_config.plugins['base_SdssCentroid'].binmax = 1
+
         meas_task = SingleFrameMeasurementTask(
             config=meas_config,
             schema=schema,
@@ -129,11 +128,17 @@ class LSSTMEDSifier(MEDSifier):
             footprints=footprints,
         )
 
+        nbad = 0
+        ntry = 0
+        kept_sources = []
+
         for record in result.sources:
 
             # Skip parent objects where all children are inserted
-            # if record.get('deblend_nChild') != 0:
-            #     continue
+            if record.get('deblend_nChild') != 0:
+                continue
+
+            ntry += 1
 
             # This will insert a single source into the image
             replacer.insertSource(record.getId())    # Get the peak as before
@@ -148,7 +153,17 @@ class LSSTMEDSifier(MEDSifier):
             # Remove object
             replacer.removeSource(record.getId())
 
+            if record.getCentroidFlag():
+                nbad += 1
+
+            kept_sources.append(record)
+
         # Insert all objects back into image
         replacer.end()
 
-        self.sources = sources
+        self.log.debug('nbad center: %d frac: %d' % (nbad, nbad/ntry))
+
+        nkeep = len(kept_sources)
+        ntot = len(result.sources)
+        self.log.debug('kept %d/%d non parents' % (nkeep, ntot))
+        self.sources = kept_sources
