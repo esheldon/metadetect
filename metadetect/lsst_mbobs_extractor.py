@@ -203,11 +203,8 @@ class MBObsExtractor(object):
         bmask = maskobj.array
         jacob = self._extract_jacobian(imobj_sub, rec)
 
-        cen = rec.getCentroid()
-        orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
-        print('rec:', rec)
-        print('cen:', cen)
-        print('orig_cen:', orig_cen)
+        orig_cen = rec.getCentroid()
+        # orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
 
         if psf_im is None:
             psf_im = self._extract_psf_image(imobj_sub, orig_cen)
