@@ -11,7 +11,7 @@ logfile=${output}.log
 tmpdir=$_CONDOR_SCRATCH_DIR
 tmplog=${tmpdir}/logfile
 
-python /astro/u/esheldon/lensing/test-lsst-mdet/detect_simple_full.py \
+python /astro/u/esheldon/lensing/test-lsst-mdet/lsst_sim.py \
     --nepochs ${nepoch} \
     --noise 1 \
     --ntrial ${ntrial} \
