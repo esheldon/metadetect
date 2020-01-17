@@ -8,7 +8,7 @@ Universe        = vanilla
 Notification    = Never
 
 # Run this exe with these args
-Executable = /astro/u/esheldon/lensing/test-lsst-mdet/run.sh
+Executable = /astro/u/esheldon/lensing/test-lsst-mdet/run_lsst_sim.sh
 
 Image_Size       =  1000000
 
