@@ -47,6 +47,17 @@ class LSSTMetadetect(Metadetect):
                     exp.setPsf(stack_psf)
                     obs.exposure = exp
 
+                    if False:
+                        import descwl_coadd.vis
+                        descwl_coadd.vis.show_images(
+                            [obs.image,
+                             obs.bmask,
+                             obs.weight,
+                             orig_obs.noise,
+                            ],
+                            title=mtype,
+                        )
+
         return odict
 
     def _do_detect(self, mbobs):
