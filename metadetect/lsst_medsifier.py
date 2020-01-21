@@ -61,6 +61,18 @@ class LSSTMEDSifier(MEDSifier):
         """
         self.det_exp = self.mbobs[0][0].exposure
 
+    def show(self):
+        """
+        show the detection image
+        """
+        import matplotlib.pyplot as plt
+        plt.imshow(
+            self.mbobs[0][0].image,
+            interpolation='nearest',
+            cmap='gray',
+        )
+        plt.show()
+
     def _detect_and_deblend(self):
         exposure = self.det_exp
 
