@@ -50,10 +50,11 @@ class LSSTMetadetect(Metadetect):
                     if False:
                         import descwl_coadd.vis
                         descwl_coadd.vis.show_images(
-                            [obs.image,
-                             obs.bmask,
-                             obs.weight,
-                             orig_obs.noise,
+                            [
+                                obs.image,
+                                obs.bmask,
+                                obs.weight,
+                                orig_obs.noise,
                             ],
                             title=mtype,
                         )
