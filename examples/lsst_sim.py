@@ -12,7 +12,7 @@ import os
 import sys
 import logging
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import ngmix
 
 from descwl_shear_sims import Sim
@@ -53,6 +53,7 @@ def get_args():
 def main():
 
     args = get_args()
+
     rng = np.random.RandomState(args.seed)
     config = {
         'bmask_flags': 0,
@@ -83,74 +84,71 @@ def main():
         getattr(logging, 'INFO')
     )
 
-    dlist = []
+    dlist_p = []
+    dlist_m = []
+
     for trial in range(args.ntrial):
         print('-'*70)
         print('trial: %d/%d' % (trial+1, args.ntrial))
-        sim = Sim(
-            rng=rng,
-            epochs_per_band=args.nepochs,
-            noise_per_band=args.noise,
-            wcs_kws=wcs_kws,
-            coadd_dim=350,
-            buff=50,
-            cosmic_rays=args.cosmic_rays,
-            bad_columns=args.bad_columns,
-        )
-        data = sim.gen_sim()
 
-        coadd_dims = (sim.coadd_dim, )*2
-        mbc = MultiBandCoadds(
-            data=data,
-            coadd_wcs=sim.coadd_wcs,
-            coadd_dims=coadd_dims,
-            byband=False,
-        )
+        trial_seed = rng.randint(0, 2**30)
 
-        coadd_mbobs = ngmix.MultiBandObsList(
-            meta={'psf_fwhm': sim.psf_kws['fwhm']},
-        )
-        obslist = ngmix.ObsList()
-        obslist.append(mbc.coadds['all'])
-        coadd_mbobs.append(obslist)
+        for shear_type in ('1p', '1m'):
+            print(shear_type)
+            trial_rng = np.random.RandomState(trial_seed)
 
-        md = LSSTMetadetect(config, coadd_mbobs, rng)
-        md.go()
-        res = md.result
-        # print(res.keys())
+            if shear_type == '1p':
+                shear_g1 = 0.02
+            else:
+                shear_g1 = -0.02
 
-        comb_data = make_comb_data(res)
-        dlist.append(comb_data)
-
-        if args.show:
-            plt.imshow(
-                coadd_mbobs[0][0].image,
-                interpolation='nearest',
-                cmap='gray',
+            sim = Sim(
+                g1=shear_g1,
+                rng=trial_rng,
+                epochs_per_band=args.nepochs,
+                noise_per_band=args.noise,
+                wcs_kws=wcs_kws,
+                coadd_dim=350,
+                buff=50,
+                cosmic_rays=args.cosmic_rays,
+                bad_columns=args.bad_columns,
             )
-            plt.scatter(
-                res['noshear']['col'], res['noshear']['row'],
-                c='r', s=0.5,
+            data = sim.gen_sim()
+
+            coadd_dims = (sim.coadd_dim, )*2
+            mbc = MultiBandCoadds(
+                data=data,
+                coadd_wcs=sim.coadd_wcs,
+                coadd_dims=coadd_dims,
+                byband=False,
             )
-            plt.show()
-            '''
-            for record in sources:
-                # Skip parent objects where all children are inserted
-                if record.get('deblend_nChild') != 0:
-                    continue
 
-                # Get the peak as before
-                peak = record.getFootprint().getPeaks()[0]
-                x, y = peak.getIx(), peak.getIy()
+            coadd_mbobs = ngmix.MultiBandObsList(
+                meta={'psf_fwhm': sim.psf_kws['fwhm']},
+            )
+            obslist = ngmix.ObsList()
+            obslist.append(mbc.coadds['all'])
+            coadd_mbobs.append(obslist)
 
-                plt.scatter([x], [y], c='r', s=0.5)
+            md = LSSTMetadetect(config, coadd_mbobs, trial_rng)
+            md.go()
+            res = md.result
+            # print(res.keys())
 
-            plt.show()
-            '''
+            comb_data = make_comb_data(res)
 
-    data = eu.numpy_util.combine_arrlist(dlist)
+            if shear_type == '1p':
+                dlist_p.append(comb_data)
+            else:
+                dlist_m.append(comb_data)
+
+    data_1p = eu.numpy_util.combine_arrlist(dlist_p)
+    data_1m = eu.numpy_util.combine_arrlist(dlist_m)
+
     print('writing:', args.output)
-    fitsio.write(args.output, data, clobber=True)
+    with fitsio.FITS(args.output, 'rw', clobber=True) as fits:
+        fits.write(data_1p, extname='1p')
+        fits.write(data_1m, extname='1m')
 
 
 if __name__ == '__main__':
