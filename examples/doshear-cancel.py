@@ -37,7 +37,6 @@ def get_m1(data):
     R11_1m = (g1_1p_1m - g1_1m_1m)/0.02  # noqa
 
     s1_1m = g1_1m/R11_1m
-    print(s1_1p, s1_1m)
 
     m1 = (s1_1p - s1_1m)/0.04 - 1
     return m1
