@@ -44,6 +44,7 @@ def get_args():
     parser.add_argument('--noise', type=float, default=180)
     parser.add_argument('--nepochs', type=int, default=3)
     parser.add_argument('--cosmic-rays', action='store_true')
+    parser.add_argument('--bad-columns', action='store_true')
     parser.add_argument('--show', action='store_true')
 
     return parser.parse_args()
@@ -94,6 +95,7 @@ def main():
             coadd_dim=350,
             buff=50,
             cosmic_rays=args.cosmic_rays,
+            bad_columns=args.bad_columns,
         )
         data = sim.gen_sim()
 
