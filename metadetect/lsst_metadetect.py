@@ -10,7 +10,8 @@ from .lsst_medsifier import LSSTMEDSifier
 
 
 class LSSTMetadetect(Metadetect):
-    def __init__(self, *args):
+    def __init__(self, *args, show=False):
+        self._show = show
         super().__init__(*args)
 
         self.log = lsst.log.Log.getLogger("LSSTMetadetect")
@@ -47,7 +48,7 @@ class LSSTMetadetect(Metadetect):
                     exp.setPsf(stack_psf)
                     obs.exposure = exp
 
-                    if False:
+                    if self._show:
                         import descwl_coadd.vis
                         descwl_coadd.vis.show_images(
                             [
