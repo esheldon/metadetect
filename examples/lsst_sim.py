@@ -46,6 +46,7 @@ def get_args():
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
     parser.add_argument('--grid', action='store_true')
+    parser.add_argument('--grid-gals', type=int, default=9)
     parser.add_argument('--show', action='store_true')
 
     return parser.parse_args()
@@ -87,7 +88,7 @@ def get_sim_kw(args):
     )
     if args.grid:
         sim_kw['grid_gals'] = True
-        sim_kw['ngals'] = 15  # really means 15x15
+        sim_kw['ngals'] = args.grid_gals  # really means NxN
 
     return sim_kw
 
@@ -163,7 +164,7 @@ def main():
             obslist.append(mbc.coadds['all'])
             coadd_mbobs.append(obslist)
 
-            md = LSSTMetadetect(config, coadd_mbobs, trial_rng)
+            md = LSSTMetadetect(config, coadd_mbobs, trial_rng, show=args.show)
             md.go()
             res = md.result
             # print(res.keys())
