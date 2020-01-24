@@ -77,13 +77,10 @@ def get_sim_kw(args):
         'shear_std': 0.01,
     }
 
-
     sim_kw = dict(
         epochs_per_band=args.nepochs,
         noise_per_band=args.noise,
         wcs_kws=wcs_kws,
-        coadd_dim=350,
-        buff=50,
         cosmic_rays=args.cosmic_rays,
         bad_columns=args.bad_columns,
         # bands=['r'],
