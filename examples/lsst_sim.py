@@ -45,9 +45,54 @@ def get_args():
     parser.add_argument('--nepochs', type=int, default=3)
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
+    parser.add_argument('--grid', action='store_true')
     parser.add_argument('--show', action='store_true')
 
     return parser.parse_args()
+
+
+def show_sim(data):
+    """
+    show an image
+    """
+    from descwl_coadd.vis import show_images, show_image
+
+    images = []
+    for band in data:
+        for se_obs in data[band]:
+            images.append(se_obs.image.array)
+
+    if len(images) > 1:
+        show_images(images)
+    else:
+        show_image(images[0])
+
+
+def get_sim_kw(args):
+
+    wcs_kws = {
+        'position_angle_range': (0, 360),
+        'scale_frac_std': 0.01,
+        'dither_range': (-0.5, 0.5),
+        'shear_std': 0.01,
+    }
+
+
+    sim_kw = dict(
+        epochs_per_band=args.nepochs,
+        noise_per_band=args.noise,
+        wcs_kws=wcs_kws,
+        coadd_dim=350,
+        buff=50,
+        cosmic_rays=args.cosmic_rays,
+        bad_columns=args.bad_columns,
+        # bands=['r'],
+    )
+    if args.grid:
+        sim_kw['grid_gals'] = True
+        sim_kw['ngals'] = 15  # really means 15x15
+
+    return sim_kw
 
 
 def main():
@@ -72,13 +117,6 @@ def main():
         'meds': {},
     }
 
-    wcs_kws = {
-        'position_angle_range': (0, 360),
-        'scale_frac_std': 0.01,
-        'dither_range': (-0.5, 0.5),
-        'shear_std': 0.01,
-    }
-
     logging.basicConfig(stream=sys.stdout)
     logging.getLogger('descwl_shear_testing').setLevel(
         getattr(logging, 'INFO')
@@ -95,25 +133,22 @@ def main():
 
         for shear_type in ('1p', '1m'):
             print(shear_type)
+
+            sim_kw = get_sim_kw(args)
+
             trial_rng = np.random.RandomState(trial_seed)
 
             if shear_type == '1p':
-                shear_g1 = 0.02
+                sim_kw['g1'] = 0.02
             else:
-                shear_g1 = -0.02
+                sim_kw['g1'] = -0.02
 
-            sim = Sim(
-                g1=shear_g1,
-                rng=trial_rng,
-                epochs_per_band=args.nepochs,
-                noise_per_band=args.noise,
-                wcs_kws=wcs_kws,
-                coadd_dim=350,
-                buff=50,
-                cosmic_rays=args.cosmic_rays,
-                bad_columns=args.bad_columns,
-            )
+            sim_kw['rng'] = trial_rng
+            sim = Sim(**sim_kw)
             data = sim.gen_sim()
+
+            if args.show:
+                show_sim(data)
 
             coadd_dims = (sim.coadd_dim, )*2
             mbc = MultiBandCoadds(
@@ -121,6 +156,7 @@ def main():
                 coadd_wcs=sim.coadd_wcs,
                 coadd_dims=coadd_dims,
                 byband=False,
+                show=args.show,
             )
 
             coadd_mbobs = ngmix.MultiBandObsList(
