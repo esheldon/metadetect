@@ -203,8 +203,8 @@ class MBObsExtractor(object):
         bmask = maskobj.array
         jacob = self._extract_jacobian(imobj_sub, rec)
 
-        # cen = rec.getCentroid()
-        orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
+        orig_cen = rec.getCentroid()
+        # orig_cen = imobj_sub.getWcs().skyToPixel(rec.getCoord())
 
         if psf_im is None:
             psf_im = self._extract_psf_image(imobj_sub, orig_cen)
@@ -247,6 +247,9 @@ class MBObsExtractor(object):
         coadded psfs are generally not square, so we will
         trim it to be square and preserve the center to
         be at the new canonical center
+
+        TODO: should we really trim the psf to be even?  will this
+        cause a shift due being off-center?
         """
         try:
             psfobj = stamp.getPsf()
