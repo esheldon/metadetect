@@ -17,6 +17,7 @@ import ngmix
 
 from descwl_shear_sims import Sim
 from descwl_coadd.coadd import MultiBandCoadds
+from descwl_coadd.coadd_simple import MultiBandCoaddsSimple
 from metadetect.lsst_metadetect import LSSTMetadetect
 import fitsio
 import esutil as eu
@@ -62,6 +63,9 @@ def get_args():
     parser.add_argument('--grid-gals', type=int, default=9)
 
     parser.add_argument('--show', action='store_true')
+
+    parser.add_argument('--straight-coadd', action='store_true',
+                        help='just do weighted sum coadd')
 
     return parser.parse_args()
 
@@ -166,14 +170,17 @@ def main():
             if args.show:
                 show_sim(data)
 
-            coadd_dims = (sim.coadd_dim, )*2
-            mbc = MultiBandCoadds(
-                data=data,
-                coadd_wcs=sim.coadd_wcs,
-                coadd_dims=coadd_dims,
-                byband=False,
-                show=args.show,
-            )
+            if args.straight_coadd:
+                mbc = MultiBandCoaddsSimple(data=data)
+            else:
+                coadd_dims = (sim.coadd_dim, )*2
+                mbc = MultiBandCoadds(
+                    data=data,
+                    coadd_wcs=sim.coadd_wcs,
+                    coadd_dims=coadd_dims,
+                    byband=False,
+                    show=args.show,
+                )
 
             coadd_mbobs = ngmix.MultiBandObsList(
                 meta={'psf_fwhm': sim.psf_kws['fwhm']},
