@@ -173,7 +173,8 @@ class LSSTMEDSifier(MEDSifier):
         # Insert all objects back into image
         replacer.end()
 
-        self.log.debug('nbad center: %d frac: %d' % (nbad, nbad/ntry))
+        if ntry > 0:
+            self.log.debug('nbad center: %d frac: %d' % (nbad, nbad/ntry))
 
         nkeep = len(kept_sources)
         ntot = len(result.sources)

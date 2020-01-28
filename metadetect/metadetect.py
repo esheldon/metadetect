@@ -133,7 +133,9 @@ class Metadetect(dict):
 
         res = self._fitter.go(mbobs_list)
 
-        res = self._add_positions_and_psf(medsifier.cat, res, shear_str)
+        if res is not None:
+            res = self._add_positions_and_psf(medsifier.cat, res, shear_str)
+
         return res
 
     def _add_positions_and_psf(self, cat, res, shear_str):
