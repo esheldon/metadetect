@@ -45,8 +45,18 @@ def get_args():
     parser.add_argument('--nepochs', type=int, default=3)
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
+
+    parser.add_argument('--rotate', action='store_true')
+    parser.add_argument('--dither', action='store_true')
+    parser.add_argument('--vary-scale', action='store_true')
+    parser.add_argument('--vary-wcs-shear', action='store_true')
+
+    parser.add_argument('--coadd-dim', type=int, default=350)
+    parser.add_argument('--buff', type=int, default=50)
+
     parser.add_argument('--grid', action='store_true')
     parser.add_argument('--grid-gals', type=int, default=9)
+
     parser.add_argument('--show', action='store_true')
 
     return parser.parse_args()
@@ -71,12 +81,15 @@ def show_sim(data):
 
 def get_sim_kw(args):
 
-    wcs_kws = {
-        'position_angle_range': (0, 360),
-        'scale_frac_std': 0.01,
-        'dither_range': (-0.5, 0.5),
-        'shear_std': 0.01,
-    }
+    wcs_kws = {}
+    if args.rotate:
+        wcs_kws['position_angle_range'] = (0, 360)
+    if args.dither:
+        wcs_kws['dither_range'] = (-0.5, 0.5)
+    if args.vary_scale:
+        wcs_kws['scale_frac_std'] = 0.01
+    if args.vary_wcs_shear:
+        wcs_kws['shear_std'] = 0.01
 
     sim_kw = dict(
         epochs_per_band=args.nepochs,
@@ -84,7 +97,8 @@ def get_sim_kw(args):
         wcs_kws=wcs_kws,
         cosmic_rays=args.cosmic_rays,
         bad_columns=args.bad_columns,
-        # bands=['r'],
+        coadd_dim=args.coadd_dim,
+        buff=args.buff,
     )
     if args.grid:
         sim_kw['grid_gals'] = True
