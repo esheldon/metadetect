@@ -69,6 +69,7 @@ def get_args():
                         help=('just do weighted sum coadd and run '
                               'metadetect'))
 
+    parser.add_argument('--bands', default='r,i,z')
     return parser.parse_args()
 
 
@@ -112,7 +113,10 @@ def get_sim_kw(args):
     if args.cosmic_rays or args.bad_columns:
         assert not args.nostack
 
+    bands = args.bands.split(',')
+
     sim_kw = dict(
+        bands=bands,
         epochs_per_band=args.nepochs,
         noise_per_band=args.noise,
         wcs_kws=wcs_kws,
