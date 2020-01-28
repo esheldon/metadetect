@@ -41,7 +41,10 @@ class Metadetect(dict):
     rng: numpy.random.RandomState
         Random number generator
     """
-    def __init__(self, config, mbobs, rng):
+    def __init__(self, config, mbobs, rng, show=False):
+
+        self._show = show
+
         self._set_config(config)
         self.mbobs = mbobs
         self.nband = len(mbobs)
@@ -234,6 +237,31 @@ class Metadetect(dict):
             rng=self.rng,
             **self['metacal']
         )
+
+        if self._show:
+            import descwl_coadd.vis
+
+            orig_mbobs = self.mbobs
+
+            for mtype, mbobs in odict.items():
+                for band in range(len(mbobs)):
+
+                    obslist = mbobs[band]
+                    orig_obslist = orig_mbobs[band]
+
+                    for iobs in range(len(obslist)):
+                        obs = obslist[iobs]
+                        orig_obs = orig_obslist[iobs]
+
+                        descwl_coadd.vis.show_images(
+                            [
+                                obs.image,
+                                obs.bmask,
+                                obs.weight,
+                                orig_obs.noise,
+                            ],
+                            title=mtype,
+                        )
 
         return odict
 
