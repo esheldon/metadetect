@@ -82,8 +82,10 @@ class Moments(FitterBase):
 
             datalist.append(fit_data)
 
-        output = eu.numpy_util.combine_arrlist(datalist)
-        return output
+        if len(datalist) == 0:
+            return None
+        else:
+            return eu.numpy_util.combine_arrlist(datalist)
 
     def _get_max_psf_size(self, mbobs):
         sizes = []

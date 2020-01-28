@@ -29,11 +29,15 @@ def make_comb_data(res):
     dlist = []
     for stype in res.keys():
         data = res[stype]
-        newdata = eu.numpy_util.add_fields(data, add_dt)
-        newdata['shear_type'] = stype
-        dlist.append(newdata)
+        if data is not None:
+            newdata = eu.numpy_util.add_fields(data, add_dt)
+            newdata['shear_type'] = stype
+            dlist.append(newdata)
 
-    return eu.numpy_util.combine_arrlist(dlist)
+    if len(dlist) > 0:
+        return eu.numpy_util.combine_arrlist(dlist)
+    else:
+        return []
 
 
 def get_args():
@@ -184,11 +188,11 @@ def main():
             # print(res.keys())
 
             comb_data = make_comb_data(res)
-
-            if shear_type == '1p':
-                dlist_p.append(comb_data)
-            else:
-                dlist_m.append(comb_data)
+            if len(comb_data) > 0:
+                if shear_type == '1p':
+                    dlist_p.append(comb_data)
+                else:
+                    dlist_m.append(comb_data)
 
     data_1p = eu.numpy_util.combine_arrlist(dlist_p)
     data_1m = eu.numpy_util.combine_arrlist(dlist_m)

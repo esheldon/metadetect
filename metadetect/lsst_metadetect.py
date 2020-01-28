@@ -82,8 +82,9 @@ class LSSTMetadetect(Metadetect):
         mbobs_list = mbm.get_mbobs_list()
 
         res = self._fitter.go(mbobs_list)
+        if res is not None:
+            res = self._add_positions_and_psf(medsifier, res, shear_str)
 
-        res = self._add_positions_and_psf(medsifier, res, shear_str)
         return res
 
     def _add_positions_and_psf(self, medsifier, res, shear_str):
