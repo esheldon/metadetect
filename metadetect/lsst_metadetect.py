@@ -10,10 +10,8 @@ from .lsst_medsifier import LSSTMEDSifier
 
 
 class LSSTMetadetect(Metadetect):
-    def __init__(self, *args, show=False):
-        self._show = show
-        super().__init__(*args)
-
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
         self.log = lsst.log.Log.getLogger("LSSTMetadetect")
 
     def _get_all_metacal(self):

@@ -17,7 +17,9 @@ import ngmix
 
 from descwl_shear_sims import Sim
 from descwl_coadd.coadd import MultiBandCoadds
+from descwl_coadd.coadd_simple import MultiBandCoaddsSimple
 from metadetect.lsst_metadetect import LSSTMetadetect
+from metadetect.metadetect import Metadetect
 import fitsio
 import esutil as eu
 import argparse
@@ -63,6 +65,11 @@ def get_args():
 
     parser.add_argument('--show', action='store_true')
 
+    parser.add_argument('--nostack', action='store_true',
+                        help=('just do weighted sum coadd and run '
+                              'metadetect'))
+
+    parser.add_argument('--bands', default='r,i,z')
     return parser.parse_args()
 
 
@@ -86,16 +93,30 @@ def show_sim(data):
 def get_sim_kw(args):
 
     wcs_kws = {}
+
     if args.rotate:
+        assert not args.nostack
         wcs_kws['position_angle_range'] = (0, 360)
+
     if args.dither:
+        assert not args.nostack
         wcs_kws['dither_range'] = (-0.5, 0.5)
+
     if args.vary_scale:
+        assert not args.nostack
         wcs_kws['scale_frac_std'] = 0.01
+
     if args.vary_wcs_shear:
+        assert not args.nostack
         wcs_kws['shear_std'] = 0.01
 
+    if args.cosmic_rays or args.bad_columns:
+        assert not args.nostack
+
+    bands = args.bands.split(',')
+
     sim_kw = dict(
+        bands=bands,
         epochs_per_band=args.nepochs,
         noise_per_band=args.noise,
         wcs_kws=wcs_kws,
@@ -111,11 +132,7 @@ def get_sim_kw(args):
     return sim_kw
 
 
-def main():
-
-    args = get_args()
-
-    rng = np.random.RandomState(args.seed)
+def get_config(args):
     config = {
         'bmask_flags': 0,
         'metacal': {
@@ -132,6 +149,81 @@ def main():
         },
         'meds': {},
     }
+
+    if args.nostack:
+        config['sx'] = {
+            # in sky sigma
+            # DETECT_THRESH
+            'detect_thresh': 0.8,
+
+            # Minimum contrast parameter for deblending
+            # DEBLEND_MINCONT
+            'deblend_cont': 0.00001,
+
+            # minimum number of pixels above threshold
+            # DETECT_MINAREA: 6
+            'minarea': 4,
+
+            'filter_type': 'conv',
+
+            # 7x7 convolution mask of a gaussian PSF with FWHM = 3.0 pixels.
+            'filter_kernel':  [
+                [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],  # noqa
+                [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],  # noqa
+                [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],  # noqa
+                [0.068707, 0.296069, 0.710525, 0.951108, 0.710525, 0.296069, 0.068707],  # noqa
+                [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],  # noqa
+                [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],  # noqa
+                [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],  # noqa
+            ]
+        }
+
+        config['meds'] = {
+            'min_box_size': 32,
+            'max_box_size': 256,
+
+            'box_type': 'iso_radius',
+
+            'rad_min': 4,
+            'rad_fac': 2,
+            'box_padding': 2,
+        }
+        # fraction of slice where STAR or TRAIL was set.  We may cut objects
+        # detected there
+        config['star_flags'] = 96
+
+        # we don't interpolate over tapebumps
+        config['tapebump_flags'] = 16384
+
+        # things interpolated using the spline
+        config['spline_interp_flags'] = 3155
+
+        # replaced with noise
+        config['noise_interp_flags'] = 908
+
+        # pixels will have these flag set in the ormask if they were
+        # interpolated plus adding in tapebump and star
+        config['imperfect_flags'] = 20479
+
+    return config
+
+
+def make_mbobs(obs, psf_fwhm):
+    mbobs = ngmix.MultiBandObsList(
+        meta={'psf_fwhm': psf_fwhm}
+    )
+    obslist = ngmix.ObsList()
+    obslist.append(obs)
+    mbobs.append(obslist)
+    return mbobs
+
+
+def main():
+
+    args = get_args()
+
+    rng = np.random.RandomState(args.seed)
+    config = get_config(args)
 
     logging.basicConfig(stream=sys.stdout)
     logging.getLogger('descwl_shear_testing').setLevel(
@@ -166,23 +258,36 @@ def main():
             if args.show:
                 show_sim(data)
 
-            coadd_dims = (sim.coadd_dim, )*2
-            mbc = MultiBandCoadds(
-                data=data,
-                coadd_wcs=sim.coadd_wcs,
-                coadd_dims=coadd_dims,
-                byband=False,
-                show=args.show,
-            )
+            if args.nostack:
+                coadd_obs = MultiBandCoaddsSimple(data=data)
 
-            coadd_mbobs = ngmix.MultiBandObsList(
-                meta={'psf_fwhm': sim.psf_kws['fwhm']},
-            )
-            obslist = ngmix.ObsList()
-            obslist.append(mbc.coadds['all'])
-            coadd_mbobs.append(obslist)
+                coadd_mbobs = make_mbobs(coadd_obs, sim.psf_kws['fwhm'])
+                md = Metadetect(
+                    config,
+                    coadd_mbobs,
+                    trial_rng,
+                    show=args.show,
+                )
+            else:
+                coadd_dims = (sim.coadd_dim, )*2
+                mbc = MultiBandCoadds(
+                    data=data,
+                    coadd_wcs=sim.coadd_wcs,
+                    coadd_dims=coadd_dims,
+                    byband=False,
+                    show=args.show,
+                )
 
-            md = LSSTMetadetect(config, coadd_mbobs, trial_rng, show=args.show)
+                coadd_obs = mbc.coadds['all']
+                coadd_mbobs = make_mbobs(coadd_obs, sim.psf_kws['fwhm'])
+
+                md = LSSTMetadetect(
+                    config,
+                    coadd_mbobs,
+                    trial_rng,
+                    show=args.show,
+                )
+
             md.go()
             res = md.result
             # print(res.keys())
