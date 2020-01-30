@@ -269,11 +269,16 @@ def main():
                     show=args.show,
                 )
             else:
-                coadd_dims = (sim.coadd_dim, )*2
+
+                psf_dim = int(sim.psf_dim/np.sqrt(3))
+                if psf_dim % 2 == 0:
+                    psf_dim -= 1
+
                 mbc = MultiBandCoadds(
                     data=data,
                     coadd_wcs=sim.coadd_wcs,
-                    coadd_dims=coadd_dims,
+                    coadd_dims=[sim.coadd_dim]*2,
+                    psf_dims=[psf_dim]*2,
                     byband=False,
                     show=args.show,
                 )
