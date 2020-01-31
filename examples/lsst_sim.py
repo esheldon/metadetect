@@ -52,6 +52,8 @@ def get_args():
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
 
+    parser.add_argument('--gal-type', default='exp')
+
     parser.add_argument('--psf-g1', type=float, default=0)
     parser.add_argument('--psf-g2', type=float, default=0)
 
@@ -67,6 +69,8 @@ def get_args():
     parser.add_argument('--grid-gals', type=int, default=9)
 
     parser.add_argument('--show', action='store_true')
+    parser.add_argument('--show-sim', action='store_true',
+                        help='show the sim image')
 
     parser.add_argument('--nostack', action='store_true',
                         help=('just do weighted sum coadd and run '
@@ -81,17 +85,19 @@ def show_sim(data):
     show an image
     """
     from descwl_coadd.vis import show_images, show_2images
+    import images
 
-    images = []
+    imlist = []
     for band in data:
         for se_obs in data[band]:
-            images.append(se_obs.image.array)
-            images.append(se_obs.get_psf(25.1, 31.5).array)
+            sim = images.asinh_scale(se_obs.image.array)
+            imlist.append(sim)
+            imlist.append(se_obs.get_psf(25.1, 31.5).array)
 
-    if len(images) == 2:
-        show_2images(*images)
+    if len(imlist) == 2:
+        show_2images(*imlist)
     else:
-        show_images(images)
+        show_images(imlist)
 
 
 def get_sim_kw(args):
@@ -128,6 +134,7 @@ def get_sim_kw(args):
         bad_columns=args.bad_columns,
         coadd_dim=args.coadd_dim,
         buff=args.buff,
+        gal_type=args.gal_type,
     )
     if args.grid:
         sim_kw['grid_gals'] = True
@@ -260,7 +267,7 @@ def main():
             sim = Sim(**sim_kw)
             data = sim.gen_sim()
 
-            if args.show:
+            if args.show_sim:
                 show_sim(data)
 
             if args.nostack:
