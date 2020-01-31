@@ -52,6 +52,9 @@ def get_args():
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
 
+    parser.add_argument('--psf-g1', type=float, default=0)
+    parser.add_argument('--psf-g2', type=float, default=0)
+
     parser.add_argument('--rotate', action='store_true')
     parser.add_argument('--dither', action='store_true')
     parser.add_argument('--vary-scale', action='store_true')
@@ -77,17 +80,18 @@ def show_sim(data):
     """
     show an image
     """
-    from descwl_coadd.vis import show_images, show_image
+    from descwl_coadd.vis import show_images, show_2images
 
     images = []
     for band in data:
         for se_obs in data[band]:
             images.append(se_obs.image.array)
+            images.append(se_obs.get_psf(25.1, 31.5).array)
 
-    if len(images) > 1:
-        show_images(images)
+    if len(images) == 2:
+        show_2images(*images)
     else:
-        show_image(images[0])
+        show_images(images)
 
 
 def get_sim_kw(args):
@@ -251,6 +255,7 @@ def main():
             else:
                 sim_kw['g1'] = -0.02
 
+            sim_kw['psf_kws'] = {'g1': args.psf_g1, 'g2': args.psf_g2}
             sim_kw['rng'] = trial_rng
             sim = Sim(**sim_kw)
             data = sim.gen_sim()
