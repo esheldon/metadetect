@@ -59,11 +59,13 @@ def get_args():
 
     parser.add_argument('--rotate', action='store_true')
     parser.add_argument('--dither', action='store_true')
+    parser.add_argument('--dither-range', type=float)
     parser.add_argument('--vary-scale', action='store_true')
     parser.add_argument('--vary-wcs-shear', action='store_true')
 
     parser.add_argument('--coadd-dim', type=int, default=350)
     parser.add_argument('--buff', type=int, default=50)
+    parser.add_argument('--se-dim', type=int)
 
     parser.add_argument('--grid', action='store_true')
     parser.add_argument('--grid-gals', type=int, default=9)
@@ -110,7 +112,7 @@ def get_sim_kw(args):
 
     if args.dither:
         assert not args.nostack
-        wcs_kws['dither_range'] = (-0.5, 0.5)
+        wcs_kws['dither_range'] = (-args.dither_range, args.dither_range)
 
     if args.vary_scale:
         assert not args.nostack
@@ -133,6 +135,7 @@ def get_sim_kw(args):
         cosmic_rays=args.cosmic_rays,
         bad_columns=args.bad_columns,
         coadd_dim=args.coadd_dim,
+        se_dim=args.se_dim,
         buff=args.buff,
         gal_type=args.gal_type,
     )
