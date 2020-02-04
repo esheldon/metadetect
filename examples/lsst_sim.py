@@ -92,7 +92,8 @@ def show_sim(data):
     imlist = []
     for band in data:
         for se_obs in data[band]:
-            sim = images.asinh_scale(se_obs.image.array)
+            sim = se_obs.image.array
+            sim = images.asinh_scale(sim/sim.max(), 0.14)
             imlist.append(sim)
             imlist.append(se_obs.get_psf(25.1, 31.5).array)
 
