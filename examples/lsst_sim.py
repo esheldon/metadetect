@@ -25,13 +25,28 @@ import esutil as eu
 import argparse
 
 
-def make_comb_data(res):
+def trim_output(data):
+    cols2keep = [
+        'flags',
+        'wmom_s2n',
+        'wmom_T_ratio',
+        'wmom_g',
+    ]
+
+    return eu.numpy_util.extract_fields(data, cols2keep)
+
+
+def make_comb_data(args, res):
     add_dt = [('shear_type', 'S7')]
 
     dlist = []
     for stype in res.keys():
         data = res[stype]
         if data is not None:
+
+            if args.trim_output:
+                data = trim_output(data)
+
             newdata = eu.numpy_util.add_fields(data, add_dt)
             newdata['shear_type'] = stype
             dlist.append(newdata)
@@ -79,6 +94,11 @@ def get_args():
                               'metadetect'))
 
     parser.add_argument('--bands', default='r,i,z')
+
+    parser.add_argument('--trim-output',
+                        action='store_true',
+                        help='trim output columns to save space')
+
     return parser.parse_args()
 
 
@@ -113,7 +133,11 @@ def get_sim_kw(args):
 
     if args.dither:
         assert not args.nostack
-        wcs_kws['dither_range'] = (-args.dither_range, args.dither_range)
+        dither_range = args.dither_range
+        if dither_range is None:
+            dither_range = 0.5
+
+        wcs_kws['dither_range'] = (-dither_range, dither_range)
 
     if args.vary_scale:
         assert not args.nostack
@@ -313,7 +337,7 @@ def main():
             res = md.result
             # print(res.keys())
 
-            comb_data = make_comb_data(res)
+            comb_data = make_comb_data(args, res)
             if len(comb_data) > 0:
                 if shear_type == '1p':
                     dlist_p.append(comb_data)
