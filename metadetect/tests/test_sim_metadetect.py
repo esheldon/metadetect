@@ -38,9 +38,7 @@ def test_sim_metadetect_smoke(ntrial=1, show=False):
 
         # faking ngmix MultiBandObsList
         # note data is an OrderedDict
-        coadd_mbobs = ngmix.MultiBandObsList(
-            meta={'psf_fwhm': sim.psf_kws['fwhm']},
-        )
+        coadd_mbobs = ngmix.MultiBandObsList()
         for band in data:
             coadd_obs = CoaddObsSimple(data[band])
             obslist = ngmix.ObsList()
