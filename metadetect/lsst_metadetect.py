@@ -61,11 +61,9 @@ class LSSTMetadetect(Metadetect):
         return odict
 
     def _do_detect(self, mbobs):
-        psf_fwhm = self.mbobs.meta['psf_fwhm']
         return LSSTMEDSifier(
             mbobs=mbobs,
             meds_config=self['meds'],
-            psf_fwhm_arcsec=psf_fwhm,  # for detection, but we could fit for it
         )
 
     def _measure(self, mbobs, shear_str):

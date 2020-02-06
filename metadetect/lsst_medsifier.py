@@ -14,10 +14,9 @@ from .lsst_mbobs_extractor import MBObsExtractor
 
 
 class LSSTMEDSifier(MEDSifier):
-    def __init__(self, *, mbobs, meds_config, psf_fwhm_arcsec):
+    def __init__(self, *, mbobs, meds_config):
         self.mbobs = mbobs
         self.nband = len(mbobs)
-        self.psf_fwhm_arcsec = psf_fwhm_arcsec
 
         assert len(mbobs) == 1, 'multi band not supported yet'
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'

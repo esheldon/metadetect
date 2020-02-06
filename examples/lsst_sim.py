@@ -69,8 +69,12 @@ def get_args():
 
     parser.add_argument('--gal-type', default='exp')
 
-    parser.add_argument('--psf-g1', type=float, default=0)
-    parser.add_argument('--psf-g2', type=float, default=0)
+    parser.add_argument('--psf-g1', type=float, default=0,
+                        help='not used for psf type "ps"')
+    parser.add_argument('--psf-g2', type=float, default=0,
+                        help='not used for psf type "ps"')
+
+    parser.add_argument('--psf-type', default='gauss')
 
     parser.add_argument('--rotate', action='store_true')
     parser.add_argument('--dither', action='store_true')
@@ -168,6 +172,10 @@ def get_sim_kw(args):
         sim_kw['grid_gals'] = True
         sim_kw['ngals'] = args.grid_gals  # really means NxN
 
+    sim_kw['psf_type'] = args.psf_type
+    if sim_kw['psf_type'] == 'gauss':
+        sim_kw['psf_kws'] = {'g1': args.psf_g1, 'g2': args.psf_g2}
+
     return sim_kw
 
 
@@ -247,10 +255,8 @@ def get_config(args):
     return config
 
 
-def make_mbobs(obs, psf_fwhm):
-    mbobs = ngmix.MultiBandObsList(
-        meta={'psf_fwhm': psf_fwhm}
-    )
+def make_mbobs(obs):
+    mbobs = ngmix.MultiBandObsList()
     obslist = ngmix.ObsList()
     obslist.append(obs)
     mbobs.append(obslist)
@@ -290,7 +296,6 @@ def main():
             else:
                 sim_kw['g1'] = -0.02
 
-            sim_kw['psf_kws'] = {'g1': args.psf_g1, 'g2': args.psf_g2}
             sim_kw['rng'] = trial_rng
             sim = Sim(**sim_kw)
             data = sim.gen_sim()
@@ -301,7 +306,7 @@ def main():
             if args.nostack:
                 coadd_obs = MultiBandCoaddsSimple(data=data)
 
-                coadd_mbobs = make_mbobs(coadd_obs, sim.psf_kws['fwhm'])
+                coadd_mbobs = make_mbobs(coadd_obs)
                 md = Metadetect(
                     config,
                     coadd_mbobs,
@@ -324,7 +329,7 @@ def main():
                 )
 
                 coadd_obs = mbc.coadds['all']
-                coadd_mbobs = make_mbobs(coadd_obs, sim.psf_kws['fwhm'])
+                coadd_mbobs = make_mbobs(coadd_obs)
 
                 md = LSSTMetadetect(
                     config,
