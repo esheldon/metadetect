@@ -67,14 +67,18 @@ def get_args():
     parser.add_argument('--cosmic-rays', action='store_true')
     parser.add_argument('--bad-columns', action='store_true')
 
-    parser.add_argument('--gal-type', default='exp')
+    parser.add_argument('--gal-type')
 
+    parser.add_argument('--psf-type', default='gauss')
+
+    # used for gauss psf
     parser.add_argument('--psf-g1', type=float, default=0,
                         help='not used for psf type "ps"')
     parser.add_argument('--psf-g2', type=float, default=0,
                         help='not used for psf type "ps"')
 
-    parser.add_argument('--psf-type', default='gauss')
+    # used for ps psf
+    parser.add_argument('--psf-varfac', type=float, default=1)
 
     parser.add_argument('--rotate', action='store_true')
     parser.add_argument('--dither', action='store_true')
@@ -82,8 +86,8 @@ def get_args():
     parser.add_argument('--vary-scale', action='store_true')
     parser.add_argument('--vary-wcs-shear', action='store_true')
 
-    parser.add_argument('--coadd-dim', type=int, default=350)
-    parser.add_argument('--buff', type=int, default=50)
+    parser.add_argument('--coadd-dim', type=int)
+    parser.add_argument('--buff', type=int)
     parser.add_argument('--se-dim', type=int)
 
     parser.add_argument('--grid', action='store_true')
@@ -163,11 +167,18 @@ def get_sim_kw(args):
         wcs_kws=wcs_kws,
         cosmic_rays=args.cosmic_rays,
         bad_columns=args.bad_columns,
-        coadd_dim=args.coadd_dim,
-        se_dim=args.se_dim,
-        buff=args.buff,
-        gal_type=args.gal_type,
+        se_dim=args.se_dim,  # can be None
     )
+
+    if args.gal_type is not None:
+        sim_kw['gal_type'] = args.gal_type
+
+    if args.buff is not None:
+        sim_kw['buff'] = args.buff
+
+    if args.coadd_dim is not None:
+        sim_kw['coadd_dim'] = args.coadd_dim
+
     if args.grid:
         sim_kw['grid_gals'] = True
         sim_kw['ngals'] = args.grid_gals  # really means NxN
@@ -175,6 +186,8 @@ def get_sim_kw(args):
     sim_kw['psf_type'] = args.psf_type
     if sim_kw['psf_type'] == 'gauss':
         sim_kw['psf_kws'] = {'g1': args.psf_g1, 'g2': args.psf_g2}
+    elif sim_kw['psf_type'] == 'ps':
+        sim_kw['psf_kws'] = {'variation_factor': args.psf_varfac}
 
     return sim_kw
 

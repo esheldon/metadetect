@@ -26,11 +26,13 @@ python /astro/u/esheldon/lensing/test-lsst-mdet/lsst_sim.py \
     %(nostack)s \
     %(psf_g1)s \
     %(psf_g2)s \
+    %(psf_varfac)s \
     %(se_dim)s \
+    %(coadd_dim)s \
+    %(buff)s \
     --gal-type %(gal_type)s \
+    --psf-type %(psf_type)s \
     --bands %(bands)s \
-    --coadd-dim %(coadd_dim)d \
-    --buff %(buff)d \
     --nepochs %(nepochs)d \
     --ntrial %(ntrial)d \
     --seed ${seed} \
@@ -99,9 +101,8 @@ def get_args():
     parser.add_argument('--nepochs', type=int, default=1)
     parser.add_argument('--ntrial', type=int, default=10)
 
-    parser.add_argument('--coadd-dim', type=int, default=350)
-    parser.add_argument('--buff', type=int, default=50)
-
+    parser.add_argument('--coadd-dim', type=int)
+    parser.add_argument('--buff', type=int)
     parser.add_argument('--se-dim', type=int)
 
     parser.add_argument('--cosmic-rays', action='store_true')
@@ -118,8 +119,10 @@ def get_args():
 
     parser.add_argument('--bands', default='r,i,z')
 
+    parser.add_argument('--psf-type', default='gauss')
     parser.add_argument('--psf-g1', type=float)
     parser.add_argument('--psf-g2', type=float)
+    parser.add_argument('--psf-varfac', type=float)
 
     parser.add_argument('--gal-type', default='exp')
 
@@ -191,6 +194,21 @@ def make_script_text(args):
     else:
         psf_g2 = ''
 
+    if args.psf_varfac is not None:
+        psf_varfac = '--psf-varfac %g' % args.psf_varfac
+    else:
+        psf_varfac = ''
+
+    if args.coadd_dim is not None:
+        coadd_dim = '--coadd-dim %d' % args.coadd_dim
+    else:
+        coadd_dim = ''
+
+    if args.buff is not None:
+        buff = '--buff%d' % args.buff
+    else:
+        buff = ''
+
     return SCRIPT_TEMPLATE % {
         'grid': grid,
         'dither': dither,
@@ -202,15 +220,17 @@ def make_script_text(args):
         'vary_scale': vary_scale,
         'nostack': nostack,
         'bands': args.bands,
-        'coadd_dim': args.coadd_dim,
-        'buff': args.buff,
+        'coadd_dim': coadd_dim,
+        'buff': buff,
         'se_dim': se_dim,
         'nepochs': args.nepochs,
         'ntrial': args.ntrial,
         'gal_type': args.gal_type,
 
+        'psf_type': args.psf_type,
         'psf_g1': psf_g1,
         'psf_g2': psf_g2,
+        'psf_varfac': psf_varfac,
     }
 
 
