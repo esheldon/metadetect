@@ -21,6 +21,7 @@ command: |
         %(nostack)s \
         %(psf_g1)s \
         %(psf_g2)s \
+        %(psf_varfac)s \
         %(se_dim)s \
         %(coadd_dim)s \
         %(buff)s \
@@ -86,6 +87,7 @@ def get_args():
     parser.add_argument('--psf-type', default='gauss')
     parser.add_argument('--psf-g1', type=float)
     parser.add_argument('--psf-g2', type=float)
+    parser.add_argument('--psf-varfac', type=float)
 
     parser.add_argument('--gal-type', default='exp')
 
@@ -162,6 +164,11 @@ def main():
     else:
         psf_g2 = ''
 
+    if args.psf_varfac is not None:
+        psf_varfac = '--psf-varfac %g' % args.psf_varfac
+    else:
+        psf_varfac = ''
+
     if args.coadd_dim is not None:
         coadd_dim = '--coadd-dim %d' % args.coadd_dim
     else:
@@ -206,6 +213,7 @@ def main():
             'psf_type': args.psf_type,
             'psf_g1': psf_g1,
             'psf_g2': psf_g2,
+            'psf_varfac': psf_varfac,
 
             'output': output,
             'job_name': job_name,
