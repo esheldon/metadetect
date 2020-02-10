@@ -15,6 +15,7 @@ tmpdir=$_CONDOR_SCRATCH_DIR
 tmplog=${tmpdir}/logfile
 
 python /astro/u/esheldon/lensing/test-lsst-mdet/lsst_sim.py \
+    --trim-output \
     %(grid)s \
     %(dither)s \
     %(dither_range)s \

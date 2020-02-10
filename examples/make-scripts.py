@@ -10,6 +10,7 @@ command: |
     output=%(output)s
 
     python lsst_sim.py \
+        --trim-output \
         %(grid)s \
         %(dither)s \
         %(dither_range)s \
