@@ -9,12 +9,7 @@ export OMP_NUM_THREADS=1
 seed=$1
 output=$2
 
-logfile=${output}.log
-
-tmpdir=$_CONDOR_SCRATCH_DIR
-tmplog=${tmpdir}/logfile
-
-python /astro/u/esheldon/lensing/test-lsst-mdet/lsst_sim.py \
+python %(pyscript_file)s \
     --trim-output \
     %(grid)s \
     %(dither)s \
@@ -37,9 +32,7 @@ python /astro/u/esheldon/lensing/test-lsst-mdet/lsst_sim.py \
     --nepochs %(nepochs)d \
     --ntrial %(ntrial)d \
     --seed ${seed} \
-    --output ${output} &> ${tmplog}
-
-mv -fv $tmplog $logfile
+    --output ${output} 2>&1
 """
 
 CONDOR_SUBMIT_HEAD = """
@@ -56,18 +49,37 @@ GetEnv = True
 
 kill_sig        = SIGINT
 
+should_transfer_files = YES
+transfer_input_files = %(pyscript_file)s
+
+# we don't want open file handles, so transfer when
+# the job completes or is evicted
+when_to_transfer_output = ON_EXIT_OR_EVICT
+
 +Experiment     = "astro"
 """
 
 CONDOR_JOB_TEMPLATE = """
 +job_name = "%(job_name)s"
+Output = %(logfile)s
 Arguments = %(seed)d %(output)s
 Queue
 """
 
 
+def get_base_dir():
+    return '/astro/u/esheldon/lensing/test-lsst-mdet'
+
+
 def get_run_dir(run):
-    return '/astro/u/esheldon/lensing/test-lsst-mdet/runs/%s' % run
+    bdir = get_base_dir()
+    return os.path.join(bdir, 'runs/%s' % run)
+
+
+def get_log_dir(run):
+    bdir = get_base_dir()
+    return os.path.join(bdir, 'runs/%s-logs' % run)
+    return 'runs/%s-logs' % run
 
 
 def get_condor_script_file(run, seed):
@@ -86,12 +98,28 @@ def get_script_file(run, seed):
     )
 
 
+def get_pyscript_file():
+    bdir = get_base_dir()
+    return os.path.join(
+        bdir,
+        'lsst_sim.py',
+    )
+
+
 def get_output(run, num):
+    return '%s-%07d.fits' % (run, num)
+
+
+def get_output_old(run, num):
     outdir = get_run_dir(run)
     return os.path.join(
         outdir,
         '%s-%07d.fits' % (run, num)
     )
+
+
+def get_logfile(run, num):
+    return '%s-%07d.log' % (run, num)
 
 
 def get_args():
@@ -211,6 +239,7 @@ def make_script_text(args):
         buff = ''
 
     return SCRIPT_TEMPLATE % {
+        'pyscript_file': os.path.basename(get_pyscript_file()),
         'grid': grid,
         'dither': dither,
         'dither_range': dither_range,
@@ -241,10 +270,15 @@ def main():
     rng = np.random.RandomState(args.seed)
 
     run_dir = get_run_dir(args.run)
+    log_dir = get_log_dir(args.run)
+
     if not os.path.exists(run_dir):
         os.makedirs(run_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     script_file = get_script_file(args.run, args.seed)
+    pyscript_file = get_pyscript_file()
     condor_file = get_condor_script_file(args.run, args.seed)
 
     if os.path.exists(condor_file):
@@ -257,18 +291,25 @@ def main():
     os.system('chmod 755 '+script_file)
 
     with open(condor_file, 'w') as fobj:
-        fobj.write(CONDOR_SUBMIT_HEAD % {'script_file': script_file})
+        fobj.write(CONDOR_SUBMIT_HEAD % {
+            'script_file': script_file,
+            'pyscript_file': pyscript_file,
+            # 'output_dir': run_dir,
+            # 'log_dir': log_dir,
+        })
 
         for i in range(args.njobs):
 
             seed = rng.randint(0, 2**19)
             output = get_output(args.run, seed)
+            logfile = get_logfile(args.run, seed)
             job_name = '%s-%07d' % (args.run, seed)
 
             job_text = CONDOR_JOB_TEMPLATE % {
                 'job_name': job_name,
                 'seed': seed,
                 'output': output,
+                'logfile': logfile,
             }
 
             # print('%d/%d  %s' % (i+1, args.njobs, job_name))
