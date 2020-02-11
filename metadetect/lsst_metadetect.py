@@ -11,8 +11,13 @@ from .lsst_medsifier import LSSTMEDSifier
 
 class LSSTMetadetect(Metadetect):
     def __init__(self, *args, **kw):
+        loglevel = kw.pop('loglevel', 'info').upper()
+
         super().__init__(*args, **kw)
+
         self.log = lsst.log.Log.getLogger("LSSTMetadetect")
+        self.log.setLevel(getattr(lsst.log, loglevel))
+        self.loglevel = loglevel
 
     def _get_all_metacal(self):
         """
@@ -64,6 +69,7 @@ class LSSTMetadetect(Metadetect):
         return LSSTMEDSifier(
             mbobs=mbobs,
             meds_config=self['meds'],
+            loglevel=self.loglevel,
         )
 
     def _measure(self, mbobs, shear_str):
