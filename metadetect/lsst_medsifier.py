@@ -14,7 +14,7 @@ from .lsst_mbobs_extractor import MBObsExtractor
 
 
 class LSSTMEDSifier(MEDSifier):
-    def __init__(self, *, mbobs, meds_config):
+    def __init__(self, *, mbobs, meds_config, loglevel='info'):
         self.mbobs = mbobs
         self.nband = len(mbobs)
 
@@ -22,7 +22,9 @@ class LSSTMEDSifier(MEDSifier):
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
         self._set_meds_config(meds_config)
+        self.loglevel = loglevel.upper()
         self.log = lsst.log.Log.getLogger("LSSTMEDSifier")
+        self.log.setLevel(getattr(lsst.log, self.loglevel))
 
         self.log.debug('setting detection exposure')
         self._set_detim_exposure()
@@ -112,9 +114,11 @@ class LSSTMEDSifier(MEDSifier):
         detection_config.reEstimateBackground = False
         detection_config.thresholdValue = 10
         detection_task = SourceDetectionTask(config=detection_config)
+        detection_task.log.setLevel(getattr(lsst.log, self.loglevel))
 
         deblend_config = SourceDeblendConfig()
         deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
+        deblend_task.log.setLevel(getattr(lsst.log, self.loglevel))
 
         # Detect objects
         table = afw_table.SourceTable.make(schema)
