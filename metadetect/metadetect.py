@@ -130,6 +130,10 @@ class Metadetect(dict):
         """
 
         medsifier = self._do_detect(mbobs)
+        if self._show:
+            import descwl_coadd.vis
+            descwl_coadd.vis.show_image(medsifier.seg)
+
         mbm = medsifier.get_multiband_meds()
 
         mbobs_list = mbm.get_mbobs_list()
