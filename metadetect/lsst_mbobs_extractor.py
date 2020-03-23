@@ -2,6 +2,7 @@
 copied from meas_extensions_ngmix and modified
 """
 import numpy as np
+from numba import njit
 import ngmix
 import lsst.log
 import lsst.afw.image as afw_image
@@ -198,6 +199,8 @@ class MBObsExtractor(object):
         """
 
         im = imobj_sub.image.array
+        # im = im - _get_bg_from_edges(image=im, border=2)
+
         wt = self._extract_weight(imobj_sub)
         maskobj = imobj_sub.mask
         bmask = maskobj.array
@@ -444,3 +447,20 @@ def _print_bits(maskobj, bitnames):
         w = np.where((mask & bitval) != 0)
         if w[0].size > 0:
             print('%s %d %d/%d' % (bitname, bitval, w[0].size, mask.size))
+
+
+@njit
+def _get_bg_from_edges(*, image, border):
+    nrow, ncol = image.shape
+
+    count = 0
+    vsum = 0.0
+    for row in range(nrow):
+        for col in range(ncol):
+            if (row < border or row >= (nrow-2) or
+                    col < border or col >= (ncol-2)):
+
+                count += 1
+                vsum += image[row, col]
+
+    return vsum/count
