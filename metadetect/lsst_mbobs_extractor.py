@@ -393,7 +393,7 @@ class MBObsExtractor(object):
                     "all images must have same reference position"
 
 
-def _project_box(source, wcs, radius):
+def _project_box(*, source, wcs, radius):
     """
     create a box for the input source
     """
