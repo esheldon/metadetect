@@ -228,6 +228,7 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
         res = measure_weighted_moments(
             mbobs=mbobs,
             weight=self.weight,
+            thresh=self['detect']['thresh'],
         )
 
         if res is not None:
