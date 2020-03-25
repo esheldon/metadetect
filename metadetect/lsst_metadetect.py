@@ -71,6 +71,7 @@ class LSSTMetadetect(Metadetect):
         return LSSTMEDSifier(
             mbobs=mbobs,
             meds_config=self['meds'],
+            thresh=self['detect']['thresh'],
             loglevel=self.loglevel,
         )
 
