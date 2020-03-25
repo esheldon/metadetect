@@ -37,19 +37,20 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         loglevel=loglevel,
     )
 
-    #exposure.mask.printMaskPlanes()
+    # ormasks will be different within the loop below due to the replacer
+    ormasks = _get_ormasks(sources=sources, exposure=exposure)
 
     replacer = _get_noise_replacer(exposure=exposure, sources=sources)
 
     results = []
 
-    for source in sources:
+    for i, source in enumerate(sources):
 
         # Skip parent objects where all children are inserted
         if source.get('deblend_nChild') != 0:
             continue
 
-        ormask = _get_ormask(source=source, mask=exposure.mask.array)
+        ormask = ormasks[i]
 
         # This will insert a single source into the image
         replacer.insertSource(source.getId())
@@ -90,7 +91,15 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
     return results
 
 
-def _get_ormask(*, source, mask):
+def _get_ormasks(*, sources, exposure):
+    ormasks = []
+    for source in sources:
+        ormask = _get_ormask(source=source, exposure=exposure)
+        ormasks.append(ormask)
+    return ormasks
+
+
+def _get_ormask(*, source, exposure):
     """
     get ormask based on original peak position
     """
@@ -99,7 +108,8 @@ def _get_ormask(*, source, mask):
     y = orig_cen.getY()
     x = orig_cen.getX()
 
-    return mask[y, x]
+    maskval = exposure.mask.array[y, x]
+    return maskval
 
 
 def detect_and_deblend(*, exposure, thresh=10, loglevel='INFO'):
