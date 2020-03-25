@@ -31,28 +31,6 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
 
     exposure = mbobs[0][0].exposure
 
-    # This schema needs to be constructed before running anything and passed
-    # to algorithms that make additional measurents.
-
-    """
-    schema = afw_table.SourceTable.makeMinimalSchema()
-    meas_task = _get_meas_task(schema=schema)
-
-    sources = detect(
-        exposure=exposure,
-        schema=schema,
-        thresh=thresh,
-        loglevel=loglevel,
-    )
-
-    deblend(
-        schema=schema,
-        exposure=exposure,
-        sources=sources,
-        loglevel=loglevel,
-    )
-    """
-
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
         thresh=thresh,
@@ -74,6 +52,7 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
 
         meas_task.callMeasure(source, exposure)
 
+        # TODO variable box size
         bbox = _get_bbox_fixed(
             exposure=exposure,
             source=source,
@@ -160,65 +139,6 @@ def detect_and_deblend(*, exposure, thresh=10, loglevel='INFO'):
     deblend_task.run(exposure, sources)
 
     return sources, meas_task
-
-
-def detect(*, exposure, schema, thresh=10, loglevel='INFO'):
-    """
-    run a basic detection task
-    """
-
-    # setup detection config
-    detection_config = SourceDetectionConfig()
-    detection_config.reEstimateBackground = False
-    detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(config=detection_config)
-
-    detection_task.log.setLevel(getattr(lsst.log, loglevel.upper()))
-
-    table = afw_table.SourceTable.make(schema)
-    result = detection_task.run(table, exposure)
-    sources = result.sources
-
-    return sources
-
-
-def _get_meas_task(*, schema):
-    # Setup algorithms to run
-    meas_config = SingleFrameMeasurementConfig()
-    meas_config.plugins.names = [
-        "base_SdssCentroid",
-        "base_PsfFlux",
-        "base_SkyCoord",
-        # "base_SdssShape",
-        # "base_LocalBackground",
-    ]
-
-    # set these slots to none because we aren't running these algorithms
-    meas_config.slots.apFlux = None
-    meas_config.slots.gaussianFlux = None
-    meas_config.slots.calibFlux = None
-    meas_config.slots.modelFlux = None
-
-    # goes with SdssShape above
-    meas_config.slots.shape = None
-
-    # fix odd issue where it things things are near the edge
-    meas_config.plugins['base_SdssCentroid'].binmax = 1
-
-    meas_task = SingleFrameMeasurementTask(
-        config=meas_config,
-        schema=schema,
-    )
-
-    return meas_task
-
-
-def deblend(*, schema, exposure, sources, loglevel='INFO'):
-    deblend_config = SourceDeblendConfig()
-    deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
-
-    deblend_task.log.setLevel(getattr(lsst.log, loglevel.upper()))
-    deblend_task.run(exposure, sources)
 
 
 def _get_noise_replacer(*, exposure, sources):
