@@ -37,6 +37,8 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         loglevel=loglevel,
     )
 
+    #exposure.mask.printMaskPlanes()
+
     replacer = _get_noise_replacer(exposure=exposure, sources=sources)
 
     results = []
@@ -46,6 +48,8 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         # Skip parent objects where all children are inserted
         if source.get('deblend_nChild') != 0:
             continue
+
+        ormask = _get_ormask(source=source, mask=exposure.mask.array)
 
         # This will insert a single source into the image
         replacer.insertSource(source.getId())
@@ -68,7 +72,7 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         pres = _measure_moments(obs=obs.psf, weight=weight)
         ores = _measure_moments(obs=obs, weight=weight)
 
-        res = _get_output(source=source, res=ores, pres=pres)
+        res = _get_output(source=source, res=ores, pres=pres, ormask=ormask)
 
         # Remove object
         replacer.removeSource(source.getId())
@@ -84,6 +88,18 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         results = None
 
     return results
+
+
+def _get_ormask(*, source, mask):
+    """
+    get ormask based on original peak position
+    """
+    peak = source.getFootprint().getPeaks()[0]
+    orig_cen = peak.getI()
+    y = orig_cen.getY()
+    x = orig_cen.getX()
+
+    return mask[y, x]
 
 
 def detect_and_deblend(*, exposure, thresh=10, loglevel='INFO'):
@@ -521,6 +537,8 @@ def _get_dtype():
         ('psf_g', 'f8', 2),
         ('psf_T', 'f8'),
 
+        ('ormask', 'i4'),
+
         (n('flags'), 'i4'),
         (n('s2n'), 'f8'),
         (n('pars'), 'f8', npars),
@@ -534,7 +552,7 @@ def _get_dtype():
     return dt
 
 
-def _get_output(*, source, res, pres):
+def _get_output(*, source, res, pres, ormask):
 
     model = 'wmom'
     n = util.Namer(front=model)
@@ -555,6 +573,7 @@ def _get_output(*, source, res, pres):
 
     output['row'] = orig_cen.getY()
     output['col'] = orig_cen.getX()
+    output['ormask'] = ormask
 
     flags = 0
     if pres['flags'] != 0:
