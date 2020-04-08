@@ -55,16 +55,8 @@ class LSSTMetadetect(Metadetect):
 
                     if self._show:
                         import descwl_coadd.vis
-                        descwl_coadd.vis.show_images(
-                            [
-                                obs.image,
-                                obs.bmask,
-                                obs.weight,
-                                orig_obs.noise,
-                            ],
-                            title=mtype,
-                        )
                         descwl_coadd.vis.show_image_and_mask(exp)
+                        input('hit a key')
 
         return odict
 
