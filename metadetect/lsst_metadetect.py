@@ -64,6 +64,7 @@ class LSSTMetadetect(Metadetect):
                             ],
                             title=mtype,
                         )
+                        descwl_coadd.vis.show_image_and_mask(exp)
 
         return odict
 
