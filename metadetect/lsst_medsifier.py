@@ -14,9 +14,10 @@ from .lsst_mbobs_extractor import MBObsExtractor
 
 
 class LSSTMEDSifier(MEDSifier):
-    def __init__(self, *, mbobs, meds_config, loglevel='info'):
+    def __init__(self, *, mbobs, meds_config, thresh=10.0, loglevel='info'):
         self.mbobs = mbobs
         self.nband = len(mbobs)
+        self.thresh = thresh
 
         assert len(mbobs) == 1, 'multi band not supported yet'
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
@@ -112,7 +113,7 @@ class LSSTMEDSifier(MEDSifier):
         # setup detection config
         detection_config = SourceDetectionConfig()
         detection_config.reEstimateBackground = False
-        detection_config.thresholdValue = 10
+        detection_config.thresholdValue = self.thresh
         detection_task = SourceDetectionTask(config=detection_config)
         detection_task.log.setLevel(getattr(lsst.log, self.loglevel))
 

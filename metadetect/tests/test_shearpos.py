@@ -97,7 +97,8 @@ def test_shear_pos_image(show=False):
 
     # the single pixel with a non-zero value
     row, col = 35, 15
-    obs.image[row, col] = 1
+    with obs.writeable():
+        obs.image[row, col] = 1
 
     gsim = galsim.Image(obs.image, wcs=gs_wcs)
     ii = galsim.InterpolatedImage(gsim, x_interpolant='lanczos15')
