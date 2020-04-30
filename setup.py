@@ -1,13 +1,13 @@
-import os
-from glob import glob
-from distutils.core import setup
+from setuptools import setup, find_packages
+
 
 setup(
-    name="metadetect", 
+    name="metadetect",
     version="0.2.0",
+    packages=find_packages(),
     description="Combining detection and metacalibration",
-    license = "GPL",
+    license="GPL",
     author="Erin Scott Sheldon",
     author_email="erin.sheldon@gmail.com",
-    packages=['metadetect'],
+    url='https://github.com/esheldon/metadetect',
 )
