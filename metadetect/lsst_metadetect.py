@@ -74,6 +74,11 @@ class LSSTMetadetect(Metadetect):
         detection as well as measurements
         """
 
+        nband = len(mbobs)
+        if nband > 1:
+            self.log.info('coadding %d bands' % nband)
+            mbobs = make_straight_coadd_obs_over_bands(mbobs)
+
         medsifier = self._do_detect(mbobs)
         mbm = medsifier.get_multiband_meds()
 
@@ -264,3 +269,115 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
         weight.set_flux(1.0/norm)
 
         self.weight = weight
+
+
+def make_straight_coadd_obs_over_bands(mbobs):
+    """
+    make a straight coadd over bands, assuming perfect
+    alignment
+
+    this is to be run on the outputs from get_all_metacal
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        Possibly multi-band coadd
+
+    Returns
+    -------
+    coadd_mbobs: ngmix.MultiBandObsList
+        The new coadd obs with exposure attached
+    """
+    from lsst.meas.algorithms import KernelPsf
+    from lsst.afw.math import FixedKernel
+    import lsst.afw.image as afw_image
+    import copy
+
+    nband = len(mbobs)
+    if nband == 1:
+        return mbobs
+
+    oobs = mbobs[0][0]
+    weight = oobs.weight.copy()
+    # noise = oobs.noise.copy()
+
+    psf_im = oobs.psf.image.copy()
+    psf_weight = oobs.psf.weight.copy()
+
+    exp = copy.deepcopy(mbobs[0][0].exposure)
+    im = exp.image.array
+    var = exp.variance.array
+    # this is the ormask
+    mask = exp.mask.array
+
+    im[:, :] = 0
+    weight[:, :] = 0
+    # noise[:, :] = 0.0
+
+    psf_im[:, :] = 0
+    psf_weight[:, :] = 0
+
+    mask[:, :] = 0
+    var[:, :] = 0
+
+    wsum = 0.0
+    for iband, obslist in enumerate(mbobs):
+        assert len(obslist) == 1
+        obs = obslist[0]
+
+        wt = obs.weight.max()
+        wsum += wt
+
+        im += obs.image * wt
+        weight += obs.weight
+        # noise += obs.noise * wt
+
+        psf_im += obs.psf.image * wt
+        psf_weight += obs.psf.weight
+
+        var += obs.exposure.variance.array * wt
+        mask |= obs.exposure.mask.array
+
+    iwsum = 1.0/wsum
+    im *= iwsum
+    # noise *= iwsum
+    psf_im *= iwsum
+
+    bad = ~np.isfinite(var)
+    weight[bad] = 0.0
+    w = np.where(weight > 0)
+    if w[0].size > 0:
+        var[w] = 1.0/weight[w]
+
+    stack_psf = KernelPsf(
+        FixedKernel(
+            afw_image.ImageD(psf_im.astype(np.float))
+        )
+    )
+    exp.setPsf(stack_psf)
+
+    # using store_pixels = False as we don't plan to run
+    # directly on these, rather we pull out stamps
+    psf_obs = ngmix.Observation(
+        image=psf_im,
+        weight=psf_weight,
+        jacobian=oobs.psf.jacobian,
+        store_pixels=False,
+    )
+    coadd_obs = ngmix.Observation(
+        image=im,
+        # noise=noise,
+        weight=weight,
+        bmask=np.zeros(im.shape, dtype='i4'),
+        ormask=mask,
+        jacobian=oobs.jacobian,  # assuming all same jacobian
+        psf=psf_obs,
+        store_pixels=False,
+    )
+    coadd_obs.exposure = exp
+
+    obslist = ngmix.ObsList()
+    obslist.append(coadd_obs)
+    coadd_mbobs = ngmix.MultiBandObsList()
+    coadd_mbobs.append(obslist)
+    return coadd_mbobs
