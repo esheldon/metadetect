@@ -377,32 +377,6 @@ class MaxLike(Moments):
         mess = "        s2n: %g Trat: %g"
         logger.debug(mess % (data['gauss_s2n'][0], data['gauss_T_ratio'][0]))
 
-    def _get_dtype(self, model, npars):
-
-        n = Namer(front=model)
-        dt = [
-            ('flags', 'i4'),
-
-            ('psfrec_flags', 'i4'),  # psfrec is the original psf
-            ('psfrec_g', 'f8', 2),
-            ('psfrec_T', 'f8'),
-
-            ('psf_g', 'f8', 2),
-            ('psf_T', 'f8'),
-
-            (n('flags'), 'i4'),
-            (n('s2n'), 'f8'),
-            (n('pars'), 'f8', npars),
-            (n('g'), 'f8', 2),
-            (n('g_cov'), 'f8', (2, 2)),
-            (n('T'), 'f8'),
-            (n('T_err'), 'f8'),
-            (n('T_ratio'), 'f8'),
-        ]
-
-        return dt
-
-
     def _get_output(self, res):
 
         npars = 6 + self.nband - 1
