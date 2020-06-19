@@ -513,6 +513,7 @@ class Bootstrapper(object):
             self.psf_model,
             self.psf_Tguess,
             self.psf_lm_pars,
+            rng=self.rng,
         )
         runner.go(ntry=self.psf_ntry)
 
