@@ -356,8 +356,8 @@ class MaxLike(Moments):
                     logger.debug("        fit failed: %s" % res['flagstr'])
                 except BootGalFailure:
                     res = {
-                        'flags': procflags.GAL_FAILURE,
-                        'flagstr': procflags.get_name(procflags.GAL_FAILURE),
+                        'flags': procflags.OBJ_FAILURE,
+                        'flagstr': procflags.get_name(procflags.OBJ_FAILURE),
                     }
                     logger.debug("        fit failed: %s" % res['flagstr'])
 
