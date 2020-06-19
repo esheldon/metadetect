@@ -118,10 +118,14 @@ class Metadetect(dict):
         """
         set the fitter to be used
         """
-        self._fitter = fitting.Moments(
-            self,
-            self.rng,
-        )
+        model = self.get('model', 'moments')
+
+        if model == 'wmom':
+            self._fitter = fitting.Moments(self, self.rng)
+        elif model == 'gauss':
+            self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+        else:
+            raise ValueError("bad model: '%s'" % model)
 
     def _measure(self, mbobs, shear_str):
         """

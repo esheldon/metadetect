@@ -315,10 +315,11 @@ class MaxLike(Moments):
     """
     measure simple weighted moments
     """
-    def __init__(self, config, rng):
+    def __init__(self, config, rng, nband):
         self.update(config)
         self.rng = rng
-        self.bootstrapper = Bootstrapper(self.rng)
+        self.nband = nband
+        self.bootstrapper = Bootstrapper(self.rng, self.nband)
 
     def go(self, mbobs_list):
         """
@@ -457,8 +458,9 @@ def fit_one_psf(obs, pconf, rng):
 
 
 class Bootstrapper(object):
-    def __init__(self, rng):
+    def __init__(self, rng, nband):
         self.rng = rng
+        self.nband = nband
 
         self._setup_fitting()
 
@@ -571,7 +573,7 @@ class Bootstrapper(object):
         generate a guess, drawing from priors on the other parameters
         """
 
-        guesser = ngmix.joint_prior.TFluxAndPriorGuesser(
+        guesser = ngmix.guessers.TFluxAndPriorGuesser(
             psf_T, psf_flux, self.prior, scaling="linear",
         )
         return guesser
@@ -596,8 +598,8 @@ class Bootstrapper(object):
             rng=self.rng,
         )
         g_prior = ngmix.priors.GPriorBA(0.2, rng=self.rng)
-        T_prior = ngmix.priors.Flat([-0.1, 1.e+05], rng=self.rng)
-        flux_prior = ngmix.priors.Flat([-1000.0, 1.0e+09], rng=self.rng)
+        T_prior = ngmix.priors.FlatPrior(-0.1, 1.e+05, rng=self.rng)
+        flux_prior = ngmix.priors.FlatPrior(-1000.0, 1.0e+09, rng=self.rng)
 
         self.prior = PriorSimpleSep(
             cen_prior,
