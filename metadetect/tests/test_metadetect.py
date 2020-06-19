@@ -4,6 +4,7 @@ to make sure it gets the right answer or anything, just
 to test all the moving parts
 """
 import time
+import pytest
 import numpy as np
 import ngmix
 import galsim
@@ -29,6 +30,8 @@ DEFAULT_SIM_CONFIG = {
 }
 
 TEST_METADETECT_CONFIG = {
+    "model": "wmom",
+
     'weight': {
         'fwhm': 1.2,  # arcsec
     },
@@ -327,11 +330,13 @@ def test_detect(ntrial=1, show=False):
     print("time per object:", total_time/nobj_meas)
 
 
-def test_metadetect(ntrial=1):
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect(model):
     """
     test full metadetection
     """
 
+    ntrial = 1
     rng = np.random.RandomState()
 
     tm0 = time.time()
@@ -339,6 +344,7 @@ def test_metadetect(ntrial=1):
     sim = Sim(rng)
     config = {}
     config.update(TEST_METADETECT_CONFIG)
+    config["model"] = model
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
