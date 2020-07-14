@@ -271,17 +271,16 @@ class MEDSifier(object):
             objs['flag'][w] |= krflag
 
             aper_rad = 2.5*kron_radius
-            flux_auto[w], fluxerr_auto[w], flag_auto = \
-                sep.sum_ellipse(
-                    self.detim,
-                    objs['x'][w],
-                    objs['y'][w],
-                    objs['a'][w],
-                    objs['b'][w],
-                    objs['theta'][w],
-                    aper_rad[w],
-                    subpix=1,
-                )
+            flux_auto[w], fluxerr_auto[w], flag_auto = sep.sum_ellipse(
+                self.detim,
+                objs['x'][w],
+                objs['y'][w],
+                objs['a'][w],
+                objs['b'][w],
+                objs['theta'][w],
+                aper_rad[w],
+                subpix=1,
+            )
             objs['flag'][w] |= flag_auto
 
             # what we did in DES, but note threshold above

@@ -1,7 +1,7 @@
 import numpy as np
 import logging
 import ngmix
-from ngmix.gexceptions import BootPSFFailure
+from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 import esutil as eu
 from .util import Namer
 from . import procflags
@@ -211,7 +211,6 @@ class Moments(FitterBase):
             ('psfrec_g', 'f8', 2),
             ('psfrec_T', 'f8'),
 
-            ('psf_flags', 'i4'),
             ('psf_g', 'f8', 2),
             ('psf_T', 'f8'),
 
@@ -239,7 +238,6 @@ class Moments(FitterBase):
 
         output['psfrec_flags'] = procflags.NO_ATTEMPT
 
-        output['psf_flags'] = pres['flags']
         output[n('flags')] = res['flags']
 
         flags = 0
@@ -313,6 +311,103 @@ class Moments(FitterBase):
         return isok
 
 
+class MaxLike(Moments):
+    """
+    measure simple weighted moments
+    """
+    def __init__(self, config, rng, nband):
+        self.update(config)
+        self.rng = rng
+        self.nband = nband
+        self.bootstrapper = Bootstrapper(self.rng, self.nband)
+
+    def go(self, mbobs_list):
+        """
+        run moments measurements on all objects
+
+        parameters
+        ----------
+        mbobs_list: list of ngmix.MultiBandObsList
+            One for each object to be measured
+
+        returns
+        -------
+        output: list of numpy arrays with fields
+            Results for each object
+        """
+
+        datalist = []
+        for i, mbobs in enumerate(mbobs_list):
+
+            if not self._check_flags(mbobs):
+                res = {
+                    'flags': procflags.IMAGE_FLAGS,
+                    'flagstr': procflags.get_name(procflags.IMAGE_FLAGS),
+                }
+            else:
+
+                try:
+                    res = self.bootstrapper.go(mbobs)
+                except BootPSFFailure:
+                    res = {
+                        'flags': procflags.PSF_FAILURE,
+                        'flagstr': procflags.get_name(procflags.PSF_FAILURE),
+                    }
+                    logger.debug("        fit failed: %s" % res['flagstr'])
+                except BootGalFailure:
+                    res = {
+                        'flags': procflags.OBJ_FAILURE,
+                        'flagstr': procflags.get_name(procflags.OBJ_FAILURE),
+                    }
+                    logger.debug("        fit failed: %s" % res['flagstr'])
+
+            fit_data = self._get_output(res)
+
+            if res['flags'] == 0:
+                self._print_result(fit_data)
+
+            datalist.append(fit_data)
+
+        if len(datalist) == 0:
+            return None
+        else:
+            return eu.numpy_util.combine_arrlist(datalist)
+
+    def _print_result(self, data):
+        mess = "        s2n: %g Trat: %g"
+        logger.debug(mess % (data['gauss_s2n'][0], data['gauss_T_ratio'][0]))
+
+    def _get_output(self, res):
+
+        npars = 6 + self.nband - 1
+
+        model = 'gauss'
+        n = Namer(front=model)
+
+        dt = self._get_dtype(model, npars)
+        output = np.zeros(1, dtype=dt)
+
+        output['psfrec_flags'] = procflags.NO_ATTEMPT
+
+        output['flags'] = res['flags']
+        output[n('flags')] = res['flags']
+
+        if res['flags'] == 0:
+            output['psf_g'] = res['psf_g_avg']
+            output['psf_T'] = res['psf_T_avg']
+
+            output[n('s2n')] = res['s2n']
+            output[n('pars')] = res['pars']
+            output[n('g')] = res['g']
+            output[n('g_cov')] = res['g_cov']
+            output[n('T')] = res['T']
+            output[n('T_err')] = res['T_err']
+
+            output[n('T_ratio')] = res['T']/res['psf_T_avg']
+
+        return output
+
+
 def fit_all_psfs(mbobs, psf_conf, rng):
     """
     fit all psfs in the input observations
@@ -325,7 +420,6 @@ def fit_all_psfs(mbobs, psf_conf, rng):
 
 
 def fit_one_psf(obs, pconf, rng):
-    # Tguess=4.0*obs.jacobian.get_scale()**2
     fwhm_guess = 0.9
     Tguess = ngmix.moments.fwhm_to_T(fwhm_guess)
 
@@ -359,3 +453,198 @@ def fit_one_psf(obs, pconf, rng):
         obs.set_gmix(gmix)
     else:
         raise BootPSFFailure("failed to fit psfs: %s" % str(res))
+
+    return res
+
+
+class Bootstrapper(object):
+    def __init__(self, rng, nband):
+        self.rng = rng
+        self.nband = nband
+
+        self._setup_fitting()
+
+    def go(self, mbobs):
+
+        assert isinstance(mbobs, ngmix.MultiBandObsList)
+        self._fit_psfs(mbobs)
+        psf_g_avg, psf_T_avg = get_psf_averages(mbobs)
+
+        psf_flux_res = self._fit_gal_psf_flux(mbobs)
+
+        psf_flux = psf_flux_res['psf_flux']
+
+        guesser = self._get_max_guesser(psf_T_avg, psf_flux)
+        runner = ngmix.bootstrap.MaxRunner(
+            mbobs,
+            self.gal_model,
+            self.max_pars,
+            guesser,
+            prior=self.prior,
+        )
+
+        runner.go(ntry=self.gal_ntry)
+
+        fitter = runner.fitter
+
+        res = fitter.get_result()
+
+        if res["flags"] != 0:
+            raise BootGalFailure("failed to fit galaxy with maxlike")
+
+        res['psf_T_avg'] = psf_T_avg
+        res['psf_g_avg'] = psf_g_avg
+        return res
+
+    def _fit_psfs(self, mb_obs_list):
+        for band, obslist in enumerate(mb_obs_list):
+            for i, obs in enumerate(obslist):
+
+                psf_obs = obs.get_psf()
+                self._fit_one_psf(psf_obs)
+
+    def _fit_one_psf(self, psf_obs):
+        """
+        fit the psf and set the gmix if succeeds
+        """
+
+        runner = ngmix.bootstrap.PSFRunner(
+            psf_obs,
+            self.psf_model,
+            self.psf_Tguess,
+            self.psf_lm_pars,
+            rng=self.rng,
+        )
+        runner.go(ntry=self.psf_ntry)
+
+        psf_fitter = runner.fitter
+        res = psf_fitter.get_result()
+
+        if res["flags"] == 0:
+            gmix = psf_fitter.get_gmix()
+            psf_obs.set_gmix(gmix)
+        else:
+            raise BootPSFFailure("failed to fit psfs: %s" % str(res))
+
+    def _fit_gal_psf_flux(self, mbo, normalize_psf=True):
+        """
+        use psf as a template, measure flux (linear)
+        """
+
+        nband = len(mbo)
+
+        flags = []
+        psf_flux = np.zeros(nband) - 9999.0
+        psf_flux_err = np.zeros(nband)
+
+        for i, obs_list in enumerate(mbo):
+
+            if len(obs_list) == 0:
+                raise BootPSFFailure("no epochs for band %d" % i)
+
+            if not obs_list[0].has_psf_gmix():
+                raise RuntimeError("you need to fit the psfs first")
+
+            fitter = ngmix.fitting.TemplateFluxFitter(
+                obs_list, do_psf=True, normalize_psf=normalize_psf,
+            )
+            fitter.go()
+
+            res = fitter.get_result()
+            tflags = res["flags"]
+            flags.append(tflags)
+
+            if tflags == 0:
+
+                psf_flux[i] = res["flux"]
+                psf_flux_err[i] = res["flux_err"]
+
+            else:
+                print("failed to fit psf flux for band", i)
+
+        return {
+            "flags": flags,
+            "psf_flux": psf_flux,
+            "psf_flux_err": psf_flux_err,
+        }
+
+    def _get_max_guesser(self, psf_T, psf_flux):
+        """
+        get a guesser that uses the psf T and galaxy psf flux to
+        generate a guess, drawing from priors on the other parameters
+        """
+
+        guesser = ngmix.guessers.TFluxAndPriorGuesser(
+            psf_T, psf_flux, self.prior, scaling="linear",
+        )
+        return guesser
+
+    def _setup_fitting(self):
+        from ngmix.joint_prior import PriorSimpleSep
+
+        self.gal_model = "gauss"
+        self.gal_ntry = 2
+        self.max_pars = {
+            "method": "lm",
+            "lm_pars": {
+                # "maxfev": 4000,
+                "xtol": 5.0e-5,
+                "ftol": 5.0e-5,
+            }
+        }
+        sigma_arcsec = 0.1
+        cen_prior = ngmix.priors.CenPrior(
+            0.0, 0.0,
+            sigma_arcsec, sigma_arcsec,
+            rng=self.rng,
+        )
+        g_prior = ngmix.priors.GPriorBA(0.2, rng=self.rng)
+        T_prior = ngmix.priors.FlatPrior(-0.1, 1.e+05, rng=self.rng)
+        flux_prior = ngmix.priors.FlatPrior(-1000.0, 1.0e+09, rng=self.rng)
+
+        self.prior = PriorSimpleSep(
+            cen_prior,
+            g_prior,
+            T_prior,
+            [flux_prior]*self.nband,
+        )
+
+        self.psf_model = "gauss"
+        self.psf_Tguess = ngmix.moments.fwhm_to_T(0.9)
+        self.psf_lm_pars = {
+            "maxfev": 4000,
+            "xtol": 5.0e-5,
+            "ftol": 5.0e-5,
+        }
+        self.psf_ntry = 4
+
+
+def get_psf_averages(mbobs):
+    """
+    get weighted averages of g and T using the max value from the weight maps
+    as the weight
+    """
+    Tsum = 0.0
+    g1sum = 0.0
+    g2sum = 0.0
+    wsum = 0.0
+
+    for obslist in mbobs:
+        for obs in obslist:
+            wt = np.max(obs.weight)
+
+            g1, g2, T = obs.psf.gmix.get_g1g2T()
+
+            wsum += wt
+            Tsum += wt*T
+            g1sum += wt*g1
+            g2sum += wt*g2
+
+    if wsum <= 0.0:
+        g1 = g2 = T = 9999.0, 9999.0, 9999.0
+    else:
+        T = Tsum/wsum
+        g1 = g1sum/wsum
+        g2 = g2sum/wsum
+
+    return np.array([g1, g2]), T

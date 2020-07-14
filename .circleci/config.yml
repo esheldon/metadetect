@@ -39,6 +39,5 @@ jobs:
             pip install -U --progress-bar=off --no-cache-dir --upgrade-strategy=eager --force-reinstall -r volatile-requirements.txt
             pip install -q --progress-bar=off --no-cache-dir --force-reinstall .
             flake8 metadetect
-            flake8 bin
 
             pytest -vv metadetect
