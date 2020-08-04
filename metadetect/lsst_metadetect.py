@@ -28,6 +28,8 @@ class LSSTMetadetect(Metadetect):
         call the parent and then add in the stack exposure with image copied
         in, modify the variance and set the new psf
         """
+
+        did_fixnoise = self['metacal'].get('fixnoise', True)
         orig_mbobs = self.mbobs
         odict = super()._get_all_metacal()
         for mtype, mbobs in odict.items():
@@ -42,7 +44,8 @@ class LSSTMetadetect(Metadetect):
 
                     exp = copy.deepcopy(orig_obs.coadd_exp)
                     exp.image.array[:, :] = obs.image
-                    exp.variance.array[:, :] = exp.variance.array[:, :]*2
+                    if did_fixnoise:
+                        exp.variance.array[:, :] = exp.variance.array[:, :]*2
 
                     psf_image = obs.psf.image
                     stack_psf = KernelPsf(
