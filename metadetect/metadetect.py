@@ -50,7 +50,8 @@ class Metadetect(dict):
         self.nband = len(mbobs)
         self.rng = rng
 
-        self._fit_original_psfs()
+        if 'psf' in config:
+            self._fit_original_psfs()
 
         self._set_fitter()
 
@@ -171,10 +172,12 @@ class Metadetect(dict):
             new_dt,
         )
 
-        newres['psfrec_flags'][:] = self.psf_stats['flags']
-        newres['psfrec_g'][:, 0] = self.psf_stats['g1']
-        newres['psfrec_g'][:, 1] = self.psf_stats['g2']
-        newres['psfrec_T'][:] = self.psf_stats['T']
+        if hasattr(self, 'psf_stats'):
+            newres['psfrec_flags'][:] = self.psf_stats['flags']
+            newres['psfrec_g'][:, 0] = self.psf_stats['g1']
+            newres['psfrec_g'][:, 1] = self.psf_stats['g2']
+            newres['psfrec_T'][:] = self.psf_stats['T']
+
         newres['star_frac'][:] = self.star_frac
         newres['tapebump_frac'][:] = self.tapebump_frac
         newres['spline_interp_frac'][:] = self.spline_interp_frac
