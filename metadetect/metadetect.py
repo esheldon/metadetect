@@ -119,7 +119,7 @@ class Metadetect(dict):
         """
         set the fitter to be used
         """
-        model = self.get('model', 'moments')
+        model = self.get('model', 'wmom')
 
         if model == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
