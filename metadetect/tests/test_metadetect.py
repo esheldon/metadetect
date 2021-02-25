@@ -308,9 +308,9 @@ def test_detect(ntrial=1, show=False):
 
         mbobs = sim.get_mbobs()
         mer = detect.MEDSifier(
-            mbobs,
-            config['sx'],
-            config['meds'],
+            mbobs=mbobs,
+            sx_config=config['sx'],
+            meds_config=config['meds'],
         )
 
         mbm = mer.get_multiband_meds()
