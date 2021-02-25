@@ -1,7 +1,7 @@
 numpy
 scipy
 galsim
-fitsio~=1.0
+fitsio>=1.0
 pyyaml
 numba
 esutil
