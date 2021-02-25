@@ -31,7 +31,6 @@ jobs:
           conda config --set always_yes yes
           conda install --quiet --yes --file requirements.txt
           conda install --quiet --yes --file dev-requirements.txt
-          pip install --progress-bar=off -r volatile-requirements.txt
 
           python -m pip install -e .
 
