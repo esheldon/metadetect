@@ -10,9 +10,7 @@ DM stack detection
 from __future__ import print_function
 import logging
 import numpy as np
-from numpy import pi
 import esutil as eu
-from esutil.numpy_util import between
 
 from ngmix.medsreaders import NGMixMEDS, MultiBandNGMixMEDS
 from meds.util import get_image_info_struct
@@ -154,10 +152,7 @@ class MEDSInterface(NGMixMEDS):
 
 
 class MEDSifier(object):
-    def __init__(self,
-                 mbobs,
-                 sx_config,
-                 meds_config):
+    def __init__(self, mbobs, sx_config, meds_config):
         """
         very simple MEDS maker for images. Assumes the images are perfectly
         registered and are sky subtracted, with constant PSF and WCS.
@@ -203,9 +198,9 @@ class MEDSifier(object):
         obslist = self.mbobs[band]
         obs = obslist[0]
         return MEDSInterface(
-            obs,
-            self.seg,
-            self.cat,
+            obs=obs,
+            seg=self.seg,
+            cat=self.cat,
         )
 
     def _get_image_vars(self):
@@ -238,81 +233,19 @@ class MEDSifier(object):
         self.detnoise = detnoise
 
     def _run_sep(self):
-        import sep
-        objs, seg = sep.extract(
-            self.detim,
-            self.detect_thresh,
-            err=self.detnoise,
-            segmentation_map=True,
-            **self.sx_config
+        import sxdes
+        objs, seg = sxdes.run_sep(
+            image=self.detim,
+            noise=self.detnoise,
+            config=self.sx_config,
+            thresh=self.detect_thresh,
         )
-
-        flux_auto = np.zeros(objs.size)-9999.0
-        fluxerr_auto = np.zeros(objs.size)-9999.0
-        flux_radius = np.zeros(objs.size)-9999.0
-        kron_radius = np.zeros(objs.size)-9999.0
-
-        w, = np.where(
-            (objs['a'] >= 0.0) &
-            (objs['b'] >= 0.0) &
-            between(objs['theta'], -pi/2., pi/2., type='[]')
-        )
-
-        if w.size > 0:
-            kron_radius[w], krflag = sep.kron_radius(
-                self.detim,
-                objs['x'][w],
-                objs['y'][w],
-                objs['a'][w],
-                objs['b'][w],
-                objs['theta'][w],
-                6.0,
-            )
-            objs['flag'][w] |= krflag
-
-            aper_rad = 2.5*kron_radius
-            flux_auto[w], fluxerr_auto[w], flag_auto = sep.sum_ellipse(
-                self.detim,
-                objs['x'][w],
-                objs['y'][w],
-                objs['a'][w],
-                objs['b'][w],
-                objs['theta'][w],
-                aper_rad[w],
-                subpix=1,
-            )
-            objs['flag'][w] |= flag_auto
-
-            # what we did in DES, but note threshold above
-            # is 1 as opposed to wide survey. deep survey
-            # was even lower, 0.8?
-
-            # used half light radius
-            PHOT_FLUXFRAC = 0.5
-
-            flux_radius[w], frflag = sep.flux_radius(
-                self.detim,
-                objs['x'][w],
-                objs['y'][w],
-                6.*objs['a'][w],
-                PHOT_FLUXFRAC,
-                normflux=flux_auto[w],
-                subpix=5,
-            )
-            objs['flag'][w] |= frflag  # combine flags into 'flag'
 
         ncut = 2  # need this to make sure array
         new_dt = [
-            ('id', 'i8'),
-            ('number', 'i4'),
-            ('ncutout', 'i4'),
-            ('kron_radius', 'f4'),
-            ('flux_auto', 'f4'),
-            ('fluxerr_auto', 'f4'),
-            ('flux_radius', 'f4'),
-            ('isoarea_image', 'f4'),
-            ('iso_radius', 'f4'),
             ('iso_radius_arcsec', 'f4'),
+            ('id', 'i8'),
+            ('ncutout', 'i4'),
             ('box_size', 'i4'),
             ('file_id', 'i8', ncut),
             ('orig_row', 'f4', ncut),
@@ -332,11 +265,7 @@ class MEDSifier(object):
         ]
         cat = eu.numpy_util.add_fields(objs, new_dt)
         cat['id'] = np.arange(cat.size)
-        cat['number'] = np.arange(1, cat.size+1)
         cat['ncutout'] = 1
-        cat['flux_auto'] = flux_auto
-        cat['fluxerr_auto'] = fluxerr_auto
-        cat['flux_radius'] = flux_radius
 
         jacob = self.mbobs[0][0].jacobian
         cat['dudrow'][:, 0] = jacob.dudrow
@@ -344,14 +273,9 @@ class MEDSifier(object):
         cat['dvdrow'][:, 0] = jacob.dvdrow
         cat['dvdcol'][:, 0] = jacob.dvdcol
 
-        # use the number of pixels in the seg map as the iso area
-        for i in range(objs.size):
-            w = np.where(seg == (i+1))
-            cat['isoarea_image'][i] = w[0].size
-
-        cat['iso_radius'] = np.sqrt(cat['isoarea_image'].clip(min=1)/np.pi)
         cat['iso_radius_arcsec'] = (
-            cat['iso_radius'] * self.mbobs[0][0].jacobian.get_scale())
+            cat['iso_radius'] * self.mbobs[0][0].jacobian.get_scale()
+        )
 
         if cat.size > 0:
 
@@ -464,14 +388,19 @@ class MEDSifier(object):
         return sigma_size
 
     def _set_sx_config(self, sx_config_in):
+        import sxdes
 
-        sx_config = {}
-        sx_config.update(sx_config_in)
-        sx_config['filter_kernel'] = np.array(sx_config['filter_kernel'])
+        if sx_config_in is not None:
+            sx_config = {}
+            sx_config.update(sx_config_in)
+            sx_config['filter_kernel'] = np.array(sx_config['filter_kernel'])
 
-        # this isn't a keyword
-        self.detect_thresh = sx_config.pop('detect_thresh')
-        self.sx_config = sx_config
+            # this isn't a keyword
+            self.detect_thresh = sx_config.pop('detect_thresh')
+            self.sx_config = sx_config
+        else:
+            self.sx_config = sxdes.SX_CONFIG
+            self.detect_thresh = sxdes.DETECT_THRESH
 
     def _set_meds_config(self, meds_config):
         self.meds_config = meds_config
