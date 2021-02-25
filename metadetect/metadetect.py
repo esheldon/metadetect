@@ -233,7 +233,7 @@ class Metadetect(dict):
         use a MEDSifier to run detection
         """
         return detect.MEDSifier(
-            mbobs,
+            mbobs=mbobs,
             sx_config=self['sx'],
             meds_config=self['meds'],
         )
