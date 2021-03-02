@@ -572,7 +572,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     rng: np.random.RandomState
         The random number generator, used for guessers
     """
-    if ngmix.__version__[1] ==  '1':
+    if ngmix.__version__[1] == '1':
         fit_all_psfs_ngmixv1(mbobs=mbobs, psf_conf=psf_conf, rng=rng)
         return
 
