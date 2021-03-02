@@ -408,53 +408,56 @@ class MaxLike(Moments):
         return output
 
 
+def get_coellip_ngauss(name):
+    ngauss = int(name[7:])
+    return ngauss
+
+
 def fit_all_psfs(mbobs, psf_conf, rng):
     """
-    fit all psfs in the input observations
+    measure all psfs in the input observations and store the results
+    in the meta dictionary, and possibly as a gmix for model fits
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations to fit
+    psf_conf: dict
+        Config for  the measurements/fitting
+    rng: np.random.RandomState
+        The random number generator, used for guessers
     """
 
+    if 'coellip' in psf_conf['model']:
+        ngauss = get_coellip_ngauss(psf_conf['model'])
+        fitter = ngmix.fitting.LMCoellip(
+            ngauss=ngauss, fit_pars=psf_conf['lm_pars'],
+        )
+        guesser = ngmix.guessers.CoellipPSFGuesser(
+            rng=rng, ngauss=ngauss,
+        )
+    elif psf_conf['model'] == 'gaussmom':
+        fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
+        guesser = None
+    else:
+        fitter = ngmix.fitting.LM(
+            model=psf_conf['model'], fit_pars=psf_conf['lm_pars'],
+        )
+        guesser = ngmix.guessers.SimplePSFGuesser(rng=rng)
+
+    runner = ngmix.runners.PSFRunner(
+        fitter=fitter, guesser=guesser, ntry=psf_conf.get('ntry', 1),
+    )
+
     for obslist in mbobs:
-        for obs in obslist:
-            psf_obs = obs.get_psf()
-            fit_one_psf(psf_obs, psf_conf, rng)
+        assert len(obslist) == 1, 'metadetect is not multi-epoch'
 
+        obs = obslist[0]
+        runner.go(obs=obs, set_result=True)
 
-def fit_one_psf(obs, pconf, rng):
-    fwhm_guess = 0.9
-    Tguess = ngmix.moments.fwhm_to_T(fwhm_guess)
-
-    if 'coellip' in pconf['model']:
-        ngauss = ngmix.bootstrap.get_coellip_ngauss(pconf['model'])
-        runner = ngmix.bootstrap.PSFRunnerCoellip(
-            obs,
-            Tguess,
-            ngauss,
-            pconf['lm_pars'],
-            rng=rng,
-        )
-
-    else:
-        runner = ngmix.bootstrap.PSFRunner(
-            obs,
-            pconf['model'],
-            Tguess,
-            pconf['lm_pars'],
-            rng=rng,
-        )
-
-    runner.go(ntry=pconf['ntry'])
-
-    psf_fitter = runner.fitter
-    res = psf_fitter.get_result()
-    obs.update_meta_data({'fitter': psf_fitter})
-
-    if res['flags'] == 0:
-        gmix = psf_fitter.get_gmix()
-        obs.set_gmix(gmix)
-    else:
-        raise BootPSFFailure("failed to fit psfs: %s" % str(res))
-
-    return res
+        flags = obs.psf.meta['result']['flags']
+        if flags != 0:
+            raise BootPSFFailure("failed to measure psfs: %s" % flags)
 
 
 class Bootstrapper(object):

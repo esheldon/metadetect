@@ -308,7 +308,12 @@ class Metadetect(dict):
             for obslist in self.mbobs:
                 for obs in obslist:
                     wt = obs.weight.max()
-                    g1, g2, T = obs.psf.gmix.get_g1g2T()
+                    res = obs.psf.meta['result']
+                    T = res['T']
+                    if 'e' in res:
+                        g1, g2 = res['e']
+                    else:
+                        g1, g2 = res['g']
 
                     g1sum += g1*wt
                     g2sum += g2*wt
