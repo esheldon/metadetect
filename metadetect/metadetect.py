@@ -119,14 +119,19 @@ class Metadetect(dict):
         """
         set the fitter to be used
         """
-        model = self.get('model', 'wmom')
+        self['model'] = self.get('model', 'wmom')
 
-        if model == 'wmom':
+        if self['model'] == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
-        elif model == 'gauss':
-            self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+        elif self['model'] == 'gauss':
+            if ngmix.__version__[1] == '1':
+                self._fitter = fitting.MaxLikeNgmixv1(
+                    self, self.rng, self.nband,
+                )
+            else:
+                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
         else:
-            raise ValueError("bad model: '%s'" % model)
+            raise ValueError("bad model: '%s'" % self['model'])
 
     def _measure(self, mbobs, shear_str):
         """

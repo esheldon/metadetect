@@ -461,6 +461,103 @@ def get_coellip_ngauss(name):
     return ngauss
 
 
+class MaxLikeNgmixv1(Moments):
+    """
+    measure simple weighted moments
+    """
+    def __init__(self, config, rng, nband):
+        self.update(config)
+        self.rng = rng
+        self.nband = nband
+        self.bootstrapper = Bootstrapper(self.rng, self.nband)
+
+    def go(self, mbobs_list):
+        """
+        run moments measurements on all objects
+
+        parameters
+        ----------
+        mbobs_list: list of ngmix.MultiBandObsList
+            One for each object to be measured
+
+        returns
+        -------
+        output: list of numpy arrays with fields
+            Results for each object
+        """
+
+        datalist = []
+        for i, mbobs in enumerate(mbobs_list):
+
+            if not self._check_flags(mbobs):
+                res = {
+                    'flags': procflags.IMAGE_FLAGS,
+                    'flagstr': procflags.get_name(procflags.IMAGE_FLAGS),
+                }
+            else:
+
+                try:
+                    res = self.bootstrapper.go(mbobs)
+                except BootPSFFailure:
+                    res = {
+                        'flags': procflags.PSF_FAILURE,
+                        'flagstr': procflags.get_name(procflags.PSF_FAILURE),
+                    }
+                    logger.debug("        fit failed: %s" % res['flagstr'])
+                except BootGalFailure:
+                    res = {
+                        'flags': procflags.OBJ_FAILURE,
+                        'flagstr': procflags.get_name(procflags.OBJ_FAILURE),
+                    }
+                    logger.debug("        fit failed: %s" % res['flagstr'])
+
+            fit_data = self._get_output(res)
+
+            if res['flags'] == 0:
+                self._print_result(fit_data)
+
+            datalist.append(fit_data)
+
+        if len(datalist) == 0:
+            return None
+        else:
+            return eu.numpy_util.combine_arrlist(datalist)
+
+    def _print_result(self, data):
+        mess = "        s2n: %g Trat: %g"
+        logger.debug(mess % (data['gauss_s2n'][0], data['gauss_T_ratio'][0]))
+
+    def _get_output(self, res):
+
+        npars = 6 + self.nband - 1
+
+        model = 'gauss'
+        n = Namer(front=model)
+
+        dt = self._get_dtype(model, npars)
+        output = np.zeros(1, dtype=dt)
+
+        output['psfrec_flags'] = procflags.NO_ATTEMPT
+
+        output['flags'] = res['flags']
+        output[n('flags')] = res['flags']
+
+        if res['flags'] == 0:
+            output['psf_g'] = res['psf_g_avg']
+            output['psf_T'] = res['psf_T_avg']
+
+            output[n('s2n')] = res['s2n']
+            output[n('pars')] = res['pars']
+            output[n('g')] = res['g']
+            output[n('g_cov')] = res['g_cov']
+            output[n('T')] = res['T']
+            output[n('T_err')] = res['T_err']
+
+            output[n('T_ratio')] = res['T']/res['psf_T_avg']
+
+        return output
+
+
 def fit_all_psfs(mbobs, psf_conf, rng):
     """
     measure all psfs in the input observations and store the results
@@ -475,6 +572,9 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     rng: np.random.RandomState
         The random number generator, used for guessers
     """
+    if ngmix.__version__[1] ==  '1':
+        fit_all_psfs_ngmixv1(mbobs=mbobs, psf_conf=psf_conf, rng=rng)
+        return
 
     if 'coellip' in psf_conf['model']:
         ngauss = get_coellip_ngauss(psf_conf['model'])
@@ -484,7 +584,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
         guesser = ngmix.guessers.CoellipPSFGuesser(
             rng=rng, ngauss=ngauss,
         )
-    elif psf_conf['model'] == 'gaussmom':
+    elif psf_conf['model'] == 'wmom':
         fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
         guesser = None
     else:
@@ -506,6 +606,56 @@ def fit_all_psfs(mbobs, psf_conf, rng):
         flags = obs.psf.meta['result']['flags']
         if flags != 0:
             raise BootPSFFailure("failed to measure psfs: %s" % flags)
+
+
+def fit_all_psfs_ngmixv1(mbobs, psf_conf, rng):
+    """
+    fit all psfs in the input observations
+    """
+
+    for obslist in mbobs:
+        for obs in obslist:
+            psf_obs = obs.get_psf()
+            fit_one_psf_ngmixv1(psf_obs, psf_conf, rng)
+
+
+def fit_one_psf_ngmixv1(obs, pconf, rng):
+    fwhm_guess = 0.9
+    Tguess = ngmix.moments.fwhm_to_T(fwhm_guess)
+
+    if 'coellip' in pconf['model']:
+        ngauss = ngmix.bootstrap.get_coellip_ngauss(pconf['model'])
+        runner = ngmix.bootstrap.PSFRunnerCoellip(
+            obs,
+            Tguess,
+            ngauss,
+            pconf['lm_pars'],
+            rng=rng,
+        )
+
+    else:
+        runner = ngmix.bootstrap.PSFRunner(
+            obs,
+            pconf['model'],
+            Tguess,
+            pconf['lm_pars'],
+            rng=rng,
+        )
+
+    runner.go(ntry=pconf['ntry'])
+
+    psf_fitter = runner.fitter
+    res = psf_fitter.get_result()
+    obs.update_meta_data({'fitter': psf_fitter})
+
+    obs.meta['result'] = res
+    if res['flags'] == 0:
+        gmix = psf_fitter.get_gmix()
+        obs.set_gmix(gmix)
+    else:
+        raise BootPSFFailure("failed to fit psfs: %s" % str(res))
+
+    return res
 
 
 class Bootstrapper(object):
