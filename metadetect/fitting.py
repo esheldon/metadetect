@@ -319,7 +319,8 @@ class MaxLike(Moments):
         self.update(config)
         self.rng = rng
         self.nband = nband
-        self.bootstrapper = Bootstrapper(self.rng, self.nband)
+
+        self._setup_fitting()
 
     def go(self, mbobs_list):
         """
@@ -347,21 +348,16 @@ class MaxLike(Moments):
             else:
 
                 try:
-                    res = self.bootstrapper.go(mbobs)
+                    self.bootstrapper.go(obs=mbobs)
+                    res = self.bootstrapper.get_result()
                 except BootPSFFailure:
                     res = {
                         'flags': procflags.PSF_FAILURE,
                         'flagstr': procflags.get_name(procflags.PSF_FAILURE),
                     }
                     logger.debug("        fit failed: %s" % res['flagstr'])
-                except BootGalFailure:
-                    res = {
-                        'flags': procflags.OBJ_FAILURE,
-                        'flagstr': procflags.get_name(procflags.OBJ_FAILURE),
-                    }
-                    logger.debug("        fit failed: %s" % res['flagstr'])
 
-            fit_data = self._get_output(res)
+            fit_data = self._get_output(obs=mbobs, res=res)
 
             if res['flags'] == 0:
                 self._print_result(fit_data)
@@ -377,7 +373,9 @@ class MaxLike(Moments):
         mess = "        s2n: %g Trat: %g"
         logger.debug(mess % (data['gauss_s2n'][0], data['gauss_T_ratio'][0]))
 
-    def _get_output(self, res):
+    def _get_output(self, obs, res):
+
+        psf_g_avg, psf_T_avg = get_psf_averages(mbobs=obs)
 
         npars = 6 + self.nband - 1
 
@@ -393,8 +391,8 @@ class MaxLike(Moments):
         output[n('flags')] = res['flags']
 
         if res['flags'] == 0:
-            output['psf_g'] = res['psf_g_avg']
-            output['psf_T'] = res['psf_T_avg']
+            output['psf_g'] = psf_g_avg
+            output['psf_T'] = psf_T_avg
 
             output[n('s2n')] = res['s2n']
             output[n('pars')] = res['pars']
@@ -403,9 +401,59 @@ class MaxLike(Moments):
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
 
-            output[n('T_ratio')] = res['T']/res['psf_T_avg']
+            output[n('T_ratio')] = res['T']/psf_T_avg
 
         return output
+
+    def _setup_fitting(self):
+        from ngmix.joint_prior import PriorSimpleSep
+
+        self.gal_model = "gauss"
+        self.gal_ntry = 2
+        self.max_pars = {
+            "method": "lm",
+            "lm_pars": {
+                # "maxfev": 4000,
+                "xtol": 5.0e-5,
+                "ftol": 5.0e-5,
+            }
+        }
+        sigma_arcsec = 0.1
+        cen_prior = ngmix.priors.CenPrior(
+            0.0, 0.0,
+            sigma_arcsec, sigma_arcsec,
+            rng=self.rng,
+        )
+        g_prior = ngmix.priors.GPriorBA(0.2, rng=self.rng)
+        T_prior = ngmix.priors.FlatPrior(-0.1, 1.e+05, rng=self.rng)
+        flux_prior = ngmix.priors.FlatPrior(-1000.0, 1.0e+09, rng=self.rng)
+
+        prior = PriorSimpleSep(
+            cen_prior,
+            g_prior,
+            T_prior,
+            [flux_prior]*self.nband,
+        )
+
+        # we use a gaussian for the reconvolved psf
+        psf_fitter = ngmix.fitting.LM(model='gauss')
+        psf_guesser = ngmix.guessers.SimplePSFGuesser(rng=self.rng)
+
+        fitter = ngmix.fitting.LM(model=self['model'], prior=prior)
+
+        Tguess = ngmix.moments.fwhm_to_T(0.5)
+        guesser = ngmix.guessers.TPSFFluxAndPriorGuesser(
+            rng=self.rng, T=Tguess, prior=prior,
+        )
+
+        psf_runner = ngmix.runners.PSFRunner(
+            psf_fitter, guesser=psf_guesser, ntry=4,
+        )
+        runner = ngmix.runners.Runner(fitter, guesser=guesser, ntry=4)
+
+        self.bootstrapper = ngmix.bootstrap.Bootstrapper(
+            runner=runner, psf_runner=psf_runner,
+        )
 
 
 def get_coellip_ngauss(name):
