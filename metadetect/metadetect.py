@@ -119,14 +119,19 @@ class Metadetect(dict):
         """
         set the fitter to be used
         """
-        model = self.get('model', 'wmom')
+        self['model'] = self.get('model', 'wmom')
 
-        if model == 'wmom':
+        if self['model'] == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
-        elif model == 'gauss':
-            self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+        elif self['model'] == 'gauss':
+            if ngmix.__version__[1] == '1':
+                self._fitter = fitting.MaxLikeNgmixv1(
+                    self, self.rng, self.nband,
+                )
+            else:
+                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
         else:
-            raise ValueError("bad model: '%s'" % model)
+            raise ValueError("bad model: '%s'" % self['model'])
 
     def _measure(self, mbobs, shear_str):
         """
@@ -308,7 +313,12 @@ class Metadetect(dict):
             for obslist in self.mbobs:
                 for obs in obslist:
                     wt = obs.weight.max()
-                    g1, g2, T = obs.psf.gmix.get_g1g2T()
+                    res = obs.psf.meta['result']
+                    T = res['T']
+                    if 'e' in res:
+                        g1, g2 = res['e']
+                    else:
+                        g1, g2 = res['g']
 
                     g1sum += g1*wt
                     g2sum += g2*wt
