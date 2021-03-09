@@ -39,7 +39,18 @@ jobs:
         run: |
           flake8 metadetect
 
-      - name: test
+      - name: test ngmix w/ conda latest
+        shell: bash -l {0}
+        run: |
+          pytest -vvs metadetect
+
+      - name: install ngmix master
+        shell: bash -l {0}
+        run: |
+          conda uninstall ngmix --force -y
+          pip install git+https://github.com/esheldon/ngmix.git
+
+      - name: test ngmix w/ master
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect

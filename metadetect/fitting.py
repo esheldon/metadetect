@@ -601,7 +601,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
         assert len(obslist) == 1, 'metadetect is not multi-epoch'
 
         obs = obslist[0]
-        runner.go(obs=obs, set_result=True)
+        runner.go(obs=obs)
 
         flags = obs.psf.meta['result']['flags']
         if flags != 0:
