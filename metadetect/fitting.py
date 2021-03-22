@@ -348,8 +348,7 @@ class MaxLike(Moments):
             else:
 
                 try:
-                    self.bootstrapper.go(obs=mbobs)
-                    res = self.bootstrapper.get_result()
+                    res = self.bootstrapper.go(obs=mbobs)
                 except BootPSFFailure:
                     res = {
                         'flags': procflags.PSF_FAILURE,
@@ -436,10 +435,10 @@ class MaxLike(Moments):
         )
 
         # we use a gaussian for the reconvolved psf
-        psf_fitter = ngmix.fitting.LM(model='gauss')
+        psf_fitter = ngmix.fitting.Fitter(model='gauss')
         psf_guesser = ngmix.guessers.SimplePSFGuesser(rng=self.rng)
 
-        fitter = ngmix.fitting.LM(model=self['model'], prior=prior)
+        fitter = ngmix.fitting.Fitter(model=self['model'], prior=prior)
 
         Tguess = ngmix.moments.fwhm_to_T(0.5)
         guesser = ngmix.guessers.TPSFFluxAndPriorGuesser(
@@ -578,7 +577,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
 
     if 'coellip' in psf_conf['model']:
         ngauss = get_coellip_ngauss(psf_conf['model'])
-        fitter = ngmix.fitting.LMCoellip(
+        fitter = ngmix.fitting.CoellipFitter(
             ngauss=ngauss, fit_pars=psf_conf['lm_pars'],
         )
         guesser = ngmix.guessers.CoellipPSFGuesser(
@@ -588,7 +587,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
         fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
         guesser = None
     else:
-        fitter = ngmix.fitting.LM(
+        fitter = ngmix.fitting.Fitter(
             model=psf_conf['model'], fit_pars=psf_conf['lm_pars'],
         )
         guesser = ngmix.guessers.SimplePSFGuesser(rng=rng)
