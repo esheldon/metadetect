@@ -385,8 +385,8 @@ def test_metadetect_mfrac(model):
         res = metadetect.do_metadetect(config, mbobs, rng)
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(
-                (res[shear]["mfrac"] > 0.45)
-                & (res[shear]["mfrac"] < 0.55)
+                (res[shear]["mfrac"] > 0.44)
+                & (res[shear]["mfrac"] < 0.56)
             )
 
     total_time = time.time()-tm0
