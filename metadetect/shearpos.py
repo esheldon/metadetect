@@ -1,10 +1,16 @@
 import numpy as np
 import galsim
 
+try:
+    from ngmix.metacal import DEFAULT_STEP
+except ImportError:
+    # ngmix v1
+    DEFAULT_STEP = 0.01
+
 SKIP_SHEARS = ['noshear', '1p_psf', '1m_psf', '2p_psf', '2m_psf']
 
 
-def shear_positions(rows, cols, shear_str, obs, step=0.01):
+def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     """
     unshear the input row and column positions
 
@@ -67,7 +73,7 @@ def shear_positions(rows, cols, shear_str, obs, step=0.01):
     return rows_sheared, cols_sheared
 
 
-def unshear_positions(rows, cols, shear_str, obs, step=0.01):
+def unshear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     """
     unshear the input row and column positions
 
