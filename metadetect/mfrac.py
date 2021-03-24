@@ -10,7 +10,6 @@ def measure_mfrac(
     *,
     mfrac,
     cat,
-    shear_str,
     obs,
     fwhm,
     step=DEFAULT_STEP,
@@ -21,21 +20,8 @@ def measure_mfrac(
     obs = obs.copy()
     obs.set_image(mfrac)
 
-    if shear_str == '1p':
-        g1, g2 = step, 0.0
-    elif shear_str == '1m':
-        g1, g2 = -step, 0.0
-    elif shear_str == '2p':
-        g1, g2 = 0.0, step
-    elif shear_str == '2m':
-        g1, g2 = 0.0, -step
-    elif shear_str == 'noshear':
-        g1, g2 = 0.0, 0.0
-    else:
-        raise ValueError('Can only convert 1p,1m,2p,2m to a shear!')
-
     gauss_wgt = ngmix.GMixModel(
-        [0, 0, g1, g2, ngmix.moments.fwhm_to_T(fwhm), 1],
+        [0, 0, 0, 0, ngmix.moments.fwhm_to_T(fwhm), 1],
         'gauss',
     )
     m = MEDSInterface(

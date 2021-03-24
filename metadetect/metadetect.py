@@ -259,7 +259,6 @@ class Metadetect(dict):
                 newres["mfrac"] = measure_mfrac(
                     mfrac=self.mfrac,
                     cat=cat,
-                    shear_str=shear_str,
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
                     step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
