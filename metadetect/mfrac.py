@@ -42,7 +42,7 @@ def measure_mfrac(
 
         stats = gauss_wgt.get_weighted_sums(
             obs,
-            obs.image.shape[0] * obs.jacobian.get_scale() / 2,
+            fwhm * 2,
         )
         mfracs.append(stats["sums"][5] / stats["wsum"])
 
