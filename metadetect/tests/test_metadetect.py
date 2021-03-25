@@ -293,7 +293,7 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
-    rng = np.random.RandomState()
+    rng = np.random.RandomState(seed=45)
 
     tm0 = time.time()
     nobj_meas = 0
@@ -337,7 +337,7 @@ def test_metadetect(model):
     """
 
     ntrial = 1
-    rng = np.random.RandomState()
+    rng = np.random.RandomState(seed=116)
 
     tm0 = time.time()
 
@@ -350,7 +350,44 @@ def test_metadetect(model):
         print("trial: %d/%d" % (trial+1, ntrial))
 
         mbobs = sim.get_mbobs()
-        metadetect.do_metadetect(config, mbobs, rng)
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert np.all(res[shear]["mfrac"] == 0)
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial)
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_mfrac(model):
+    """
+    test full metadetection w/ mfrac
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    tm0 = time.time()
+
+    sim = Sim(rng)
+    config = {}
+    config.update(TEST_METADETECT_CONFIG)
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].mfrac = rng.uniform(
+                size=mbobs[band][0].image.shape, low=0.2, high=0.8
+            )
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert np.all(
+                (res[shear]["mfrac"] > 0.45)
+                & (res[shear]["mfrac"] < 0.55)
+            )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)

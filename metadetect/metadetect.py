@@ -7,6 +7,7 @@ from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
+from .mfrac import measure_mfrac
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class Metadetect(dict):
         self._set_fitter()
 
         self._set_ormask()
+        self._set_mfrac()
 
     def _set_ormask(self):
         """
@@ -86,6 +88,24 @@ class Metadetect(dict):
         self.noise_interp_frac = wnoise_interp[0].size/ormask.size
         self.spline_interp_frac = wspline_interp[0].size/ormask.size
         self.imperfect_frac = wimperfect[0].size/ormask.size
+
+    def _set_mfrac(self):
+        """
+        set the masked fraction image, averaged over all bands
+        """
+        wgts = []
+        mfrac = np.zeros_like(self.mbobs[0][0].image)
+        for band, obslist in enumerate(self.mbobs):
+            nepoch = len(obslist)
+            assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
+
+            obs = obslist[0]
+            wgt = np.median(obs.weight)
+            if hasattr(obs, "mfrac"):
+                mfrac += (obs.mfrac * wgt)
+            wgts.append(wgt)
+
+        self.mfrac = mfrac / np.sum(wgts)
 
     @property
     def result(self):
@@ -166,6 +186,7 @@ class Metadetect(dict):
             ('sx_row_noshear', 'f4'),
             ('sx_col_noshear', 'f4'),
             ('ormask', 'i4'),
+            ('mfrac', 'f4'),
             ('star_frac', 'f4'),  # these are for the whole image, redundant
             ('tapebump_frac', 'f4'),
             ('spline_interp_frac', 'f4'),
@@ -200,6 +221,9 @@ class Metadetect(dict):
                 newres['sx_col'],
                 shear_str,
                 obs,  # an example for jacobian and image shape
+                # default is 0.01 but make sure to use the passed in default
+                # if needed
+                step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
             )
 
             newres['sx_row_noshear'] = rows_noshear
@@ -230,6 +254,20 @@ class Metadetect(dict):
                         self.ormask[lr:ur+1, lc:uc+1], axis=None)
             else:
                 newres['ormask'] = self.ormask[rclip, cclip]
+
+            if np.any(self.mfrac > 0):
+                # we are using the positions with the metacal shear removed
+                # for this.
+                newres["mfrac"] = measure_mfrac(
+                    mfrac=self.mfrac,
+                    x=newres["sx_col_noshear"],
+                    y=newres["sx_row_noshear"],
+                    box_sizes=cat["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
+            else:
+                newres["mfrac"] = 0
 
         return newres
 
