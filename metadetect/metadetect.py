@@ -256,6 +256,8 @@ class Metadetect(dict):
                 newres['ormask'] = self.ormask[rclip, cclip]
 
             if np.any(self.mfrac > 0):
+                # we are using the positions with the metacal shear removed
+                # for this.
                 newres["mfrac"] = measure_mfrac(
                     mfrac=self.mfrac,
                     x=newres["sx_col_noshear"],
@@ -263,7 +265,6 @@ class Metadetect(dict):
                     box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
-                    step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
                 )
             else:
                 newres["mfrac"] = 0
