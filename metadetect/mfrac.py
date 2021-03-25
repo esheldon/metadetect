@@ -2,14 +2,16 @@ import ngmix
 import numpy as np
 
 from .shearpos import DEFAULT_STEP
-from .detect import MEDSInterface
+from .detect import CatalogMEDSifier
 from .defaults import BMASK_EDGE
 
 
 def measure_mfrac(
     *,
     mfrac,
-    cat,
+    x,
+    y,
+    box_sizes,
     obs,
     fwhm,
     step=DEFAULT_STEP,
@@ -24,13 +26,13 @@ def measure_mfrac(
         [0, 0, 0, 0, ngmix.moments.fwhm_to_T(fwhm), 1],
         'gauss',
     )
-    m = MEDSInterface(
-        obs,
-        np.zeros_like(mfrac, dtype=np.int32),
-        cat,
-    )
+    mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    mbobs.append(obslist)
+    obslist.append(obs)
+    m = CatalogMEDSifier(mbobs, x, y, box_sizes).get_meds(0)
     mfracs = []
-    for i in range(cat.shape[0]):
+    for i in range(x.shape[0]):
         obs = m.get_obs(i, 0)
         wgt = obs.weight.copy()
         msk = (obs.bmask & BMASK_EDGE) != 0

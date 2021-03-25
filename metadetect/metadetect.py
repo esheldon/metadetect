@@ -258,7 +258,9 @@ class Metadetect(dict):
             if np.any(self.mfrac > 0):
                 newres["mfrac"] = measure_mfrac(
                     mfrac=self.mfrac,
-                    cat=cat,
+                    x=newres["sx_col_noshear"],
+                    y=newres["sx_row_noshear"],
+                    box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
                     step=self['metacal'].get("step", shearpos.DEFAULT_STEP),

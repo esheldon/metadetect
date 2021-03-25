@@ -152,23 +152,23 @@ class MEDSInterface(NGMixMEDS):
 
 
 class MEDSifier(object):
+    """
+    very simple MEDS maker for images. Assumes the images are perfectly
+    registered and are sky subtracted, with constant PSF and WCS.
+
+    The images are added together to make a detection image and sep, the
+    SExtractor wrapper, is run
+
+    parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The data with the psf set.
+    sx_config: dict, optional
+        Dict holding sep extract parameters
+    meds_config: dict, optional
+        Dict holding MEDS parameters
+    """
     def __init__(self, mbobs, sx_config, meds_config):
-        """
-        very simple MEDS maker for images. Assumes the images are perfectly
-        registered and are sky subtracted, with constant PSF and WCS.
-
-        The images are added together to make a detection image and sep, the
-        SExtractor wrapper, is run
-
-        parameters
-        ----------
-        mbobs: ngmix.MultiBandObsList
-            The data with the psf set.
-        sx_config: dict, optional
-            Dict holding sep extract parameters
-        meds_config: dict, optional
-            Dict holding MEDS parameters
-        """
         self.mbobs = mbobs
         self.nband = len(mbobs)
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
@@ -404,3 +404,104 @@ class MEDSifier(object):
 
     def _set_meds_config(self, meds_config):
         self.meds_config = meds_config
+
+
+class CatalogMEDSifier(MEDSifier):
+    """
+    very simple MEDS maker for images. Assumes the images are perfectly
+    registered and are sky subtracted, with constant PSF and WCS.
+
+    Uses an input position and box size.
+
+    parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The data with the psf set.
+    x : array-like
+        Input x/col in zero-indexed pixels.
+    y : array-like
+        Input y/row in zero-indexed pixels.
+    box_sizes : array-like
+        The box size for each stamp.
+    """
+
+    def __init__(self, mbobs, x, y, box_sizes):
+        self.mbobs = mbobs
+        self.nband = len(mbobs)
+        assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
+        self.x = x
+        self.y = y
+        self.box_sizes = box_sizes
+
+        self._set_cat_and_seg()
+
+    def _set_cat_and_seg(self):
+        ncut = 2  # need this to make sure array
+        new_dt = [
+            ('id', 'i8'),
+            ('ncutout', 'i4'),
+            ('box_size', 'i4'),
+            ('file_id', 'i8', ncut),
+            ('orig_row', 'f4', ncut),
+            ('orig_col', 'f4', ncut),
+            ('orig_start_row', 'i8', ncut),
+            ('orig_start_col', 'i8', ncut),
+            ('orig_end_row', 'i8', ncut),
+            ('orig_end_col', 'i8', ncut),
+            ('cutout_row', 'f4', ncut),
+            ('cutout_col', 'f4', ncut),
+            ('psf_cutout_row', 'f4', ncut),
+            ('psf_cutout_col', 'f4', ncut),
+            ('dudrow', 'f8', ncut),
+            ('dudcol', 'f8', ncut),
+            ('dvdrow', 'f8', ncut),
+            ('dvdcol', 'f8', ncut),
+        ]
+        cat = np.zeros(self.x.shape[0], dtype=new_dt)
+        cat['id'] = np.arange(cat.size)
+        cat['ncutout'] = 1
+
+        jacob = self.mbobs[0][0].jacobian
+        cat['dudrow'][:, 0] = jacob.dudrow
+        cat['dudcol'][:, 0] = jacob.dudcol
+        cat['dvdrow'][:, 0] = jacob.dvdrow
+        cat['dvdcol'][:, 0] = jacob.dvdcol
+
+        half_box_size = self.box_sizes//2
+
+        maxrow, maxcol = self.mbobs[0][0].image.shape
+
+        cat['box_size'] = self.box_sizes
+
+        cat['orig_row'][:, 0] = self.y
+        cat['orig_col'][:, 0] = self.x
+
+        orow = cat['orig_row'][:, 0].astype('i4')
+        ocol = cat['orig_col'][:, 0].astype('i4')
+
+        ostart_row = orow - half_box_size + 1
+        ostart_col = ocol - half_box_size + 1
+        oend_row = orow + half_box_size + 1  # plus one for slices
+        oend_col = ocol + half_box_size + 1
+
+        ostart_row.clip(min=0, out=ostart_row)
+        ostart_col.clip(min=0, out=ostart_col)
+        oend_row.clip(max=maxrow, out=oend_row)
+        oend_col.clip(max=maxcol, out=oend_col)
+
+        # could result in smaller than box_size above
+        cat['orig_start_row'][:, 0] = ostart_row
+        cat['orig_start_col'][:, 0] = ostart_col
+        cat['orig_end_row'][:, 0] = oend_row
+        cat['orig_end_col'][:, 0] = oend_col
+        cat['cutout_row'][:, 0] = \
+            cat['orig_row'][:, 0] - cat['orig_start_row'][:, 0]
+        cat['cutout_col'][:, 0] = \
+            cat['orig_col'][:, 0] - cat['orig_start_col'][:, 0]
+
+        psf_cen = (np.array(self.mbobs[0][0].psf.image.shape) - 1)/2
+        cat['psf_cutout_row'][:, 0] = psf_cen[0]
+        cat['psf_cutout_col'][:, 0] = psf_cen[1]
+
+        self.seg = np.zeros_like(self.mbobs[0][0].image, dtype=np.int32)
+        self.cat = cat
