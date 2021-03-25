@@ -293,7 +293,7 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
-    rng = np.random.RandomState()
+    rng = np.random.RandomState(seed=45)
 
     tm0 = time.time()
     nobj_meas = 0
@@ -337,7 +337,7 @@ def test_metadetect(model):
     """
 
     ntrial = 1
-    rng = np.random.RandomState()
+    rng = np.random.RandomState(seed=116)
 
     tm0 = time.time()
 
@@ -365,7 +365,7 @@ def test_metadetect_mfrac(model):
     """
 
     ntrial = 1
-    rng = np.random.RandomState()
+    rng = np.random.RandomState(seed=53)
 
     tm0 = time.time()
 
