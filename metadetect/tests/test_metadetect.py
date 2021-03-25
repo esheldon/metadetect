@@ -380,13 +380,13 @@ def test_metadetect_mfrac(model):
         mbobs = sim.get_mbobs()
         for band in range(len(mbobs)):
             mbobs[band][0].mfrac = rng.uniform(
-                size=mbobs[band][0].image.shape, low=0, high=1
+                size=mbobs[band][0].image.shape, low=0.2, high=0.8
             )
         res = metadetect.do_metadetect(config, mbobs, rng)
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(
-                (res[shear]["mfrac"] > 0.4)
-                & (res[shear]["mfrac"] < 0.6)
+                (res[shear]["mfrac"] > 0.45)
+                & (res[shear]["mfrac"] < 0.55)
             )
 
     total_time = time.time()-tm0
