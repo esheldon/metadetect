@@ -365,7 +365,7 @@ def test_metadetect_mfrac(model):
     """
 
     ntrial = 1
-    rng = np.random.RandomState(seed=53)
+    rng = np.random.RandomState(seed=53341)
 
     tm0 = time.time()
 
