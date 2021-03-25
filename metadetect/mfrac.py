@@ -71,7 +71,7 @@ def measure_mfrac(
 
         stats = gauss_wgt.get_weighted_sums(
             obs,
-            obs.image.shape[0] * obs.jacobian.get_scale() / 2,
+            fwhm * 2,
         )
         # this is the weighted average in the image using the
         # Gaussian as the weight.
