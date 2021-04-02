@@ -112,6 +112,7 @@ TEST_METADETECT_CONFIG = {
     # plus adding in tapebump and star
     'imperfect_flags': 20479,
 
+    'maskflags': 2**0,
 }
 
 
@@ -330,6 +331,34 @@ def test_detect(ntrial=1, show=False):
     print("time per object:", total_time/nobj_meas)
 
 
+def test_detect_masking(ntrial=1, show=False):
+    """
+    just test the detection
+    """
+    rng = np.random.RandomState(seed=45)
+
+    sim = Sim(rng)
+
+    config = {}
+    config.update(TEST_METADETECT_CONFIG)
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for obslist in mbobs:
+            for obs in obslist:
+                obs.bmask = obs.bmask | config['maskflags']
+
+        mer = detect.MEDSifier(
+            mbobs=mbobs,
+            sx_config=config['sx'],
+            meds_config=config['meds'],
+            maskflags=config['maskflags'],
+        )
+        assert mer.cat.size == 0
+
+
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
 def test_metadetect(model):
     """
@@ -356,6 +385,33 @@ def test_metadetect(model):
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
+
+
+def test_metadetect_masking():
+    """
+    test full metadetection with masking
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=116)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(TEST_METADETECT_CONFIG)
+    config["model"] = "wmom"
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+
+        for obslist in mbobs:
+            for obs in obslist:
+                obs.bmask = obs.bmask | config['maskflags']
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert res[shear] is None
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])

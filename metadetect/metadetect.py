@@ -279,6 +279,7 @@ class Metadetect(dict):
             mbobs=mbobs,
             sx_config=self['sx'],
             meds_config=self['meds'],
+            maskflags=self['maskflags'],
         )
 
     def _get_all_metacal(self):
@@ -331,6 +332,7 @@ class Metadetect(dict):
             'sx setting must be present in config'
         assert 'meds' in self, \
             'meds setting must be present in config'
+        self['maskflags'] = self.get('maskflags', 0)
 
     def _fit_original_psfs(self):
         """
