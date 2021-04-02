@@ -167,10 +167,16 @@ class MEDSifier(object):
         Dict holding sep extract parameters
     meds_config: dict, optional
         Dict holding MEDS parameters
+    maskflags: int
+        Integer representing bits to mask for detection.  The results for all
+        bands are ored together if combining multiple bands into a detection
+        coadd.  Default 0
     """
-    def __init__(self, mbobs, sx_config, meds_config):
+    def __init__(self, mbobs, sx_config, meds_config, maskflags=0):
         self.mbobs = mbobs
         self.nband = len(mbobs)
+        self.maskflags = maskflags
+
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
         self._set_sx_config(sx_config)
@@ -225,18 +231,24 @@ class MEDSifier(object):
 
         weights /= wsum
 
+        mask = np.zeros(detim.shape, dtype=bool)
+
         for i, obslist in enumerate(self.mbobs):
             obs = obslist[0]
             detim += obs.image*weights[i]
+            if obs.has_bmask():
+                mask |= (obs.bmask & self.maskflags != 0)
 
         self.detim = detim
         self.detnoise = detnoise
+        self.detmask = mask
 
     def _run_sep(self):
         import sxdes
         objs, seg = sxdes.run_sep(
             image=self.detim,
             noise=self.detnoise,
+            mask=self.detmask,
             config=self.sx_config,
             thresh=self.detect_thresh,
         )
