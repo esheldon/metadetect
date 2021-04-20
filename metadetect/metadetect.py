@@ -56,12 +56,12 @@ class Metadetect(dict):
 
         self._set_fitter()
 
-        self._set_ormask()
+        self._set_ormask_and_bmask()
         self._set_mfrac()
 
-    def _set_ormask(self):
+    def _set_ormask_and_bmask(self):
         """
-        set the ormask, ored from all ormasks
+        set the ormask and bmask, ored from all epochs
         """
 
         for band, obslist in enumerate(self.mbobs):
@@ -72,22 +72,13 @@ class Metadetect(dict):
 
             if band == 0:
                 ormask = obs.ormask.copy()
+                bmask = obs.bmask.copy()
             else:
                 ormask |= obs.ormask
+                bmask |= obs.bmask
 
         self.ormask = ormask
-
-        wstar = np.where((ormask & self['star_flags']) != 0)
-        wtapebump = np.where((ormask & self['tapebump_flags']) != 0)
-        wspline_interp = np.where((ormask & self['spline_interp_flags']) != 0)
-        wnoise_interp = np.where((ormask & self['noise_interp_flags']) != 0)
-        wimperfect = np.where((ormask & self['imperfect_flags']) != 0)
-
-        self.star_frac = wstar[0].size/ormask.size
-        self.tapebump_frac = wtapebump[0].size/ormask.size
-        self.noise_interp_frac = wnoise_interp[0].size/ormask.size
-        self.spline_interp_frac = wspline_interp[0].size/ormask.size
-        self.imperfect_frac = wimperfect[0].size/ormask.size
+        self.bmask = bmask
 
     def _set_mfrac(self):
         """
@@ -187,11 +178,7 @@ class Metadetect(dict):
             ('sx_col_noshear', 'f4'),
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
-            ('star_frac', 'f4'),  # these are for the whole image, redundant
-            ('tapebump_frac', 'f4'),
-            ('spline_interp_frac', 'f4'),
-            ('noise_interp_frac', 'f4'),
-            ('imperfect_frac', 'f4'),
+            ('bmask', 'i4'),
         ]
         newres = eu.numpy_util.add_fields(
             res,
@@ -203,12 +190,6 @@ class Metadetect(dict):
             newres['psfrec_g'][:, 0] = self.psf_stats['g1']
             newres['psfrec_g'][:, 1] = self.psf_stats['g2']
             newres['psfrec_T'][:] = self.psf_stats['T']
-
-        newres['star_frac'][:] = self.star_frac
-        newres['tapebump_frac'][:] = self.tapebump_frac
-        newres['spline_interp_frac'][:] = self.spline_interp_frac
-        newres['noise_interp_frac'][:] = self.noise_interp_frac
-        newres['imperfect_frac'][:] = self.imperfect_frac
 
         if cat.size > 0:
             obs = self.mbobs[0][0]
@@ -234,26 +215,68 @@ class Metadetect(dict):
             cclip = _clip_and_round(cols_noshear, dims[1])
 
             if 'ormask_region' in self and self['ormask_region'] > 1:
-                logger.debug('ormask_region: %s' % self['ormask_region'])
+                ormask_region = self['ormask_region']
+            elif 'mask_region' in self and self['mask_region'] > 1:
+                ormask_region = self['mask_region']
+            else:
+                ormask_region = 1
+
+            if 'mask_region' in self and self['mask_region'] > 1:
+                bmask_region = self['mask_region']
+            else:
+                bmask_region = 1
+
+                logger.debug(
+                    'ormask|bmask region: %s|%s',
+                    ormask_region,
+                    bmask_region,
+                )
+
+            if ormask_region > 1:
                 for ind in range(cat.size):
                     lr = int(min(
                         dims[0]-1,
-                        max(0, rclip[ind] - self['ormask_region'])))
+                        max(0, rclip[ind] - ormask_region)))
                     ur = int(min(
                         dims[0]-1,
-                        max(0, rclip[ind] + self['ormask_region'])))
+                        max(0, rclip[ind] + ormask_region)))
 
                     lc = int(min(
                         dims[1]-1,
-                        max(0, cclip[ind] - self['ormask_region'])))
+                        max(0, cclip[ind] - ormask_region)))
                     uc = int(min(
                         dims[1]-1,
-                        max(0, cclip[ind] + self['ormask_region'])))
+                        max(0, cclip[ind] + ormask_region)))
 
                     newres['ormask'][ind] = np.bitwise_or.reduce(
-                        self.ormask[lr:ur+1, lc:uc+1], axis=None)
+                        self.ormask[lr:ur+1, lc:uc+1],
+                        axis=None,
+                    )
             else:
                 newres['ormask'] = self.ormask[rclip, cclip]
+
+            if bmask_region > 1:
+                for ind in range(cat.size):
+                    lr = int(min(
+                        dims[0]-1,
+                        max(0, rclip[ind] - bmask_region)))
+                    ur = int(min(
+                        dims[0]-1,
+                        max(0, rclip[ind] + bmask_region)))
+
+                    lc = int(min(
+                        dims[1]-1,
+                        max(0, cclip[ind] - bmask_region)))
+                    uc = int(min(
+                        dims[1]-1,
+                        max(0, cclip[ind] + bmask_region)))
+
+                    newres['bmask'][ind] = np.bitwise_or.reduce(
+                        self.bmask[lr:ur+1, lc:uc+1],
+                        axis=None,
+                    )
+            else:
+                newres['bmask'] = self.bmask[rclip, cclip]
 
             if np.any(self.mfrac > 0):
                 # we are using the positions with the metacal shear removed
