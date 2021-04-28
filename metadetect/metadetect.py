@@ -135,7 +135,7 @@ class Metadetect(dict):
         if self['model'] == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
         elif self['model'] == 'gauss':
-            if ngmix.__version__[1] == '1':
+            if ngmix.__version__[0:2] == 'v1':
                 self._fitter = fitting.MaxLikeNgmixv1(
                     self, self.rng, self.nband,
                 )

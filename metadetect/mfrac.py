@@ -62,19 +62,22 @@ def measure_mfrac(
     m = CatalogMEDSifier(mbobs, x, y, box_sizes).get_meds(0)
     mfracs = []
     for i in range(x.shape[0]):
-        obs = m.get_obs(i, 0)
-        wgt = obs.weight.copy()
-        msk = (obs.bmask & BMASK_EDGE) != 0
-        wgt[msk] = 0
-        wgt[~msk] = 1
-        obs.set_weight(wgt)
+        try:
+            obs = m.get_obs(i, 0)
+            wgt = obs.weight.copy()
+            msk = (obs.bmask & BMASK_EDGE) != 0
+            wgt[msk] = 0
+            wgt[~msk] = 1
+            obs.set_weight(wgt)
 
-        stats = gauss_wgt.get_weighted_sums(
-            obs,
-            fwhm * 2,
-        )
-        # this is the weighted average in the image using the
-        # Gaussian as the weight.
-        mfracs.append(stats["sums"][5] / stats["wsum"])
+            stats = gauss_wgt.get_weighted_sums(
+                obs,
+                fwhm * 2,
+            )
+            # this is the weighted average in the image using the
+            # Gaussian as the weight.
+            mfracs.append(stats["sums"][5] / stats["wsum"])
+        except ngmix.GMixFatalError:
+            mfracs.append(1.0)
 
     return np.array(mfracs)
