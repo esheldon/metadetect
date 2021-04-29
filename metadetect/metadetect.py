@@ -172,10 +172,10 @@ class Metadetect(dict):
         """
 
         new_dt = [
+            ('sx_row_det', 'f4'),
+            ('sx_col_det', 'f4'),
             ('sx_row', 'f4'),
             ('sx_col', 'f4'),
-            ('sx_row_noshear', 'f4'),
-            ('sx_col_noshear', 'f4'),
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
@@ -194,12 +194,12 @@ class Metadetect(dict):
         if cat.size > 0:
             obs = self.mbobs[0][0]
 
-            newres['sx_col'] = cat['x']
-            newres['sx_row'] = cat['y']
+            newres['sx_col_det'] = cat['x']
+            newres['sx_row_det'] = cat['y']
 
             rows_noshear, cols_noshear = shearpos.unshear_positions(
-                newres['sx_row'],
-                newres['sx_col'],
+                newres['sx_row_det'],
+                newres['sx_col_det'],
                 shear_str,
                 obs,  # an example for jacobian and image shape
                 # default is 0.01 but make sure to use the passed in default
@@ -207,8 +207,8 @@ class Metadetect(dict):
                 step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
             )
 
-            newres['sx_row_noshear'] = rows_noshear
-            newres['sx_col_noshear'] = cols_noshear
+            newres['sx_row'] = rows_noshear
+            newres['sx_col'] = cols_noshear
 
             dims = obs.image.shape
             rclip = _clip_and_round(rows_noshear, dims[0])
@@ -226,11 +226,11 @@ class Metadetect(dict):
             else:
                 bmask_region = 1
 
-                logger.debug(
-                    'ormask|bmask region: %s|%s',
-                    ormask_region,
-                    bmask_region,
-                )
+            logger.debug(
+                'ormask|bmask region: %s|%s',
+                ormask_region,
+                bmask_region,
+            )
 
             if ormask_region > 1:
                 for ind in range(cat.size):
@@ -283,8 +283,8 @@ class Metadetect(dict):
                 # for this.
                 newres["mfrac"] = measure_mfrac(
                     mfrac=self.mfrac,
-                    x=newres["sx_col_noshear"],
-                    y=newres["sx_row_noshear"],
+                    x=newres["sx_col"],
+                    y=newres["sx_row"],
                     box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
