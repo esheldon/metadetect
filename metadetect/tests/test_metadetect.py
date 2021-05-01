@@ -435,7 +435,7 @@ def test_metadetect_mfrac(model):
 
 def test_metadetect_flux():
     """
-    test full metadetection
+    test full metadetection w/ fluxes
     """
 
     ntrial = 1
