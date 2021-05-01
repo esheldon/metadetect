@@ -202,7 +202,7 @@ class Moments(FitterBase):
 
         return res
 
-    def _get_dtype(self, model, npars):
+    def _get_dtype(self, model, npars, flux_nband=1):
         n = Namer(front=model)
         dt = [
             ('flags', 'i4'),
@@ -223,6 +223,16 @@ class Moments(FitterBase):
             (n('T_err'), 'f8'),
             (n('T_ratio'), 'f8'),
         ]
+        if flux_nband > 1:
+            dt += [
+                (n('flux'), 'f8', flux_nband),
+                (n('flux_err'), 'f8', flux_nband),
+            ]
+        else:
+            dt += [
+                (n('flux'), 'f8'),
+                (n('flux_err'), 'f8'),
+            ]
 
         return dt
 
@@ -258,6 +268,8 @@ class Moments(FitterBase):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             if pres['flags'] == 0:
                 output[n('T_ratio')] = res['T']/pres['T']
@@ -381,7 +393,7 @@ class MaxLike(Moments):
         model = 'gauss'
         n = Namer(front=model)
 
-        dt = self._get_dtype(model, npars)
+        dt = self._get_dtype(model, npars, flux_nband=self.nband)
         output = np.zeros(1, dtype=dt)
 
         output['psfrec_flags'] = procflags.NO_ATTEMPT
@@ -399,6 +411,8 @@ class MaxLike(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/psf_T_avg
 
@@ -551,6 +565,8 @@ class MaxLikeNgmixv1(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/res['psf_T_avg']
 

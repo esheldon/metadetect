@@ -5,6 +5,7 @@ to test all the moving parts
 """
 import time
 import pytest
+import copy
 import numpy as np
 import ngmix
 import galsim
@@ -94,23 +95,6 @@ TEST_METADETECT_CONFIG = {
 
     # check for an edge hit
     'bmask_flags': 2**30,
-
-    # fraction of slice where STAR or TRAIL was set.  We may cut objects
-    # detected there
-    'star_flags': 96,
-
-    # we don't interpolate over tapebumps
-    'tapebump_flags': 16384,
-
-    # things interpolated using the spline
-    'spline_interp_flags': 3155,
-
-    # replaced with noise
-    'noise_interp_flags': 908,
-
-    # pixels will have these flag set in the ormask if they were interpolated
-    # plus adding in tapebump and star
-    'imperfect_flags': 20479,
 
     'maskflags': 2**0,
 }
@@ -302,7 +286,7 @@ def test_detect(ntrial=1, show=False):
     sim = Sim(rng)
 
     config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
@@ -340,7 +324,7 @@ def test_detect_masking(ntrial=1, show=False):
     sim = Sim(rng)
 
     config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
@@ -372,7 +356,7 @@ def test_metadetect(model):
 
     sim = Sim(rng)
     config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = model
 
     for trial in range(ntrial):
@@ -397,7 +381,7 @@ def test_metadetect_masking():
 
     sim = Sim(rng)
     config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = "wmom"
 
     for trial in range(ntrial):
@@ -427,7 +411,7 @@ def test_metadetect_mfrac(model):
 
     sim = Sim(rng)
     config = {}
-    config.update(TEST_METADETECT_CONFIG)
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = model
 
     for trial in range(ntrial):
@@ -444,6 +428,48 @@ def test_metadetect_mfrac(model):
                 (res[shear]["mfrac"] > 0.45)
                 & (res[shear]["mfrac"] < 0.55)
             )
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial)
+
+
+def test_metadetect_flux():
+    """
+    test full metadetection
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=116)
+
+    tm0 = time.time()
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config['flux'] = {
+        'model': "wmom",
+        'weight': {'fwhm': 1.2},
+    }
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        shear_mbobs = ngmix.MultiBandObsList()
+        shear_mbobs.append(mbobs[0])
+        shear_mbobs.append(mbobs[1])
+        nonshear_mbobs = ngmix.MultiBandObsList()
+        nonshear_mbobs.append(mbobs[2])
+        res = metadetect.do_metadetect(
+            config, shear_mbobs, rng, nonshear_mbobs=nonshear_mbobs
+        )
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert np.all(res[shear]["mfrac"] == 0)
+            assert "shear0_wmom_flux" in res[shear].dtype.names
+            assert "shear1_wmom_flux" in res[shear].dtype.names
+            assert "shear2_wmom_flux" not in res[shear].dtype.names
+            assert "nonshear0_wmom_flux" in res[shear].dtype.names
+            assert "nonshear1_wmom_flux" not in res[shear].dtype.names
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
