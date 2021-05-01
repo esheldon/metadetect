@@ -366,6 +366,7 @@ def test_metadetect(model):
         res = metadetect.do_metadetect(config, mbobs, rng)
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
+            assert "shear0_wmom_flux" not in res[shear].dtype.names
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
