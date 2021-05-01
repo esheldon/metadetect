@@ -1,12 +1,8 @@
 import logging
-import copy
-
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
-
-from .util import Namer
 from . import detect
 from . import fitting
 from . import procflags
@@ -16,8 +12,9 @@ from .mfrac import measure_mfrac
 logger = logging.getLogger(__name__)
 
 
-def do_metadetect(config, mbobs, rng, nonshear_mbobs=None):
-    """Run metadetect on the multi-band observations.
+class BaseMetadetect(dict):
+    """
+    meta-detect on the multi-band observations.
 
     Parameters
     ----------
@@ -25,54 +22,17 @@ def do_metadetect(config, mbobs, rng, nonshear_mbobs=None):
         Configuration dictionary. Possible entries are
 
             metacal
-            weight
-            model
-            flux
+            weight (if calculating weighted moments)
+            max (if running a max like fitter)
+            fofs (if running MOF)
+            mof (if running MOF)
 
     mbobs: ngmix.MultiBandObsList
         We will do detection and measurements on these images
     rng: numpy.random.RandomState
         Random number generator
-    nonshear_mbobs: ngmix.MultiBandObsList, optional
-        If not None and 'flux' is given in the config, then this mbobs will
-        be sheared and have flux measurements made at the detected positions in
-        the `mbobs`.
-
-    Returns
-    -------
-    res: dict
-        The fitting data keyed on the shear component.
     """
-    md = Metadetect(config, mbobs, rng, nonshear_mbobs=nonshear_mbobs)
-    md.go()
-    return md.result
-
-
-class Metadetect(dict):
-    """Metadetect fitter for multi-band observations.
-
-    Parameters
-    ----------
-    config: dict
-        Configuration dictionary. Possible entries are
-
-            metacal
-            weight
-            model
-            flux
-
-    mbobs: ngmix.MultiBandObsList
-        We will do detection and measurements on these images
-    rng: numpy.random.RandomState
-        Random number generator
-    show: bool, optional
-        If True, show the images using descwl_coadd.vis.
-    nonshear_mbobs: ngmix.MultiBandObsList, optional
-        If not None and 'flux' is given in the config, then this mbobs will
-        be sheared and have flux measurements made at the detected positions in
-        the `mbobs`.
-    """
-    def __init__(self, config, mbobs, rng, show=False, nonshear_mbobs=None):
+    def __init__(self, config, mbobs, rng, show=False):
 
         self._show = show
 
@@ -81,13 +41,6 @@ class Metadetect(dict):
         self.nband = len(mbobs)
         self.rng = rng
 
-        self.nonshear_mbobs = nonshear_mbobs
-        self.nonshear_nband = (
-            len(nonshear_mbobs)
-            if nonshear_mbobs is not None
-            else 0
-        )
-
         if 'psf' in config:
             self._fit_original_psfs()
 
@@ -95,23 +48,6 @@ class Metadetect(dict):
 
         self._set_ormask_and_bmask()
         self._set_mfrac()
-
-        if "flux" in self:
-            self._set_flux_fitter()
-
-    def _set_config(self, config):
-        """
-        set the config, dealing with defaults
-        """
-
-        self.update(config)
-        assert 'metacal' in self, \
-            'metacal setting must be present in config'
-        assert 'sx' in self, \
-            'sx setting must be present in config'
-        assert 'meds' in self, \
-            'meds setting must be present in config'
-        self['maskflags'] = self.get('maskflags', 0)
 
     def _set_ormask_and_bmask(self):
         """
@@ -152,40 +88,6 @@ class Metadetect(dict):
 
         self.mfrac = mfrac / np.sum(wgts)
 
-    def _set_fitter(self):
-        """
-        set the fitter to be used
-        """
-        self['model'] = self.get('model', 'wmom')
-
-        if self['model'] == 'wmom':
-            self._fitter = fitting.Moments(self, self.rng, keep_flux=True)
-        elif self['model'] == 'gauss':
-            if ngmix.__version__[0:2] == 'v1':
-                self._fitter = fitting.MaxLikeNgmixv1(
-                    self, self.rng, self.nband,
-                )
-            else:
-                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
-        else:
-            raise ValueError("bad model: '%s'" % self['model'])
-
-    def _set_flux_fitter(self):
-        """
-        set the fitter to be used
-        """
-        self['flux']['model'] = self['flux'].get('model', 'wmom')
-
-        if self['flux']['model'] == 'wmom':
-            self['flux']['bmask_flags'] = self['bmask_flags']
-            self._flux_fitter = fitting.Moments(
-                self['flux'],
-                self.rng,
-                keep_flux=True,
-            )
-        else:
-            raise ValueError("bad model: '%s'" % self['flux']['model'])
-
     @property
     def result(self):
         """
@@ -203,42 +105,39 @@ class Metadetect(dict):
         each
         """
         try:
-            odict = self._get_all_metacal(self.mbobs)
+            odict = self._get_all_metacal()
         except BootPSFFailure:
             odict = None
 
-        if 'flux' in self and self.nonshear_nband > 0:
-            try:
-                nonshear_odict = self._get_all_metacal(self.nonshear_mbobs)
-            except BootPSFFailure:
-                nonshear_odict = None
-
-        if (
-            odict is None
-            or (
-                'flux' in self
-                and self.nonshear_nband > 0
-                and nonshear_odict is None
-            )
-        ):
+        if odict is None:
             self._result = None
         else:
             self._result = {}
             for shear_str, mbobs in odict.items():
-                if 'flux' in self and self.nonshear_nband > 0:
-                    nonshear_mbobs = nonshear_odict[shear_str]
-                else:
-                    nonshear_mbobs = None
-                self._result[shear_str] = self._measure(
-                    mbobs, shear_str, nonshear_mbobs=nonshear_mbobs
-                )
+                self._result[shear_str] = self._measure(mbobs, shear_str)
 
-    def _measure(self, mbobs, shear_str, nonshear_mbobs=None):
+    def _set_fitter(self):
+        """
+        set the fitter to be used
+        """
+        self['model'] = self.get('model', 'wmom')
+
+        if self['model'] == 'wmom':
+            self._fitter = fitting.Moments(self, self.rng)
+        elif self['model'] == 'gauss':
+            if ngmix.__version__[0:2] == 'v1':
+                self._fitter = fitting.MaxLikeNgmixv1(
+                    self, self.rng, self.nband,
+                )
+            else:
+                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+        else:
+            raise ValueError("bad model: '%s'" % self['model'])
+
+    def _measure(self, mbobs, shear_str):
         """
         perform measurements on the input mbobs. This involves running
-        detection as well as measurements.
-
-        flux measurements will be made on the nonshear_mbobs as well
+        detection as well as measurements
         """
 
         medsifier = self._do_detect(mbobs)
@@ -250,100 +149,12 @@ class Metadetect(dict):
 
         mbobs_list = mbm.get_mbobs_list()
 
-        res = self._run_fitter(mbobs_list)
+        res = self._fitter.go(mbobs_list)
 
         if res is not None:
             res = self._add_positions_and_psf(medsifier.cat, res, shear_str)
 
-            if 'flux' in self:
-                res = self._run_flux_fitter(
-                    res,
-                    medsifier.cat,
-                    mbobs,
-                    nonshear_mbobs=nonshear_mbobs,
-                )
-
         return res
-
-    def _run_fitter(self, mbobs_list):
-
-        if self['model'] in ['wmom']:
-            return self._run_fitter_mbobs_sep(mbobs_list)
-        elif self['model'] in ['gauss']:
-            return self._fitter.go(mbobs_list)
-        else:
-            raise RuntimeError(
-                "shear model %s not supported!" % self['model']
-            )
-
-    def _run_fitter_mbobs_sep(self, mbobs_list):
-        # run the fits
-        band_res = []
-        for band in range(self.nband):
-            band_mbobs_list = []
-            for mbobs in mbobs_list:
-                _mbobs = ngmix.MultiBandObsList()
-                _mbobs.meta = copy.deepcopy(mbobs.meta)
-                _mbobs.append(mbobs[band])
-                band_mbobs_list.append(_mbobs)
-            band_res.append(self._fitter.go(band_mbobs_list))
-
-        # combine the data by inverse variance weighted averages
-        n = Namer(front=self['model'])
-        dt = [
-            ("flags", 'i4'),
-            (n("flags"), 'i4'),
-            (n("s2n"), "f8"),
-            (n("T"), "f8"),
-            (n("T_err"), "f8"),
-            (n("g"), "f8", 2),
-            (n("g_cov"), "f8", (2, 2)),
-            ('psf_g', 'f8', 2),
-            ('psf_T', 'f8'),
-            (n("T_ratio"), "f8"),
-        ]
-        res = np.zeros(len(mbobs_list), dtype=dt)
-        for ind in range(len(mbobs_list)):
-            # extract the wgts and band results
-            wgts = []
-            all_bres = []
-            for i, obslist in enumerate(mbobs_list[ind]):
-                wgts.append(np.median(obslist[0].weight))
-                all_bres.append(band_res[i][ind:ind+1])
-            wgts = np.array(wgts)/np.sum(wgts)
-
-            # compute the averages
-            flux = 0.0
-            flux_var = 0.0
-            for wgt, bres in zip(wgts, all_bres):
-                res['flags'][ind] |= bres['flags'][0]
-                res[n('flags')][ind] |= bres['flags'][0]
-
-                flux += (wgt * bres[n('flux')][0])
-                flux_var += (wgt * bres[n('flux_err')][0])**2
-
-                res[n('T')][ind] += (wgt * bres[n('T')][0])
-                res[n('T_err')][ind] += (wgt * bres[n('T_err')][0])**2
-
-                res[n('g')][ind] += (wgt * bres[n('T')][0] * bres[n('g')][0])
-                res[n('g_cov')][ind] += (
-                    bres[n('g_cov')][0]
-                    * (wgt * bres[n('T')][0])**2
-                )
-
-                res['psf_g'][ind] += (wgt * bres['psf_g'][0])
-                res['psf_T'][ind] += (wgt * bres['psf_T'][0])
-
-            res[n('g')][ind] = res[n('g')][ind] / res[n('T')][ind]
-            res[n('g_cov')][ind] = res[n('g_cov')][ind] / res[n('T')][ind]**2
-            res[n('s2n')][ind] = flux / np.sqrt(flux_var)
-            res[n('T_err')][ind] = np.sqrt(res[n('T_err')][ind])
-            res[n('T_ratio')][ind] = res[n('T')][ind] / res['psf_T'][ind]
-
-        if len(res) == 0:
-            return None
-        else:
-            return res
 
     def _add_positions_and_psf(self, cat, res, shear_str):
         """
@@ -359,18 +170,10 @@ class Metadetect(dict):
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
         ]
-        if 'psfrec_flags' not in res.dtype.names:
-            new_dt += [
-                ('psfrec_flags', 'i4'),  # psfrec is the original psf
-                ('psfrec_g', 'f8', 2),
-                ('psfrec_T', 'f8'),
-            ]
         newres = eu.numpy_util.add_fields(
             res,
             new_dt,
         )
-        if 'psfrec_flags' not in res.dtype.names:
-            newres['psfrec_flags'] = procflags.NO_ATTEMPT
 
         if hasattr(self, 'psf_stats'):
             newres['psfrec_flags'][:] = self.psf_stats['flags']
@@ -481,70 +284,6 @@ class Metadetect(dict):
 
         return newres
 
-    def _run_flux_fitter(
-        self,
-        res,
-        cat,
-        mbobs,
-        nonshear_mbobs=None,
-    ):
-        names = ["shear%d" % i for i in range(self.nband)]
-        fit_mbobs = ngmix.MultiBandObsList()
-
-        if nonshear_mbobs is not None:
-            names += ["nonshear%d" % i for i in range(self.nonshear_nband)]
-            for obsl in self.nonshear_mbobs:
-                fit_mbobs.append(obsl)
-
-        medsifier = detect.CatalogMEDSifier(
-            fit_mbobs, cat['x'], cat['y'], cat['box_size']
-        )
-        mbm = medsifier.get_multiband_meds()
-        mbobs_list = mbm.get_mbobs_list()
-
-        if self['flux']['model'] in ['wmom']:
-            res = self._run_flux_fitter_mbobs_sep(
-                res, mbobs_list, names, self['flux']['model']
-            )
-        else:
-            raise RuntimeError(
-                "flux model %s not supported!" % self['flux']['model']
-            )
-        return res
-
-    def _run_flux_fitter_mbobs_sep(
-        self,
-        res,
-        mbobs_list,
-        names,
-        model,
-    ):
-        add_dt = []
-        for name in names:
-            nm_mod = name + "_" + model
-            add_dt += [
-                (nm_mod + "_flux_flags", 'f8'),
-                (nm_mod + "_flux", 'f8'),
-                (nm_mod + "_flux_err", 'f8'),
-            ]
-        newres = eu.numpy_util.add_fields(
-            res,
-            add_dt,
-        )
-
-        for i, mbobs in enumerate(mbobs_list):
-            for name, obsl in zip(names, mbobs):
-                nm_mod = name + "_" + model
-                band_mbobs = ngmix.MultiBandObsList()
-                band_mbobs.append(obsl)
-                band_res = self._flux_fitter.go([band_mbobs])
-                newres[nm_mod + "_flux_flags"][i] = band_res["flags"][0]
-                newres[nm_mod + "_flux"][i] = band_res[model + "_flux"][0]
-                newres[nm_mod + "_flux_err"][i] = band_res[model + "_flux_err"][0]
-                newres["flags"] |= band_res["flags"][0]
-
-        return newres
-
     def _do_detect(self, mbobs):
         """
         use a MEDSifier to run detection
@@ -556,13 +295,13 @@ class Metadetect(dict):
             maskflags=self['maskflags'],
         )
 
-    def _get_all_metacal(self, mbobs):
+    def _get_all_metacal(self):
         """
         get the sheared versions of the observations
         """
 
         odict = ngmix.metacal.get_all_metacal(
-            mbobs,
+            self.mbobs,
             rng=self.rng,
             **self['metacal']
         )
@@ -570,7 +309,7 @@ class Metadetect(dict):
         if self._show:
             import descwl_coadd.vis
 
-            orig_mbobs = mbobs
+            orig_mbobs = self.mbobs
 
             for mtype, mbobs in odict.items():
                 for band in range(len(mbobs)):
@@ -593,6 +332,20 @@ class Metadetect(dict):
                         )
 
         return odict
+
+    def _set_config(self, config):
+        """
+        set the config, dealing with defaults
+        """
+
+        self.update(config)
+        assert 'metacal' in self, \
+            'metacal setting must be present in config'
+        assert 'sx' in self, \
+            'sx setting must be present in config'
+        assert 'meds' in self, \
+            'meds setting must be present in config'
+        self['maskflags'] = self.get('maskflags', 0)
 
     def _fit_original_psfs(self):
         """

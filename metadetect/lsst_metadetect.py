@@ -1,6 +1,6 @@
 import copy
 import numpy as np
-from .metadetect import Metadetect
+from .base import BaseMetadetect
 import ngmix
 import esutil as eu
 import lsst.log
@@ -11,7 +11,7 @@ from .lsst_medsifier import LSSTMEDSifier
 from .lsst_measure import measure_weighted_moments
 
 
-class LSSTMetadetect(Metadetect):
+class LSSTMetadetect(BaseMetadetect):
     def __init__(self, *args, **kw):
         loglevel = kw.pop('loglevel', 'info').upper()
 
