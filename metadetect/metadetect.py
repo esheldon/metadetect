@@ -212,7 +212,11 @@ class Metadetect(dict):
 
         if self['flux']['model'] == 'wmom':
             self['flux']['bmask_flags'] = self['bmask_flags']
-            self._flux_fitter = fitting.Moments(self['flux'], self.rng)
+            self._flux_fitter = fitting.Moments(
+                self['flux'],
+                self.rng,
+                keep_flux=True,
+            )
         else:
             raise ValueError("bad model: '%s'" % self['flux']['model'])
 

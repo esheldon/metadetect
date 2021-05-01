@@ -14,10 +14,11 @@ class FitterBase(dict):
     we don't create a new instance of this for each fit, because
     the prior can be set once
     """
-    def __init__(self, config, rng):
+    def __init__(self, config, rng, keep_flux=False):
 
         self.rng = rng
         self.update(config)
+        self.keep_flux = keep_flux
 
     def go(self, mbobs_list):
         """
@@ -223,16 +224,17 @@ class Moments(FitterBase):
             (n('T_err'), 'f8'),
             (n('T_ratio'), 'f8'),
         ]
-        if flux_nband > 1:
-            dt += [
-                (n('flux'), 'f8', flux_nband),
-                (n('flux_err'), 'f8', flux_nband),
-            ]
-        else:
-            dt += [
-                (n('flux'), 'f8'),
-                (n('flux_err'), 'f8'),
-            ]
+        if self.keep_flux:
+            if flux_nband > 1:
+                dt += [
+                    (n('flux'), 'f8', flux_nband),
+                    (n('flux_err'), 'f8', flux_nband),
+                ]
+            else:
+                dt += [
+                    (n('flux'), 'f8'),
+                    (n('flux_err'), 'f8'),
+                ]
 
         return dt
 
@@ -268,8 +270,9 @@ class Moments(FitterBase):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            output[n('flux')] = res['flux']
-            output[n('flux_err')] = res['flux_err']
+            if self.keep_flux:
+                output[n('flux')] = res['flux']
+                output[n('flux_err')] = res['flux_err']
 
             if pres['flags'] == 0:
                 output[n('T_ratio')] = res['T']/pres['T']
@@ -327,10 +330,11 @@ class MaxLike(Moments):
     """
     measure simple weighted moments
     """
-    def __init__(self, config, rng, nband):
+    def __init__(self, config, rng, nband, keep_flux=False):
         self.update(config)
         self.rng = rng
         self.nband = nband
+        self.keep_flux = keep_flux
 
         self._setup_fitting()
 
@@ -411,8 +415,9 @@ class MaxLike(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            output[n('flux')] = res['flux']
-            output[n('flux_err')] = res['flux_err']
+            if self.keep_flux:
+                output[n('flux')] = res['flux']
+                output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/psf_T_avg
 
@@ -478,11 +483,12 @@ class MaxLikeNgmixv1(Moments):
     """
     measure simple weighted moments
     """
-    def __init__(self, config, rng, nband):
+    def __init__(self, config, rng, nband, keep_flux=False):
         self.update(config)
         self.rng = rng
         self.nband = nband
         self.bootstrapper = Bootstrapper(self.rng, self.nband)
+        self.keep_flux = keep_flux
 
     def go(self, mbobs_list):
         """
@@ -547,7 +553,7 @@ class MaxLikeNgmixv1(Moments):
         model = 'gauss'
         n = Namer(front=model)
 
-        dt = self._get_dtype(model, npars)
+        dt = self._get_dtype(model, npars, flux_nband=self.nband)
         output = np.zeros(1, dtype=dt)
 
         output['psfrec_flags'] = procflags.NO_ATTEMPT
@@ -565,8 +571,9 @@ class MaxLikeNgmixv1(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            output[n('flux')] = res['flux']
-            output[n('flux_err')] = res['flux_err']
+            if self.keep_flux:
+                output[n('flux')] = res['flux']
+                output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/res['psf_T_avg']
 
