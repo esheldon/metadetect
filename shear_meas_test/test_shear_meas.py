@@ -230,27 +230,53 @@ def run_sim(seed, mdet_seed):
 
 def test_shear_meas():
     ntrial = 10000
+    nsub = min(ntrial // 100, 50)
+    nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
     seeds = rng.randint(low=1, high=2**29, size=ntrial)
     mdet_seeds = rng.randint(low=1, high=2**29, size=ntrial)
 
     tm0 = time.time()
 
-    jobs = [
-        joblib.delayed(run_sim)(seeds[i], mdet_seeds[i])
-        for i in range(ntrial)
-    ]
     print("\n")
-    outputs = joblib.Parallel(n_jobs=-1, verbose=100, backend='loky')(jobs)
 
     pres = []
     mres = []
-    for out in outputs:
-        if out is None:
-            continue
+    loc = 0
+    for itr in tqdm.trange(nitr):
+        jobs = [
+            joblib.delayed(run_sim)(seeds[loc+i], mdet_seeds[loc+i])
+            for i in range(nsub)
+        ]
+        outputs = joblib.Parallel(n_jobs=-1, verbose=0, backend='loky')(jobs)
 
-        pres.append(out[0])
-        mres.append(out[1])
+        for out in outputs:
+            if out is None:
+                continue
+            pres.append(out[0])
+            mres.append(out[1])
+        loc += nsub
+
+        m, merr, c, cerr = boostrap_m_c(
+            np.concatenate(pres),
+            np.concatenate(mres),
+        )
+        print(
+            (
+                "\n"
+                "nsims: %d\n"
+                "m [1e-3, 3sigma]: %s +/- %s\n"
+                "c [1e-5, 3sigma]: %s +/- %s\n"
+                "\n"
+            ) % (
+                len(pres),
+                m/1e-3,
+                3*merr/1e-3,
+                c/1e-5,
+                3*cerr/1e-5,
+            ),
+            flush=True,
+        )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial, flush=True)
