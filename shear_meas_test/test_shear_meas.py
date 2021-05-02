@@ -233,7 +233,7 @@ def _run_sim(seed, mdet_seed):
 
 
 def test_shear_meas():
-    ntrial = 1000
+    ntrial = 10000
     rng = np.random.RandomState(seed=116)
     seeds = rng.randint(low=1, high=2**29, size=ntrial)
     mdet_seeds = rng.randint(low=1, high=2**29, size=ntrial)
