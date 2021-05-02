@@ -143,17 +143,6 @@ def make_sim(
     return mbobs
 
 
-def _show_mbobs(mbobs):
-    im = mbobs[0][0].image
-    nse = np.sqrt(1/mbobs[0][0].weight)
-    import matplotlib.pyplot as plt
-
-    plt.figure()
-    plt.imshow(np.arcsinh(im/nse))
-    import pdb
-    pdb.set_trace()
-
-
 def _shear_cuts(arr):
     msk = (
         (arr['flags'] == 0)
@@ -188,7 +177,17 @@ def _meas_shear_data(res):
     return np.array([(g1, g2, R11, R22)], dtype=dt)
 
 
-def _meas_m_c_cancel(pres, mres):
+def _bootstrap_stat(d1, d2, func, seed, nboot=500):
+    dim = d1.shape[0]
+    rng = np.random.RandomState(seed=seed)
+    stats = []
+    for _ in tqdm.trange(nboot, leave=False):
+        ind = rng.choice(dim, size=dim, replace=True)
+        stats.append(func(d1[ind], d2[ind]))
+    return stats
+
+
+def meas_m_c_cancel(pres, mres):
     x = np.mean(pres['g1'] - mres['g1'])/2
     y = np.mean(pres['R11'] + mres['R11'])/2
     m = x/y/0.02 - 1
@@ -200,17 +199,14 @@ def _meas_m_c_cancel(pres, mres):
     return m, c
 
 
-def _bootstrap_stat(d1, d2, func, seed, nboot=500):
-    dim = d1.shape[0]
-    rng = np.random.RandomState(seed=seed)
-    stats = []
-    for _ in tqdm.trange(nboot, leave=False):
-        ind = rng.choice(dim, size=dim, replace=True)
-        stats.append(func(d1[ind], d2[ind]))
-    return stats
+def boostrap_m_c(pres, mres):
+    m, c = meas_m_c_cancel(pres, mres)
+    bdata = _bootstrap_stat(pres, mres, meas_m_c_cancel, 14324, nboot=500)
+    merr, cerr = np.std(bdata, axis=0)
+    return m, merr, c, cerr
 
 
-def _run_sim(seed, mdet_seed):
+def run_sim(seed, mdet_seed):
     mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0)
     _pres = metadetect.do_metadetect(
         copy.deepcopy(TEST_METADETECT_CONFIG),
@@ -241,7 +237,7 @@ def test_shear_meas():
     tm0 = time.time()
 
     jobs = [
-        joblib.delayed(_run_sim)(seeds[i], mdet_seeds[i])
+        joblib.delayed(run_sim)(seeds[i], mdet_seeds[i])
         for i in range(ntrial)
     ]
     print("\n")
@@ -261,10 +257,7 @@ def test_shear_meas():
 
     pres = np.concatenate(pres)
     mres = np.concatenate(mres)
-    m, c = _meas_m_c_cancel(pres, mres)
-
-    bdata = _bootstrap_stat(pres, mres, _meas_m_c_cancel, 14324, nboot=500)
-    merr, cerr = np.std(bdata, axis=0)
+    m, merr, c, cerr = boostrap_m_c(pres, mres)
 
     print(
         (
