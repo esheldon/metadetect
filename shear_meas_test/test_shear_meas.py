@@ -105,7 +105,7 @@ def make_sim(
         y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
         nobj = x.shape[0]
 
-    snr = 1e3
+    snr = 1e6
     cen = (dim-1)/2
     psf_dim = 53
     psf_cen = (psf_dim-1)/2
@@ -262,7 +262,7 @@ def test_shear_meas():
             joblib.delayed(run_sim)(seeds[loc+i], mdet_seeds[loc+i])
             for i in range(nsub)
         ]
-        outputs = joblib.Parallel(n_jobs=36, verbose=100, backend='loky')(jobs)
+        outputs = joblib.Parallel(n_jobs=-1, verbose=0, backend='loky')(jobs)
 
         for out in outputs:
             if out is None:
