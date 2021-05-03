@@ -366,7 +366,7 @@ def test_metadetect(model):
         res = metadetect.do_metadetect(config, mbobs, rng)
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
-            assert "shear0_wmom_flux" not in res[shear].dtype.names
+            assert any(c.endswith("band_flux") for c in res[shear].dtype.names)
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
@@ -434,7 +434,8 @@ def test_metadetect_mfrac(model):
     print("time per:", total_time/ntrial)
 
 
-def test_metadetect_flux():
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_flux(model):
     """
     test full metadetection w/ fluxes
     """
@@ -447,10 +448,7 @@ def test_metadetect_flux():
     sim = Sim(rng)
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config['flux'] = {
-        'model': "wmom",
-        'weight': {'fwhm': 1.2},
-    }
+    config['model'] = model
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
@@ -466,11 +464,9 @@ def test_metadetect_flux():
         )
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
-            assert "shear0_wmom_flux" in res[shear].dtype.names
-            assert "shear1_wmom_flux" in res[shear].dtype.names
-            assert "shear2_wmom_flux" not in res[shear].dtype.names
-            assert "nonshear0_wmom_flux" in res[shear].dtype.names
-            assert "nonshear1_wmom_flux" not in res[shear].dtype.names
+            for c in res[shear].dtype.names:
+                if c.endswith("band_flux"):
+                    assert res[shear][c][0].shape == (3,)
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
