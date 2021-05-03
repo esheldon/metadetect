@@ -287,23 +287,47 @@ class Metadetect(dict):
             tot_nband = self.nband
 
         n = Namer(front=self['model'])
-        new_dt = [
-            (n("band_flux"), "f8", tot_nband),
-            (n("band_flux_err"), "f8", tot_nband),
-        ]
+        if tot_nband > 1:
+            new_dt = [
+                (n("band_flux"), "f8", tot_nband),
+                (n("band_flux_err"), "f8", tot_nband),
+            ]
+        else:
+            new_dt = [
+                (n("band_flux"), "f8"),
+                (n("band_flux_err"), "f8"),
+            ]
         newres = eu.numpy_util.add_fields(
             res,
             new_dt,
         )
-        newres[n("band_flux")][:, :self.nband] = res[n('flux')]
-        newres[n("band_flux_err")][:, :self.nband] = res[n('flux_err')]
+        if tot_nband > 1:
+            if self.nband > 1:
+                newres[n("band_flux")][:, :self.nband] = res[n('flux')]
+                newres[n("band_flux_err")][:, :self.nband] = res[n('flux_err')]
+            else:
+                newres[n("band_flux")][:, :self.nband] = res[n('flux')].reshape(-1, 1)
+                newres[n("band_flux_err")][:, :self.nband] \
+                    = res[n('flux_err')].reshape(-1, 1)
+        else:
+            newres[n("band_flux")] = res[n('flux')]
 
         if nonshear_mbobs_list is not None:
-            newres[n("band_flux")][:, self.nband:] = res_nonshear[n('flux')]
-            newres[n("band_flux_err")][:, self.nband:] = res_nonshear[n('flux_err')]
+            if self.nonshear_nband > 1:
+                newres[n("band_flux")][:, self.nband:] = res_nonshear[n('flux')]
+                newres[n("band_flux_err")][:, self.nband:] = res_nonshear[n('flux_err')]
+            else:
+                newres[n("band_flux")][:, self.nband:] \
+                    = res_nonshear[n('flux')].reshape(-1, 1)
+                newres[n("band_flux_err")][:, self.nband:] \
+                    = res_nonshear[n('flux_err')].reshape(-1, 1)
 
         # remove the flux column
-        new_dt = [dt for dt in newres.dtype.descr if dt[0] not in ["flux", "flux_err"]]
+        new_dt = [
+            dt
+            for dt in newres.dtype.descr
+            if dt[0] not in [n("flux"), n("flux_err")]
+        ]
         final_res = np.zeros(newres.shape[0], dtype=new_dt)
         for c in final_res.dtype.names:
             final_res[c] = newres[c]
@@ -350,9 +374,18 @@ class Metadetect(dict):
             ('psf_g', 'f8', 2),
             ('psf_T', 'f8'),
             (n("T_ratio"), "f8"),
-            (n("band_flux"), "f8", tot_nband),
-            (n("band_flux_err"), "f8", tot_nband),
         ]
+        if tot_nband > 1:
+            dt += [
+                (n("band_flux"), "f8", tot_nband),
+                (n("band_flux_err"), "f8", tot_nband),
+            ]
+        else:
+            dt += [
+                (n("band_flux"), "f8"),
+                (n("band_flux_err"), "f8"),
+            ]
+
         res = np.zeros(len(mbobs_list), dtype=dt)
         for ind in range(len(mbobs_list)):
             # extract the wgts and band results
@@ -403,8 +436,12 @@ class Metadetect(dict):
             res[n('s2n')][ind] = flux / np.sqrt(flux_var)
             res[n('T_err')][ind] = np.sqrt(res[n('T_err')][ind])
             res[n('T_ratio')][ind] = res[n('T')][ind] / res['psf_T'][ind]
-            res[n('band_flux')][ind] = band_flux
-            res[n('band_flux_err')][ind] = band_flux_err
+            if tot_nband > 1:
+                res[n('band_flux')][ind] = np.array(band_flux)
+                res[n('band_flux_err')][ind] = np.array(band_flux_err)
+            else:
+                res[n('band_flux')][ind] = band_flux[0]
+                res[n('band_flux_err')][ind] = band_flux_err[0]
 
         if len(res) == 0:
             return None

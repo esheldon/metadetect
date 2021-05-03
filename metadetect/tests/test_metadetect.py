@@ -15,7 +15,7 @@ from .. import metadetect
 DEFAULT_SIM_CONFIG = {
     'nobj': 4,
     'nband': 3,
-    'noises': (0.0005, 0.001, 0.0015),
+    'noises': (0.0005, 0.001, 0.0015, 0.002),
     'scale': 0.263,
     'psf_fwhm': 0.9,
     'dims': (225, 225),
@@ -26,8 +26,8 @@ DEFAULT_SIM_CONFIG = {
     'g_std': 0.2,
     'fracdev_low': 0.001,
     'fracdev_high': 0.99,
-    'bulge_colors': np.array([0.5, 1.0, 1.5]),
-    'disk_colors': np.array([1.25, 1.0, 0.75]),
+    'bulge_colors': np.array([0.5, 1.0, 1.5, 2.5]),
+    'disk_colors': np.array([1.25, 1.0, 0.75, 0.5]),
 }
 
 TEST_METADETECT_CONFIG = {
@@ -435,7 +435,8 @@ def test_metadetect_mfrac(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
-def test_metadetect_flux(model):
+@pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
+def test_metadetect_flux(model, nband, nshear):
     """
     test full metadetection w/ fluxes
     """
@@ -445,7 +446,7 @@ def test_metadetect_flux(model):
 
     tm0 = time.time()
 
-    sim = Sim(rng)
+    sim = Sim(rng, config={"nband": nband})
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config['model'] = model
@@ -455,10 +456,14 @@ def test_metadetect_flux(model):
 
         mbobs = sim.get_mbobs()
         shear_mbobs = ngmix.MultiBandObsList()
-        shear_mbobs.append(mbobs[0])
-        shear_mbobs.append(mbobs[1])
         nonshear_mbobs = ngmix.MultiBandObsList()
-        nonshear_mbobs.append(mbobs[2])
+        for i in range(len(mbobs)):
+            if i < nshear:
+                shear_mbobs.append(mbobs[i])
+            else:
+                nonshear_mbobs.append(mbobs[i])
+        if len(nonshear_mbobs) == 0:
+            nonshear_mbobs = None
         res = metadetect.do_metadetect(
             config, shear_mbobs, rng, nonshear_mbobs=nonshear_mbobs
         )
@@ -466,7 +471,10 @@ def test_metadetect_flux(model):
             assert np.all(res[shear]["mfrac"] == 0)
             for c in res[shear].dtype.names:
                 if c.endswith("band_flux"):
-                    assert res[shear][c][0].shape == (3,)
+                    if nband > 1:
+                        assert res[shear][c][0].shape == (nband,)
+                    else:
+                        assert res[shear][c][0].shape == tuple()
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
