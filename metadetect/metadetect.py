@@ -392,7 +392,10 @@ class Metadetect(dict):
             wgts = []
             all_bres = []
             for i, obslist in enumerate(mbobs_list[ind]):
-                wgts.append(np.median(obslist[0].weight))
+                msk = obslist[0].weight > 0
+                if not np.any(msk):
+                    raise RuntimeError("No non-zero weights for a band in metadetect!")
+                wgts.append(np.median(obslist[0].weight[msk]))
                 all_bres.append(band_res[i][ind:ind+1])
 
             if nonshear_mbobs_list is not None:
