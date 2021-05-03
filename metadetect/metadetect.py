@@ -281,7 +281,7 @@ class Metadetect(dict):
     def _run_fitter_mbobs_comb(self, mbobs_list, nonshear_mbobs_list=None):
         res = self._fitter.go(mbobs_list)
         if nonshear_mbobs_list is not None:
-            res_nonshear = self._fitter.go(nonshear_mbobs_list)
+            res_nonshear = self._nonshear_fitter.go(nonshear_mbobs_list)
             tot_nband = self.nband + self.nonshear_nband
         else:
             tot_nband = self.nband
