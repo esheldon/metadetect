@@ -7,6 +7,8 @@ import metadetect
 import tqdm
 import joblib
 
+import pytest
+
 
 TEST_METADETECT_CONFIG = {
     "model": "wmom",
@@ -87,21 +89,35 @@ def make_sim(
     buff=34,
     scale=0.25,
     dens=100,
+    ngrid=7,
+    snr=1e6,
 ):
     rng = np.random.RandomState(seed=seed)
 
-    area_arcmin2 = ((dim - buff*2)*scale/60)**2
-    nobj = int(dens * area_arcmin2)
     half_loc = (dim-buff*2)*scale/2
-    snr = 1e3
+
+    if ngrid is None:
+        area_arcmin2 = ((dim - buff*2)*scale/60)**2
+        nobj = int(dens * area_arcmin2)
+        x = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+        y = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+    else:
+        half_ngrid = (ngrid-1)/2
+        x, y = np.meshgrid(np.arange(ngrid), np.arange(ngrid))
+        x = (x.ravel() - half_ngrid)/half_ngrid * half_loc
+        y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
+        nobj = x.shape[0]
+
     cen = (dim-1)/2
     psf_dim = 53
     psf_cen = (psf_dim-1)/2
 
     psf = galsim.Gaussian(fwhm=0.9)
     gals = []
-    for _ in range(nobj):
-        u, v = rng.uniform(low=-half_loc, high=half_loc, size=2)
+    for ind in range(nobj):
+        u, v = rng.uniform(low=-scale, high=scale, size=2)
+        u += x[ind]
+        v += y[ind]
         gals.append(galsim.Exponential(half_light_radius=0.5).shift(u, v))
     gals = galsim.Add(gals)
     gals = gals.shear(g1=g1, g2=g2)
@@ -206,8 +222,8 @@ def boostrap_m_c(pres, mres):
     return m, merr, c, cerr
 
 
-def run_sim(seed, mdet_seed):
-    mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0)
+def run_sim(seed, mdet_seed, **kwargs):
+    mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0, **kwargs)
     _pres = metadetect.do_metadetect(
         copy.deepcopy(TEST_METADETECT_CONFIG),
         mbobs_p,
@@ -216,7 +232,7 @@ def run_sim(seed, mdet_seed):
     if _pres is None:
         return None
 
-    mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0)
+    mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0, **kwargs)
     _mres = metadetect.do_metadetect(
         copy.deepcopy(TEST_METADETECT_CONFIG),
         mbobs_m,
@@ -228,9 +244,11 @@ def run_sim(seed, mdet_seed):
     return _meas_shear_data(_pres), _meas_shear_data(_mres)
 
 
-def test_shear_meas():
-    ntrial = 10000
-    nsub = min(ntrial // 100, 50)
+@pytest.mark.parametrize(
+    'snr,ngrid,ntrial', [(1e6, 7, 500), (1e6, None, 10000)]
+)
+def test_shear_meas(snr, ngrid, ntrial):
+    nsub = max(ntrial // 100, 50)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
     seeds = rng.randint(low=1, high=2**29, size=ntrial)
@@ -245,7 +263,9 @@ def test_shear_meas():
     loc = 0
     for itr in tqdm.trange(nitr):
         jobs = [
-            joblib.delayed(run_sim)(seeds[loc+i], mdet_seeds[loc+i])
+            joblib.delayed(run_sim)(
+                seeds[loc+i], mdet_seeds[loc+i], snr=snr, ngrid=ngrid,
+            )
             for i in range(nsub)
         ]
         outputs = joblib.Parallel(n_jobs=-1, verbose=0, backend='loky')(jobs)
@@ -298,5 +318,5 @@ def test_shear_meas():
         flush=True,
     )
 
-    assert np.abs(m-4e-4) < 3*merr
+    assert np.abs(m) < max(1e-3, 3*merr)
     assert np.abs(c) < 3*cerr
