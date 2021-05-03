@@ -7,6 +7,8 @@ import metadetect
 import tqdm
 import joblib
 
+import pytest
+
 
 TEST_METADETECT_CONFIG = {
     "model": "wmom",
@@ -88,6 +90,7 @@ def make_sim(
     scale=0.25,
     dens=100,
     ngrid=7,
+    snr=1e6,
 ):
     rng = np.random.RandomState(seed=seed)
 
@@ -105,7 +108,6 @@ def make_sim(
         y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
         nobj = x.shape[0]
 
-    snr = 1e6
     cen = (dim-1)/2
     psf_dim = 53
     psf_cen = (psf_dim-1)/2
@@ -220,8 +222,8 @@ def boostrap_m_c(pres, mres):
     return m, merr, c, cerr
 
 
-def run_sim(seed, mdet_seed):
-    mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0)
+def run_sim(seed, mdet_seed, **kwargs):
+    mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0, **kwargs)
     _pres = metadetect.do_metadetect(
         copy.deepcopy(TEST_METADETECT_CONFIG),
         mbobs_p,
@@ -230,7 +232,7 @@ def run_sim(seed, mdet_seed):
     if _pres is None:
         return None
 
-    mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0)
+    mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0, **kwargs)
     _mres = metadetect.do_metadetect(
         copy.deepcopy(TEST_METADETECT_CONFIG),
         mbobs_m,
@@ -242,8 +244,10 @@ def run_sim(seed, mdet_seed):
     return _meas_shear_data(_pres), _meas_shear_data(_mres)
 
 
-def test_shear_meas():
-    ntrial = 10000
+@pytest.mark.parametrize(
+    'snr,ngrid,ntrial', [(1e6, None, 2000), (1e6, 7, 500)]
+)
+def test_shear_meas(snr, ngrid, ntrial):
     nsub = min(ntrial // 100, 50)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
@@ -259,7 +263,9 @@ def test_shear_meas():
     loc = 0
     for itr in tqdm.trange(nitr):
         jobs = [
-            joblib.delayed(run_sim)(seeds[loc+i], mdet_seeds[loc+i])
+            joblib.delayed(run_sim)(
+                seeds[loc+i], mdet_seeds[loc+i], snr=snr, ngrid=ngrid,
+            )
             for i in range(nsub)
         ]
         outputs = joblib.Parallel(n_jobs=-1, verbose=0, backend='loky')(jobs)
@@ -312,5 +318,5 @@ def test_shear_meas():
         flush=True,
     )
 
-    assert np.abs(m-4e-4) < 3*merr
+    assert np.abs(m) < max(1e-3, 3*merr)
     assert np.abs(c) < 3*cerr
