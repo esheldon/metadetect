@@ -262,7 +262,7 @@ def test_shear_meas():
             joblib.delayed(run_sim)(seeds[loc+i], mdet_seeds[loc+i])
             for i in range(nsub)
         ]
-        outputs = joblib.Parallel(n_jobs=-1, verbose=100, backend='loky')(jobs)
+        outputs = joblib.Parallel(n_jobs=36, verbose=100, backend='loky')(jobs)
 
         for out in outputs:
             if out is None:
