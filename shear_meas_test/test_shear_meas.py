@@ -87,12 +87,24 @@ def make_sim(
     buff=34,
     scale=0.25,
     dens=100,
+    ngrid=7,
 ):
     rng = np.random.RandomState(seed=seed)
 
-    area_arcmin2 = ((dim - buff*2)*scale/60)**2
-    nobj = int(dens * area_arcmin2)
     half_loc = (dim-buff*2)*scale/2
+
+    if ngrid is None:
+        area_arcmin2 = ((dim - buff*2)*scale/60)**2
+        nobj = int(dens * area_arcmin2)
+        x = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+        y = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+    else:
+        half_ngrid = (ngrid-1)/2
+        x, y = np.meshgrid(np.arange(ngrid), np.arange(ngrid))
+        x = (x.ravel() - half_ngrid)/half_ngrid * half_loc
+        y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
+        nobj = x.shape[0]
+
     snr = 1e3
     cen = (dim-1)/2
     psf_dim = 53
@@ -100,8 +112,10 @@ def make_sim(
 
     psf = galsim.Gaussian(fwhm=0.9)
     gals = []
-    for _ in range(nobj):
-        u, v = rng.uniform(low=-half_loc, high=half_loc, size=2)
+    for ind in range(nobj):
+        u, v = rng.uniform(low=-scale, high=scale, size=2)
+        u += x[ind]
+        v += y[ind]
         gals.append(galsim.Exponential(half_light_radius=0.5).shift(u, v))
     gals = galsim.Add(gals)
     gals = gals.shear(g1=g1, g2=g2)
