@@ -403,6 +403,10 @@ class Metadetect(dict):
             wgts = np.array(wgts)
             wgts[0:self.nband] = wgts[0:self.nband] / np.sum(wgts[0:self.nband])
 
+            shear_flags = 0
+            for i in range(self.nband):
+                shear_flags |= all_bres[i]['flags'][0]
+
             # compute the averages
             band_flux = []
             band_flux_err = []
@@ -412,7 +416,7 @@ class Metadetect(dict):
                 res['flags'][ind] |= bres['flags'][0]
                 res[n('flags')][ind] |= bres['flags'][0]
 
-                if is_shear_band:
+                if is_shear_band and shear_flags == 0:
                     flux += (wgt * bres[n('flux')][0])
                     flux_var += (wgt * bres[n('flux_err')][0])**2
 
@@ -431,11 +435,12 @@ class Metadetect(dict):
                 band_flux.append(bres[n('flux')][0])
                 band_flux_err.append(bres[n('flux_err')][0])
 
-            res[n('g')][ind] = res[n('g')][ind] / res[n('T')][ind]
-            res[n('g_cov')][ind] = res[n('g_cov')][ind] / res[n('T')][ind]**2
-            res[n('s2n')][ind] = flux / np.sqrt(flux_var)
-            res[n('T_err')][ind] = np.sqrt(res[n('T_err')][ind])
-            res[n('T_ratio')][ind] = res[n('T')][ind] / res['psf_T'][ind]
+            if shear_flags == 0:
+                res[n('g')][ind] = res[n('g')][ind] / res[n('T')][ind]
+                res[n('g_cov')][ind] = res[n('g_cov')][ind] / res[n('T')][ind]**2
+                res[n('s2n')][ind] = flux / np.sqrt(flux_var)
+                res[n('T_err')][ind] = np.sqrt(res[n('T_err')][ind])
+                res[n('T_ratio')][ind] = res[n('T')][ind] / res['psf_T'][ind]
             if tot_nband > 1:
                 res[n('band_flux')][ind] = np.array(band_flux)
                 res[n('band_flux_err')][ind] = np.array(band_flux_err)
