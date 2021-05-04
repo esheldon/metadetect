@@ -269,7 +269,7 @@ class Moments(FitterBase):
             output['psf_T'] = pres['T']
 
         # we always keep the raw moments
-        # 5, 5, 2, 3 is the magic indexing from the ngmix moments code
+        # 5, 4, 2, 3 is the magic indexing from the ngmix moments code
         output[n('raw_mom')] = np.array([
             res['sums'][5],
             res['sums'][4],
