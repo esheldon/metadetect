@@ -11,6 +11,7 @@ import ngmix
 import galsim
 from .. import detect
 from .. import metadetect
+from ..fitting import Moments
 
 DEFAULT_SIM_CONFIG = {
     'nobj': 4,
@@ -197,7 +198,6 @@ class Sim(dict):
 
             flux_bulge = fracdev*flux
             flux_disk = (1-fracdev)*flux
-            print("fracdev:", fracdev)
 
             bulge_obj = galsim.DeVaucouleurs(
                 half_light_radius=r50
@@ -301,7 +301,6 @@ def test_detect(ntrial=1, show=False):
         mbm = mer.get_multiband_meds()
 
         nobj = mbm.size
-        print("        found", nobj, "objects")
         nobj_meas += nobj
 
         if show:
@@ -311,6 +310,7 @@ def test_detect(ntrial=1, show=False):
                     return
 
     total_time = time.time()-tm0
+    print("found", nobj_meas, "objects")
     print("time per group:", total_time/ntrial)
     print("time per object:", total_time/nobj_meas)
 
@@ -478,3 +478,195 @@ def test_metadetect_flux(model, nband, nshear):
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
+
+
+def make_mbobs_sim(seed, nobj, nband):
+    rng = np.random.RandomState(seed=seed)
+
+    dim = 35
+    cen = (dim-1)/2
+    band_mbobs_list = [[] for _ in range(nband)]
+    for _ in range(nobj):
+        gal = galsim.Exponential(
+            half_light_radius=rng.uniform(low=0.5, high=0.7),
+        ).shear(
+            g1=rng.uniform(low=-0.1, high=0.1),
+            g2=rng.uniform(low=-0.1, high=0.1),
+        ).withFlux(
+            400
+        )
+
+        for band in range(nband):
+            psf = galsim.Gaussian(
+                fwhm=rng.uniform(low=0.8, high=0.9),
+            ).shear(
+                g1=rng.uniform(low=-0.1, high=0.1),
+                g2=rng.uniform(low=-0.1, high=0.1),
+            )
+
+            gs_wcs = galsim.ShearWCS(
+                0.25,
+                galsim.Shear(
+                    g1=rng.uniform(low=-0.1, high=0.1),
+                    g2=rng.uniform(low=-0.1, high=0.1),
+                )
+            ).jacobian()
+            offset = rng.uniform(low=-0.5, high=0.5, size=2)
+
+            obj = galsim.Convolve([gal, psf])
+
+            im = obj.drawImage(nx=dim, ny=dim, wcs=gs_wcs, offset=offset).array
+            nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100)
+            im += rng.normal(size=im.shape, scale=nse)
+
+            psf_im = psf.drawImage(nx=dim, ny=dim, wcs=gs_wcs).array
+            psf_obs = ngmix.Observation(
+                image=psf_im,
+                jacobian=ngmix.Jacobian(
+                    row=cen,
+                    col=cen,
+                    wcs=gs_wcs,
+                )
+            )
+            band_mbobs_list[band].append(
+                ngmix.observation.get_mb_obs(
+                    ngmix.Observation(
+                        image=im,
+                        weight=np.ones_like(im) / nse**2,
+                        jacobian=ngmix.Jacobian(
+                            row=cen+offset[1],
+                            col=cen+offset[0],
+                            wcs=gs_wcs,
+                        ),
+                        bmask=np.zeros_like(im, dtype=np.int32),
+                        psf=psf_obs,
+                        meta={"wgt": 1.0/nse**2},
+                    )
+                )
+            )
+
+    return band_mbobs_list
+
+
+@pytest.mark.parametrize('nobj', [1, 2, 11])
+def test_metadetect_wavg_comp_single_band(nobj):
+    # sim the mbobs list
+    mbobs_list = make_mbobs_sim(134341, nobj, 1)[0]
+    momres = Moments(
+        {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
+        rng=np.random.RandomState(seed=12),
+    ).go(mbobs_list)
+
+    # now we make an Metadetect object
+    # note we are making a sim here but not using it
+    sim = Sim(np.random.RandomState(seed=329058), config={'nband': 1})
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = 'wmom'
+    sim_mbobs = sim.get_mbobs()
+    mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
+
+    wgts = np.array([1])
+    all_is_shear_band = [True]
+    any_nonzero = False
+    for i, mbobs in enumerate(mbobs_list):
+        all_bres = [momres[i:i+1]]
+        res = mdet._compute_wavg_fitter_mbobs_sep(wgts, all_bres, all_is_shear_band)
+        for col in [
+            "wmom_T", "wmom_T_err", 'wmom_g', "wmom_g_cov", "wmom_s2n",
+            "flags", "wmom_T_ratio", "wmom_flags", "psf_T", "psf_g",
+        ]:
+            if np.any(res[col] > 0):
+                any_nonzero = True
+            assert np.allclose(res[col], momres[col][i]), col
+
+    assert any_nonzero
+
+
+@pytest.mark.parametrize('nband', [2, 3, 4])
+@pytest.mark.parametrize('nobj', [1, 2, 11])
+def test_metadetect_wavg_comp(nband, nobj):
+    # sim the mbobs list
+    band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
+    band_momres = [
+        Moments(
+            {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
+            rng=np.random.RandomState(seed=12),
+        ).go(mbobs_list)
+        for mbobs_list in band_mbobs_list
+    ]
+
+    # now we make an Metadetect object
+    # note we are making a sim here but not using it
+    sim = Sim(np.random.RandomState(seed=329058), config={'nband': nband})
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = 'wmom'
+    sim_mbobs = sim.get_mbobs()
+    mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
+
+    all_is_shear_band = [True] * nband
+    any_nonzero = False
+    for i in range(nobj):
+        all_bres = [momres[i:i+1] for momres in band_momres]
+        wgts = np.array(
+            [band_mbobs_list[b][i][0][0].meta["wgt"] for b in range(nband)]
+        )
+        wgts /= np.sum(wgts)
+        res = mdet._compute_wavg_fitter_mbobs_sep(wgts, all_bres, all_is_shear_band)
+        # check a subset and don't go crazy
+        for col in [
+            "flags", "wmom_flags", "psf_T", "psf_g",
+            "wmom_band_flux", "wmom_band_flux_err",
+            # "wmom_s2n",
+            "wmom_g", "wmom_T",
+        ]:
+            if np.any(res[col] > 0):
+                any_nonzero = True
+
+            if col in ["psf_T", "psf_g"]:
+                val = np.sum([
+                    wgt * momres[col][i:i+1] for wgt, momres in zip(wgts, band_momres)
+                ], axis=0)
+            elif col in ["flags", "wmom_flags"]:
+                val = 0
+                for momres in band_momres:
+                    val |= momres[col][i:i+1]
+            elif col in ["wmom_band_flux", "wmom_band_flux_err"]:
+                val = np.array([
+                    momres[col.replace("band_", "")][i:i+1]
+                    for momres in band_momres
+                ]).T
+            elif col in ["wmom_T"]:
+                val = np.sum([
+                    wgt * momres["wmom_raw_mom"][i:i+1, 1]
+                    for wgt, momres in zip(wgts, band_momres)
+                ], axis=0)
+                val /= np.sum([
+                    wgt * momres["wmom_raw_mom"][i:i+1, 0]
+                    for wgt, momres in zip(wgts, band_momres)
+                ], axis=0)
+            elif col in ["wmom_s2n"]:
+                val = np.sum([
+                    wgt * momres[i:i+1]["wmom_raw_mom"][0]
+                    for wgt, momres in zip(wgts, band_momres)
+                ])
+                val /= np.sqrt(np.sum([
+                    wgt**2 * momres[i:i+1]["wmom_raw_mom_cov"][0, 0, 0]
+                    for wgt, momres in zip(wgts, band_momres)
+                ]))
+            elif col in ["wmom_g"]:
+                val = np.sum([
+                    wgt * momres["wmom_raw_mom"][i:i+1, 2:]
+                    for wgt, momres in zip(wgts, band_momres)
+                ], axis=0)
+                val /= np.sum([
+                    wgt * momres["wmom_raw_mom"][i:i+1, 1]
+                    for wgt, momres in zip(wgts, band_momres)
+                ], axis=0)
+            else:
+                assert False, "col %s not in elif block for test!" % col
+
+            assert np.allclose(res[col], val), col
+
+    assert any_nonzero

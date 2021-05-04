@@ -14,11 +14,10 @@ class FitterBase(dict):
     we don't create a new instance of this for each fit, because
     the prior can be set once
     """
-    def __init__(self, config, rng, keep_flux=False):
+    def __init__(self, config, rng):
 
         self.rng = rng
         self.update(config)
-        self.keep_flux = keep_flux
 
     def go(self, mbobs_list):
         """
@@ -215,6 +214,13 @@ class Moments(FitterBase):
             ('psf_g', 'f8', 2),
             ('psf_T', 'f8'),
 
+            # raw mom is always Mf, Mr, Mp, Mc
+            # in ngmix this is flux, T, M1, M2
+            # e.g., e1 = Mp/T = M1/T and e2 = Mc/T = M2/T
+            # these moments are not normalized by the total flux
+            (n('raw_mom'), 'f8', 4),
+            (n('raw_mom_cov'), 'f8', (4, 4)),
+
             (n('flags'), 'i4'),
             (n('s2n'), 'f8'),
             (n('pars'), 'f8', npars),
@@ -224,17 +230,16 @@ class Moments(FitterBase):
             (n('T_err'), 'f8'),
             (n('T_ratio'), 'f8'),
         ]
-        if self.keep_flux:
-            if flux_nband > 1:
-                dt += [
-                    (n('flux'), 'f8', flux_nband),
-                    (n('flux_err'), 'f8', flux_nband),
-                ]
-            else:
-                dt += [
-                    (n('flux'), 'f8'),
-                    (n('flux_err'), 'f8'),
-                ]
+        if flux_nband > 1:
+            dt += [
+                (n('flux'), 'f8', flux_nband),
+                (n('flux_err'), 'f8', flux_nband),
+            ]
+        else:
+            dt += [
+                (n('flux'), 'f8'),
+                (n('flux_err'), 'f8'),
+            ]
 
         return dt
 
@@ -263,6 +268,18 @@ class Moments(FitterBase):
             output['psf_g'] = pres['g']
             output['psf_T'] = pres['T']
 
+        # we always keep the raw moments
+        # 5, 5, 2, 3 is the magic indexing from the ngmix moments code
+        output[n('raw_mom')] = np.array([
+            res['sums'][5],
+            res['sums'][4],
+            res['sums'][2],
+            res['sums'][3],
+        ])
+        for inew, iold in enumerate([5, 4, 2, 3]):
+            for jnew, jold in enumerate([5, 4, 2, 3]):
+                output[n('raw_mom_cov')][0, inew, jnew] = res['sums_cov'][iold, jold]
+
         if res['flags'] == 0:
             output[n('s2n')] = res['s2n']
             output[n('pars')] = res['pars']
@@ -270,9 +287,8 @@ class Moments(FitterBase):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            if self.keep_flux:
-                output[n('flux')] = res['flux']
-                output[n('flux_err')] = res['flux_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             if pres['flags'] == 0:
                 output[n('T_ratio')] = res['T']/pres['T']
@@ -328,19 +344,18 @@ class Moments(FitterBase):
 
 class MaxLike(Moments):
     """
-    measure simple weighted moments
+    Fit a model via maximum-likelihood.
     """
-    def __init__(self, config, rng, nband, keep_flux=False):
+    def __init__(self, config, rng, nband):
         self.update(config)
         self.rng = rng
         self.nband = nband
-        self.keep_flux = keep_flux
 
         self._setup_fitting()
 
     def go(self, mbobs_list):
         """
-        run moments measurements on all objects
+        Fit a model via maximum-likelihood.
 
         parameters
         ----------
@@ -415,9 +430,8 @@ class MaxLike(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            if self.keep_flux:
-                output[n('flux')] = res['flux']
-                output[n('flux_err')] = res['flux_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/psf_T_avg
 
@@ -481,18 +495,17 @@ def get_coellip_ngauss(name):
 
 class MaxLikeNgmixv1(Moments):
     """
-    measure simple weighted moments
+    Fit a model via maximum-likelihood.
     """
-    def __init__(self, config, rng, nband, keep_flux=False):
+    def __init__(self, config, rng, nband):
         self.update(config)
         self.rng = rng
         self.nband = nband
         self.bootstrapper = Bootstrapper(self.rng, self.nband)
-        self.keep_flux = keep_flux
 
     def go(self, mbobs_list):
         """
-        run moments measurements on all objects
+        Fit a model via maximum-likelihood.
 
         parameters
         ----------
@@ -571,9 +584,8 @@ class MaxLikeNgmixv1(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
-            if self.keep_flux:
-                output[n('flux')] = res['flux']
-                output[n('flux_err')] = res['flux_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/res['psf_T_avg']
 

@@ -1,11 +1,11 @@
 import numpy as np
-from .base import BaseMetadetect
+from .base import BaseLSSTMetadetect
 import esutil as eu
 import lsst.log
 from .sim_medsifier import SimMEDSifier
 
 
-class SimMetadetect(BaseMetadetect):
+class SimMetadetect(BaseLSSTMetadetect):
     def __init__(self, *args):
         super().__init__(*args)
 
