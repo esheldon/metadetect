@@ -5,9 +5,8 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
-from ngmix.util import get_ratio_error, get_ratio_var
 
-from .util import Namer
+from .util import Namer, get_ratio_var, get_ratio_error
 from . import detect
 from . import fitting
 from . import procflags
