@@ -451,12 +451,15 @@ class Metadetect(dict):
         raw_mom = np.zeros(4, dtype=np.float64)
         raw_mom_cov = np.zeros((4, 4), dtype=np.float64)
         psf_flags = 0
+        wgt_sum = 0.0
         for wgt, bres, is_shear_band in zip(wgts, all_bres, all_is_shear_band):
             res[n("band_flux_flags")] |= bres['flags'][0]
 
-            if is_shear_band:
+            if is_shear_band and (bres['flags'][0] & procflags.NOMOMENTS_FAILURE) == 0:
                 raw_mom += (wgt * bres[n('raw_mom')][0])
                 raw_mom_cov += (wgt**2 * bres[n('raw_mom_cov')][0])
+
+                wgt_sum += wgt
 
                 if (bres['flags'] & procflags.PSF_FAILURE) != 0:
                     psf_flags |= procflags.PSF_FAILURE
@@ -474,11 +477,17 @@ class Metadetect(dict):
 
         # we need the flux > 0, flux_var > 0, T > 0 and psf measurements
         if (
-            raw_mom[0] > 0
+            wgt_sum > 0
+            and raw_mom[0] > 0
             and raw_mom[1] > 0
             and raw_mom_cov[0, 0] > 0
             and psf_flags == 0
         ):
+            raw_mom /= wgt_sum
+            raw_mom_cov /= (wgt_sum**2)
+            res['psf_g'] /= wgt_sum
+            res['psf_T'] /= wgt_sum
+
             res[n('s2n')] = raw_mom[0] / np.sqrt(raw_mom_cov[0, 0])
             res[n('T')] = raw_mom[1] / raw_mom[0]
             res[n('T_err')] = get_ratio_error(
