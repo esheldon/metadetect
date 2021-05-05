@@ -102,7 +102,7 @@ try:
 except ImportError:
     def get_ratio_var(a, b, var_a, var_b, cov_ab):
         """
-        get (a/b)**2 and variance in mean of (a/b)
+        get variance in a/b
         """
 
         if b == 0:
@@ -115,7 +115,7 @@ except ImportError:
 
     def get_ratio_error(a, b, var_a, var_b, cov_ab):
         """
-        get a/b and error on a/b
+        get error on a/b
         """
         from math import sqrt
 
