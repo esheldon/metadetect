@@ -33,6 +33,9 @@ jobs:
           conda install --quiet --yes --file dev-requirements.txt
           conda install --quiet --yes joblib tqdm
 
+          conda uninstall ngmix --force -y
+          pip install git+https://github.com/esheldon/ngmix.git        
+
           python -m pip install -e .
 
       - name: test shear meas
