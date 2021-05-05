@@ -281,6 +281,8 @@ class Moments(FitterBase):
                 for jnew, jold in enumerate([5, 4, 2, 3]):
                     output[n('raw_mom_cov')][0, inew, jnew] \
                         = res['sums_cov'][iold, jold]
+        else:
+            flags |= procflags.OBJ_FAILURE
 
         if res['flags'] == 0:
             output[n('s2n')] = res['s2n']
