@@ -202,7 +202,7 @@ class Moments(FitterBase):
 
         return res
 
-    def _get_dtype(self, model, npars):
+    def _get_dtype(self, model, npars, flux_nband=1):
         n = Namer(front=model)
         dt = [
             ('flags', 'i4'),
@@ -214,6 +214,13 @@ class Moments(FitterBase):
             ('psf_g', 'f8', 2),
             ('psf_T', 'f8'),
 
+            # raw mom is always Mf, Mr, Mp, Mc
+            # in ngmix this is flux, T, M1, M2
+            # e.g., e1 = Mp/T = M1/T and e2 = Mc/T = M2/T
+            # these moments are not normalized by the total flux
+            (n('raw_mom'), 'f8', 4),
+            (n('raw_mom_cov'), 'f8', (4, 4)),
+
             (n('flags'), 'i4'),
             (n('s2n'), 'f8'),
             (n('pars'), 'f8', npars),
@@ -223,6 +230,16 @@ class Moments(FitterBase):
             (n('T_err'), 'f8'),
             (n('T_ratio'), 'f8'),
         ]
+        if flux_nband > 1:
+            dt += [
+                (n('flux'), 'f8', flux_nband),
+                (n('flux_err'), 'f8', flux_nband),
+            ]
+        else:
+            dt += [
+                (n('flux'), 'f8'),
+                (n('flux_err'), 'f8'),
+            ]
 
         return dt
 
@@ -251,6 +268,18 @@ class Moments(FitterBase):
             output['psf_g'] = pres['g']
             output['psf_T'] = pres['T']
 
+        # we always keep the raw moments
+        # 5, 4, 2, 3 is the magic indexing from the ngmix moments code
+        output[n('raw_mom')] = np.array([
+            res['sums'][5],
+            res['sums'][4],
+            res['sums'][2],
+            res['sums'][3],
+        ])
+        for inew, iold in enumerate([5, 4, 2, 3]):
+            for jnew, jold in enumerate([5, 4, 2, 3]):
+                output[n('raw_mom_cov')][0, inew, jnew] = res['sums_cov'][iold, jold]
+
         if res['flags'] == 0:
             output[n('s2n')] = res['s2n']
             output[n('pars')] = res['pars']
@@ -258,6 +287,8 @@ class Moments(FitterBase):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             if pres['flags'] == 0:
                 output[n('T_ratio')] = res['T']/pres['T']
@@ -313,7 +344,7 @@ class Moments(FitterBase):
 
 class MaxLike(Moments):
     """
-    measure simple weighted moments
+    Fit a model via maximum-likelihood.
     """
     def __init__(self, config, rng, nband):
         self.update(config)
@@ -324,7 +355,7 @@ class MaxLike(Moments):
 
     def go(self, mbobs_list):
         """
-        run moments measurements on all objects
+        Fit a model via maximum-likelihood.
 
         parameters
         ----------
@@ -381,7 +412,7 @@ class MaxLike(Moments):
         model = 'gauss'
         n = Namer(front=model)
 
-        dt = self._get_dtype(model, npars)
+        dt = self._get_dtype(model, npars, flux_nband=self.nband)
         output = np.zeros(1, dtype=dt)
 
         output['psfrec_flags'] = procflags.NO_ATTEMPT
@@ -399,6 +430,8 @@ class MaxLike(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/psf_T_avg
 
@@ -462,7 +495,7 @@ def get_coellip_ngauss(name):
 
 class MaxLikeNgmixv1(Moments):
     """
-    measure simple weighted moments
+    Fit a model via maximum-likelihood.
     """
     def __init__(self, config, rng, nband):
         self.update(config)
@@ -472,7 +505,7 @@ class MaxLikeNgmixv1(Moments):
 
     def go(self, mbobs_list):
         """
-        run moments measurements on all objects
+        Fit a model via maximum-likelihood.
 
         parameters
         ----------
@@ -533,7 +566,7 @@ class MaxLikeNgmixv1(Moments):
         model = 'gauss'
         n = Namer(front=model)
 
-        dt = self._get_dtype(model, npars)
+        dt = self._get_dtype(model, npars, flux_nband=self.nband)
         output = np.zeros(1, dtype=dt)
 
         output['psfrec_flags'] = procflags.NO_ATTEMPT
@@ -551,6 +584,8 @@ class MaxLikeNgmixv1(Moments):
             output[n('g_cov')] = res['g_cov']
             output[n('T')] = res['T']
             output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
 
             output[n('T_ratio')] = res['T']/res['psf_T_avg']
 
