@@ -43,6 +43,7 @@ jobs:
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[1000000.0-7-50]
 
       - name: install ngmix master
         shell: bash -l {0}
@@ -54,3 +55,4 @@ jobs:
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[1000000.0-7-50]

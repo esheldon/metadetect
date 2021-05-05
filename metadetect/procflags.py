@@ -2,6 +2,7 @@ NO_ATTEMPT = 2**0
 IMAGE_FLAGS = 2**1
 PSF_FAILURE = 2**2
 OBJ_FAILURE = 2**3
+NOMOMENTS_FAILURE = 2**4
 
 NAME_MAP = {
     'no_attempt': NO_ATTEMPT,
@@ -15,6 +16,9 @@ NAME_MAP = {
 
     OBJ_FAILURE: 'obj_failure',
     'obj_failure': OBJ_FAILURE,
+
+    NOMOMENTS_FAILURE: 'nomoments_failure',
+    'nomoments_failure': NOMOMENTS_FAILURE
 }
 
 

@@ -268,17 +268,21 @@ class Moments(FitterBase):
             output['psf_g'] = pres['g']
             output['psf_T'] = pres['T']
 
-        # we always keep the raw moments
-        # 5, 4, 2, 3 is the magic indexing from the ngmix moments code
-        output[n('raw_mom')] = np.array([
-            res['sums'][5],
-            res['sums'][4],
-            res['sums'][2],
-            res['sums'][3],
-        ])
-        for inew, iold in enumerate([5, 4, 2, 3]):
-            for jnew, jold in enumerate([5, 4, 2, 3]):
-                output[n('raw_mom_cov')][0, inew, jnew] = res['sums_cov'][iold, jold]
+        if 'sums' in res and 'sums_cov' in res:
+            # we always keep the raw moments as long as they are there
+            # 5, 4, 2, 3 is the magic indexing from the ngmix moments code
+            output[n('raw_mom')] = np.array([
+                res['sums'][5],
+                res['sums'][4],
+                res['sums'][2],
+                res['sums'][3],
+            ])
+            for inew, iold in enumerate([5, 4, 2, 3]):
+                for jnew, jold in enumerate([5, 4, 2, 3]):
+                    output[n('raw_mom_cov')][0, inew, jnew] \
+                        = res['sums_cov'][iold, jold]
+        else:
+            flags |= procflags.NOMOMENTS_FAILURE
 
         if res['flags'] == 0:
             output[n('s2n')] = res['s2n']
