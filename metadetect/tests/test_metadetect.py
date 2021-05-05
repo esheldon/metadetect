@@ -589,7 +589,7 @@ def test_metadetect_wavg_comp_single_band(nobj):
 @pytest.mark.parametrize('nband', [2, 3, 4])
 @pytest.mark.parametrize('nobj', [1, 2, 11])
 def test_metadetect_wavg_comp(nband, nobj):
-    """test that the weighted averages for shear are conmputed correctly."""
+    """test that the weighted averages for shear are computed correctly."""
     # sim the mbobs list
     band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
     band_momres = [
