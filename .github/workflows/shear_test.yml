@@ -31,10 +31,9 @@ jobs:
           conda config --set always_yes yes
           conda install --quiet --yes --file requirements.txt
           conda install --quiet --yes --file dev-requirements.txt
-          conda install --quiet --yes joblib tqdm
 
           conda uninstall ngmix --force -y
-          pip install git+https://github.com/esheldon/ngmix.git        
+          pip install git+https://github.com/esheldon/ngmix.git
 
           python -m pip install -e .
 
