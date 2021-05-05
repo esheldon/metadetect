@@ -282,7 +282,7 @@ class Moments(FitterBase):
                     output[n('raw_mom_cov')][0, inew, jnew] \
                         = res['sums_cov'][iold, jold]
         else:
-            flags |= procflags.OBJ_FAILURE
+            flags |= procflags.NOMOMENTS_FAILURE
 
         if res['flags'] == 0:
             output[n('s2n')] = res['s2n']
