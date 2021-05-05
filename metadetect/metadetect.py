@@ -470,11 +470,6 @@ class Metadetect(dict):
             band_flux.append(bres[n('flux')][0])
             band_flux_err.append(bres[n('flux_err')][0])
 
-        raw_mom /= wgt_sum
-        raw_mom_cov /= (wgt_sum**2)
-        res['psf_g'] /= wgt_sum
-        res['psf_T'] /= wgt_sum
-
         # now we set the flags as they would have been set in our moments code
         # any PSF failure in a shear band causes a non-zero flags value
         res['flags'] |= psf_flags
@@ -482,11 +477,17 @@ class Metadetect(dict):
 
         # we need the flux > 0, flux_var > 0, T > 0 and psf measurements
         if (
-            raw_mom[0] > 0
+            wgt_sum > 0
+            and raw_mom[0] > 0
             and raw_mom[1] > 0
             and raw_mom_cov[0, 0] > 0
             and psf_flags == 0
         ):
+            raw_mom /= wgt_sum
+            raw_mom_cov /= (wgt_sum**2)
+            res['psf_g'] /= wgt_sum
+            res['psf_T'] /= wgt_sum
+
             res[n('s2n')] = raw_mom[0] / np.sqrt(raw_mom_cov[0, 0])
             res[n('T')] = raw_mom[1] / raw_mom[0]
             res[n('T_err')] = get_ratio_error(
