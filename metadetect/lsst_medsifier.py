@@ -126,6 +126,9 @@ class LSSTMEDSifier(MEDSifier):
         result = detection_task.run(table, exposure)
         sources = result.sources
 
+        if False:
+            plot_positions(sources)
+
         # run the deblender
         deblend_task.run(exposure, sources)
 
@@ -184,3 +187,21 @@ class LSSTMEDSifier(MEDSifier):
         ntot = len(result.sources)
         self.log.debug('kept %d/%d non parents' % (nkeep, ntot))
         self.sources = kept_sources
+
+
+def plot_positions(sources):
+    import numpy as np
+    import matplotlib.pyplot as mplt
+    rows = np.zeros(len(sources))
+    cols = np.zeros(len(sources))
+    for i, rec in enumerate(sources):
+        peak = rec.getFootprint().getPeaks()[0]
+        orig_cen = peak.getI()
+
+        rows[i] = orig_cen.getY()
+        cols[i] = orig_cen.getX()
+
+    fig, ax = mplt.subplots()
+    ax.scatter(cols, rows)
+    fig.show()
+    input("hit a key")
