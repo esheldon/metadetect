@@ -68,7 +68,8 @@ def make_lsst_sim(seed):
     return sim_data
 
 
-def test_lsst_metadetect_smoke():
+@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
+def test_lsst_metadetect_smoke(cls):
     rng = np.random.RandomState(seed=116)
 
     tm0 = time.time()
@@ -92,7 +93,7 @@ def test_lsst_metadetect_smoke():
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    md = lsst_metadetect.LSSTMetadetect(CONFIG, coadd_mbobs, rng)
+    md = getattr(lsst_metadetect, cls)(CONFIG, coadd_mbobs, rng)
     md.go()
     res = md.result
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
