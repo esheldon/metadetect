@@ -256,7 +256,7 @@ def test_shear_meas(snr, ngrid, ntrial):
 
     tm0 = time.time()
 
-    print("\n")
+    print("")
 
     pres = []
     mres = []

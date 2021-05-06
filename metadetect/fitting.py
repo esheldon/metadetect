@@ -381,7 +381,6 @@ class MaxLike(Moments):
                     'flagstr': procflags.get_name(procflags.IMAGE_FLAGS),
                 }
             else:
-
                 try:
                     res = self.bootstrapper.go(obs=mbobs)
                 except BootPSFFailure:
