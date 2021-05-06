@@ -381,7 +381,6 @@ class MaxLike(Moments):
                     'flagstr': procflags.get_name(procflags.IMAGE_FLAGS),
                 }
             else:
-
                 try:
                     res = self.bootstrapper.go(obs=mbobs)
                 except BootPSFFailure:
@@ -408,9 +407,6 @@ class MaxLike(Moments):
         logger.debug(mess % (data['gauss_s2n'][0], data['gauss_T_ratio'][0]))
 
     def _get_output(self, obs, res):
-
-        psf_g_avg, psf_T_avg = get_psf_averages(mbobs=obs)
-
         npars = 6 + self.nband - 1
 
         model = 'gauss'
@@ -425,6 +421,8 @@ class MaxLike(Moments):
         output[n('flags')] = res['flags']
 
         if res['flags'] == 0:
+            psf_g_avg, psf_T_avg = get_psf_averages(mbobs=obs)
+
             output['psf_g'] = psf_g_avg
             output['psf_T'] = psf_T_avg
 

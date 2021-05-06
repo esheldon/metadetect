@@ -7,23 +7,18 @@ import pytest
 
 import ngmix
 
-if False:
-    lsst_metadetect = pytest.importorskip(
-        'metadetect.lsst_metadetect',
-        reason='LSST codes need the Rubin Obs. science pipelines',
-    )
-    descwl_shear_sims = pytest.importorskip(
-        'descwl_shear_sims.sim',
-        reason='LSST codes need the descwl_shear_sims module for testing',
-    )
-    descwl_coadd = pytest.importorskip(
-        'descwl_coadd',
-        reason='LSST codes need the descwl_coadd module for testing',
-    )
-else:
-    import descwl_shear_sims.sim
-    import descwl_coadd.coadd
-    import metadetect.lsst_metadetect
+lsst_metadetect = pytest.importorskip(
+    'metadetect.lsst_metadetect',
+    reason='LSST codes need the Rubin Obs. science pipelines',
+)
+sim = pytest.importorskip(
+    'descwl_shear_sims.sim',
+    reason='LSST codes need the descwl_shear_sims module for testing',
+)
+coadd = pytest.importorskip(
+    'descwl_coadd.coadd',
+    reason='LSST codes need the descwl_coadd module for testing',
+)
 
 CONFIG = {
     "model": "wmom",
@@ -51,7 +46,7 @@ def make_lsst_sim(seed):
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
 
-    galaxy_catalog = descwl_shear_sims.sim.FixedGalaxyCatalog(
+    galaxy_catalog = sim.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=20,
@@ -60,9 +55,9 @@ def make_lsst_sim(seed):
         hlr=0.5,
     )
 
-    psf = descwl_shear_sims.sim.make_psf(psf_type='gauss')
+    psf = sim.make_psf(psf_type='gauss')
 
-    sim_data = descwl_shear_sims.sim.make_sim(
+    sim_data = sim.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,
@@ -80,7 +75,7 @@ def test_lsst_metadetect_smoke():
 
     sim_data = make_lsst_sim(116)
     print("")
-    mbc = descwl_coadd.coadd.MultiBandCoadds(
+    mbc = coadd.MultiBandCoadds(
         rng=rng,
         interp_bright=False,
         replace_bright=False,
@@ -97,7 +92,7 @@ def test_lsst_metadetect_smoke():
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    md = metadetect.lsst_metadetect.LSSTMetadetect(CONFIG, coadd_mbobs, rng)
+    md = lsst_metadetect.LSSTMetadetect(CONFIG, coadd_mbobs, rng)
     md.go()
     res = md.result
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
