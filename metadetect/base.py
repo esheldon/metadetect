@@ -12,7 +12,7 @@ from .mfrac import measure_mfrac
 logger = logging.getLogger(__name__)
 
 
-class BaseLSSTTMetadetect(dict):
+class BaseLSSTMetadetect(dict):
     """
     meta-detect on the multi-band observations.
 

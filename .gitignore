@@ -109,3 +109,4 @@ venv.bak/
 *.pkl
 *.png
 *.fits.fz
+pytest_session.txt
