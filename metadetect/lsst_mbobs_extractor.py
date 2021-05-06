@@ -92,7 +92,7 @@ class MBObsExtractor(object):
         weight_type: string, optional
             Currently only 'weight' is supported
         """
-
+        from lsst.pex.exceptions import LengthError
         assert weight_type == 'weight'
 
         # rec = self.sources[iobj]
@@ -103,17 +103,20 @@ class MBObsExtractor(object):
             # TODO: run noise replacers here
 
             bbox = self._get_bbox(rec, imf)
-            subim = _get_padded_sub_image(imf, bbox)
-
-            if self.psfs is not None:
-                psf_im = self.psfs[im_index]
-            else:
-                psf_im = None
-
             obslist = ngmix.ObsList()
             try:
+                subim = _get_padded_sub_image(imf, bbox)
+
+                if self.psfs is not None:
+                    psf_im = self.psfs[im_index]
+                else:
+                    psf_im = None
+
                 obs = self._extract_obs(subim, rec, psf_im=psf_im)
                 obslist.append(obs)
+
+            except LengthError as err:
+                self.log.info('bad bbox: %s' % str(err))
             except ngmix.GMixFatalError as err:
                 self.log.info(str(err))
 
