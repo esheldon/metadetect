@@ -161,12 +161,19 @@ class Metadetect(dict):
             assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
 
             obs = obslist[0]
-            wgt = np.median(obs.weight)
+            msk = obs.weight > 0
+            if not np.any(msk):
+                wgt = 0
+            else:
+                wgt = np.median(obs.weight[msk])
             if hasattr(obs, "mfrac"):
                 mfrac += (obs.mfrac * wgt)
             wgts.append(wgt)
 
-        self.mfrac = mfrac / np.sum(wgts)
+        if np.sum(wgts) > 0:
+            self.mfrac = mfrac / np.sum(wgts)
+        else:
+            self.mfrac[:, :] = 1.0
 
     def _set_fitter(self):
         """
