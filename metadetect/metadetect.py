@@ -418,14 +418,18 @@ class Metadetect(dict):
         all_bres = []
         for i, obslist in enumerate(mbobs_list[ind]):
             # we assume a single input image for each band
-            msk = obslist[0].weight > 0
-            if not np.any(msk):
-                raise RuntimeError(
-                    "No non-zero weights for band %d in metadetect!" % i
-                )
-            # we use the median here since that matches what was done in
-            # metadetect.fitting.Moments when coadding there.
-            wgts.append(np.median(obslist[0].weight[msk]))
+            if len(obslist) > 0:
+                msk = obslist[0].weight > 0
+                if not np.any(msk):
+                    # we will flag this later
+                    wgts.append(0)
+                else:
+                    # we use the median here since that matches what was done in
+                    # metadetect.fitting.Moments when coadding there.
+                    wgts.append(np.median(obslist[0].weight[msk]))
+            else:
+                # we will flag this later
+                wgts.append(0)
             all_bres.append(band_res[i][ind:ind+1])
 
         if nonshear_mbobs_list is not None:
@@ -437,10 +441,16 @@ class Metadetect(dict):
         # the weights here are for all bands for both shear and nonshear
         # measurements. we only normalize them to unity for sums over the shear
         # bands which is everything up to self.nband
-        wgts[0:self.nband] = wgts[0:self.nband] / np.sum(wgts[0:self.nband])
+        nrm = np.sum(wgts[0:self.nband])
+        if nrm != 0:
+            wgts[0:self.nband] = wgts[0:self.nband] / nrm
+        else:
+            wgts[0:self.nband] = 0
         return wgts, all_bres
 
-    def _compute_wavg_fitter_mbobs_sep(self, wgts, all_bres, all_is_shear_band):
+    def _compute_wavg_fitter_mbobs_sep(
+        self, wgts, all_bres, all_is_shear_band, mbobs, nonshear_mbobs=None,
+    ):
         # compute the weighted averages for various columns
         tot_nband = self.nband + self.nonshear_nband
         n = Namer(front=self['model'])
@@ -475,9 +485,22 @@ class Metadetect(dict):
         res['flags'] |= psf_flags
         res[n('flags')] |= psf_flags
 
+        # we flag anything where not all of the bands have an obs or one
+        # of the shear bands has zero weight
+        has_all_bands = (
+            all(len(obsl) > 0 for obsl in mbobs)
+            and np.all(wgts[0:self.nband] > 0)
+        )
+        if nonshear_mbobs is not None:
+            has_all_bands = (
+                has_all_bands
+                and all(len(obsl) > 0 for obsl in nonshear_mbobs)
+            )
+
         # we need the flux > 0, flux_var > 0, T > 0 and psf measurements
         if (
-            wgt_sum > 0
+            has_all_bands
+            and wgt_sum > 0
             and raw_mom[0] > 0
             and raw_mom[1] > 0
             and raw_mom_cov[0, 0] > 0
@@ -547,8 +570,15 @@ class Metadetect(dict):
             wgts, all_bres = self._extract_band_ind_res_fitter_mbobs_sep(
                 ind, mbobs_list, nonshear_mbobs_list, band_res
             )
+            shear_mbobs = mbobs_list[ind]
+            nonshear_mbobs = (
+                nonshear_mbobs_list[ind]
+                if nonshear_mbobs_list is not None
+                else None
+            )
             tot_res[ind] = self._compute_wavg_fitter_mbobs_sep(
                 wgts, all_bres, all_is_shear_band,
+                shear_mbobs, nonshear_mbobs=nonshear_mbobs,
             )
 
         if len(tot_res) == 0:
