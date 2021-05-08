@@ -688,7 +688,7 @@ def test_metadetect_wavg_flagging():
     """test that the weighted averages for shear are computed correctly."""
     # sim the mbobs list
     nband = 2
-    nobj = 3
+    nobj = 4
     band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
     band_momres = [
         Moments(
@@ -718,16 +718,20 @@ def test_metadetect_wavg_flagging():
         )
         wgts /= np.sum(wgts)
 
+        nonshear_mbobs = None
         if i == 0:
             shear_mbobs[1] = ngmix.ObsList()
         elif i == 1:
             wgts[0] = 0.0
+        elif i == 2:
+            nonshear_mbobs = ngmix.MultiBandObsList()
+            nonshear_mbobs.append(ngmix.ObsList())
 
         res = mdet._compute_wavg_fitter_mbobs_sep(
             wgts, all_bres, all_is_shear_band,
-            shear_mbobs,
+            shear_mbobs, nonshear_mbobs=nonshear_mbobs,
         )
 
-        if i == 0 or i == 1:
+        if i in [0, 1, 2]:
             assert (res['flags'] & procflags.OBJ_FAILURE) != 0
             assert (res['wmom_flags'] & procflags.OBJ_FAILURE) != 0
