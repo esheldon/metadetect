@@ -442,7 +442,7 @@ class Metadetect(dict):
         # measurements. we only normalize them to unity for sums over the shear
         # bands which is everything up to self.nband
         nrm = np.sum(wgts[0:self.nband])
-        if nrm != 0:
+        if nrm > 0:
             wgts[0:self.nband] = wgts[0:self.nband] / nrm
         else:
             wgts[0:self.nband] = 0
