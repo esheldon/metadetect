@@ -436,6 +436,33 @@ def test_metadetect_mfrac(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_mfrac_all(model):
+    """
+    test full metadetection w/ mfrac
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    tm0 = time.time()
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].mfrac = np.ones_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
 @pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
 def test_metadetect_flux(model, nband, nshear):
     """
