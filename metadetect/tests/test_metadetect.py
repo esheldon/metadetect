@@ -444,7 +444,6 @@ def test_metadetect_mfrac_all(model):
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
 
-    tm0 = time.time()
 
     sim = Sim(rng)
     config = {}
