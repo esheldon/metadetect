@@ -148,6 +148,7 @@ class Sim(dict):
                 ormask=ormask,
                 jacobian=self._jacobian,
                 psf=self._psf_obs.copy(),
+                ignore_zero_weight=False,
             )
 
             obslist = ngmix.ObsList()
@@ -438,7 +439,7 @@ def test_metadetect_mfrac(model):
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
 def test_metadetect_mfrac_all(model):
     """
-    test full metadetection w/ mfrac
+    test full metadetection w/ mfrac all 1
     """
 
     ntrial = 1
@@ -455,6 +456,31 @@ def test_metadetect_mfrac_all(model):
         mbobs = sim.get_mbobs()
         for band in range(len(mbobs)):
             mbobs[band][0].mfrac = np.ones_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_all(model):
+    """
+    test full metadetection w/ all zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].weight = np.ones_like(mbobs[band][0].image)
 
         res = metadetect.do_metadetect(config, mbobs, rng)
         assert res is None

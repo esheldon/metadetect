@@ -219,7 +219,13 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
-        if not np.any(self.mfrac < 1):
+        all_zero_weight = True
+        for obsl in self.mbobs:
+            for obs in obsl:
+                if np.any(obs.weight > 0):
+                    all_zero_weight = False
+
+        if not np.any(self.mfrac < 1) or all_zero_weight:
             self._result = None
             return
 
