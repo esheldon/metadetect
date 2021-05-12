@@ -487,6 +487,32 @@ def test_metadetect_zero_weight_all(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_some(model):
+    """
+    test full metadetection w/ some zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            if band == 1:
+                mbobs[band][0].weight = np.ones_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is not None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
 @pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
 def test_metadetect_flux(model, nband, nshear):
     """
