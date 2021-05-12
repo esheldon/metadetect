@@ -219,6 +219,10 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
+        if not np.any(mfrac < 1):
+            self._result = None
+            return
+
         try:
             odict = self._get_all_metacal(self.mbobs)
         except BootPSFFailure:
