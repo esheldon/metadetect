@@ -1,4 +1,4 @@
-__version__ = '0.3.4'
+from ._version import __version__  # noqa
 
 from .metadetect import (  # noqa
     do_metadetect,

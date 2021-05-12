@@ -219,13 +219,17 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
-        all_zero_weight = True
+        any_all_zero_weight = False
+        any_all_masked = False
         for obsl in self.mbobs:
             for obs in obsl:
-                if np.any(obs.weight > 0):
-                    all_zero_weight = False
+                if np.all(obs.weight == 0):
+                    any_all_zero_weight = True
 
-        if not np.any(self.mfrac < 1) or all_zero_weight:
+                if np.all((obs.bmask & self['maskflags']) != 0):
+                    any_all_masked = True
+
+        if not np.any(self.mfrac < 1) or any_all_zero_weight or any_all_masked:
             self._result = None
             return
 
