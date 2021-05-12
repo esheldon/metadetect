@@ -171,9 +171,11 @@ class Metadetect(dict):
             wgts.append(wgt)
 
         if np.sum(wgts) > 0:
-            self.mfrac = mfrac / np.sum(wgts)
+            mfrac = mfrac / np.sum(wgts)
         else:
-            self.mfrac[:, :] = 1.0
+            mfrac[:, :] = 1.0
+
+        self.mfrac = mfrac
 
     def _set_fitter(self):
         """
