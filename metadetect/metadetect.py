@@ -219,7 +219,7 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
-        if not np.any(mfrac < 1):
+        if not np.any(self.mfrac < 1):
             self._result = None
             return
 
