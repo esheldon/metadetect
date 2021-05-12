@@ -148,6 +148,7 @@ class Sim(dict):
                 ormask=ormask,
                 jacobian=self._jacobian,
                 psf=self._psf_obs.copy(),
+                ignore_zero_weight=False,
             )
 
             obslist = ngmix.ObsList()
@@ -373,33 +374,6 @@ def test_metadetect(model):
     print("time per:", total_time/ntrial)
 
 
-def test_metadetect_masking():
-    """
-    test full metadetection with masking
-    """
-
-    ntrial = 1
-    rng = np.random.RandomState(seed=116)
-
-    sim = Sim(rng)
-    config = {}
-    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config["model"] = "wmom"
-
-    for trial in range(ntrial):
-        print("trial: %d/%d" % (trial+1, ntrial))
-
-        mbobs = sim.get_mbobs()
-
-        for obslist in mbobs:
-            for obs in obslist:
-                obs.bmask = obs.bmask | config['maskflags']
-
-        res = metadetect.do_metadetect(config, mbobs, rng)
-        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
-            assert res[shear] is None
-
-
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
 def test_metadetect_mfrac(model):
     """
@@ -433,6 +407,137 @@ def test_metadetect_mfrac(model):
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_mfrac_all(model):
+    """
+    test full metadetection w/ mfrac all 1
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].mfrac = np.ones_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_all(model):
+    """
+    test full metadetection w/ all zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].weight = np.zeros_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_some(model):
+    """
+    test full metadetection w/ some zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            if band == 1:
+                mbobs[band][0].weight = np.zeros_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_maskflags_all(model):
+    """
+    test full metadetection w/ all bmask all maskflags
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].bmask = np.ones_like(
+                mbobs[band][0].image, dtype=np.int32
+            )
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_bmask_some(model):
+    """
+    test full metadetection w/ some bmask all maskflags
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            if band == 1:
+                mbobs[band][0].bmask = np.ones_like(
+                    mbobs[band][0].image, dtype=np.int32
+                )
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])

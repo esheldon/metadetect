@@ -171,9 +171,11 @@ class Metadetect(dict):
             wgts.append(wgt)
 
         if np.sum(wgts) > 0:
-            self.mfrac = mfrac / np.sum(wgts)
+            mfrac = mfrac / np.sum(wgts)
         else:
-            self.mfrac[:, :] = 1.0
+            mfrac[:, :] = 1.0
+
+        self.mfrac = mfrac
 
     def _set_fitter(self):
         """
@@ -217,6 +219,20 @@ class Metadetect(dict):
         make sheared versions of the images, run detection and measurements on
         each
         """
+        any_all_zero_weight = False
+        any_all_masked = False
+        for obsl in self.mbobs:
+            for obs in obsl:
+                if np.all(obs.weight == 0):
+                    any_all_zero_weight = True
+
+                if np.all((obs.bmask & self['maskflags']) != 0):
+                    any_all_masked = True
+
+        if not np.any(self.mfrac < 1) or any_all_zero_weight or any_all_masked:
+            self._result = None
+            return
+
         try:
             odict = self._get_all_metacal(self.mbobs)
         except BootPSFFailure:
