@@ -12,7 +12,7 @@ lsst_metadetect = pytest.importorskip(
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 sim = pytest.importorskip(
-    'descwl_shear_sims.sim',
+    'descwl_shear_sims',
     reason='LSST codes need the descwl_shear_sims module for testing',
 )
 coadd = pytest.importorskip(
