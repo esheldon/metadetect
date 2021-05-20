@@ -346,6 +346,92 @@ class Moments(FitterBase):
         return isok
 
 
+class KSigmaMoments(Moments):
+    """
+    measure pre-PSF 'ksigma' weighted moments following Bernstein et al. but
+    in real-space.
+    """
+    def __init__(self, *args, **kw):
+        super(Moments, self).__init__(*args, **kw)
+        self._set_fitter()
+
+    def _print_result(self, data):
+        mess = "        ksigma s2n: %g Trat: %g"
+        logger.debug(mess % (data['ksigma_s2n'][0], data['ksigma_T_ratio'][0]))
+
+    def _measure_moments(self, obs):
+        """
+        measure weighted moments
+        """
+
+        if obs.has_psf():
+            res = self._fitter.go(obs)
+        else:
+            res = self._fitter.go(obs, no_psf=True)
+
+        res['numiter'] = 1
+        res['g'] = res['e']
+        res['g_cov'] = res['e_cov']
+        res['g_err'] = res['e_err']
+
+        return res
+
+    def _get_output(self, res, pres):
+
+        npars = 6
+
+        model = 'ksigma'
+        n = Namer(front=model)
+
+        dt = self._get_dtype(model, npars)
+        output = np.zeros(1, dtype=dt)
+
+        output['psfrec_flags'] = procflags.NO_ATTEMPT
+
+        output[n('flags')] = res['flags']
+
+        flags = 0
+        if pres['flags'] != 0:
+            flags |= procflags.PSF_FAILURE
+
+        if res['flags'] != 0:
+            flags |= procflags.OBJ_FAILURE
+
+        if pres['flags'] == 0:
+            output['psf_g'] = pres['g']
+            output['psf_T'] = pres['T']
+
+        if 'mom' in res and 'mom_cov' in res:
+            # we always keep the raw moments as long as they are there
+            # 5, 4, 2, 3 is the magic indexing from the ngmix moments code
+            output[n('raw_mom')] = res['mom']
+            output[n('raw_mom_cov')][:] = res['mom_cov']
+        else:
+            flags |= procflags.NOMOMENTS_FAILURE
+
+        if res['flags'] == 0:
+            output[n('s2n')] = res['s2n']
+            output[n('pars')] = res['pars']
+            output[n('g')] = res['g']
+            output[n('g_cov')] = res['g_cov']
+            output[n('T')] = res['T']
+            output[n('T_err')] = res['T_err']
+            output[n('flux')] = res['flux']
+            output[n('flux_err')] = res['flux_err']
+
+            if pres['flags'] == 0:
+                output[n('T_ratio')] = res['T']/pres['T']
+
+        output['flags'] = flags
+        return output
+
+    def _set_fitter(self):
+        wpars = self['weight']
+        from ngmix.ksigmamom import KSigmaMom
+
+        self._fitter = KSigmaMom(wpars['fwhm'])
+
+
 class MaxLike(Moments):
     """
     Fit a model via maximum-likelihood.

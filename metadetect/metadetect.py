@@ -187,6 +187,10 @@ class Metadetect(dict):
             self._fitter = fitting.Moments(self, self.rng)
             if self.nonshear_mbobs is not None:
                 self._nonshear_fitter = fitting.Moments(self, self.rng)
+        elif self['model'] == 'ksigma':
+            self._fitter = fitting.KSigmaMoments(self, self.rng)
+            if self.nonshear_mbobs is not None:
+                self._nonshear_fitter = fitting.KSigmaMoments(self, self.rng)
         elif self['model'] == 'gauss':
             if ngmix.__version__[0:2] == 'v1':
                 self._fitter = fitting.MaxLikeNgmixv1(self, self.rng, self.nband)
@@ -300,7 +304,7 @@ class Metadetect(dict):
         return res
 
     def _run_fitter(self, mbobs_list, nonshear_mbobs_list=None):
-        if self['model'] in ['wmom']:
+        if self['model'] in ['wmom', 'ksigma']:
             return self._run_fitter_mbobs_sep(
                 mbobs_list, nonshear_mbobs_list=nonshear_mbobs_list,
             )

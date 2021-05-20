@@ -12,38 +12,38 @@ import ngmix
 from .. import detect
 from .. import metadetect
 from .. import procflags
-from ..fitting import Moments
+from ..fitting import Moments, KSigmaMoments
 from .sim import Sim, make_mbobs_sim
 
 TEST_METADETECT_CONFIG = {
     "model": "wmom",
 
-    'weight': {
-        'fwhm': 1.2,  # arcsec
+    "weight": {
+        "fwhm": 1.2,  # arcsec
     },
 
-    'metacal': {
-        'psf': 'fitgauss',
-        'types': ['noshear', '1p', '1m', '2p', '2m'],
+    "metacal": {
+        "psf": "fitgauss",
+        "types": ["noshear", "1p", "1m", "2p", "2m"],
     },
 
-    'sx': {
+    "sx": {
         # in sky sigma
         # DETECT_THRESH
-        'detect_thresh': 0.8,
+        "detect_thresh": 0.8,
 
         # Minimum contrast parameter for deblending
         # DEBLEND_MINCONT
-        'deblend_cont': 0.00001,
+        "deblend_cont": 0.00001,
 
         # minimum number of pixels above threshold
         # DETECT_MINAREA: 6
-        'minarea': 4,
+        "minarea": 4,
 
-        'filter_type': 'conv',
+        "filter_type": "conv",
 
         # 7x7 convolution mask of a gaussian PSF with FWHM = 3.0 pixels.
-        'filter_kernel': [
+        "filter_kernel": [
             [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],  # noqa
             [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],  # noqa
             [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],  # noqa
@@ -54,34 +54,34 @@ TEST_METADETECT_CONFIG = {
         ]
     },
 
-    'meds': {
-        'min_box_size': 32,
-        'max_box_size': 256,
+    "meds": {
+        "min_box_size": 32,
+        "max_box_size": 256,
 
-        'box_type': 'iso_radius',
+        "box_type": "iso_radius",
 
-        'rad_min': 4,
-        'rad_fac': 2,
-        'box_padding': 2,
+        "rad_min": 4,
+        "rad_fac": 2,
+        "box_padding": 2,
     },
 
     # needed for PSF symmetrization
-    'psf': {
-        'model': 'gauss',
+    "psf": {
+        "model": "gauss",
 
-        'ntry': 2,
+        "ntry": 2,
 
-        'lm_pars': {
-            'maxfev': 2000,
-            'ftol': 1.0e-5,
-            'xtol': 1.0e-5,
+        "lm_pars": {
+            "maxfev": 2000,
+            "ftol": 1.0e-5,
+            "xtol": 1.0e-5,
         }
     },
 
     # check for an edge hit
-    'bmask_flags': 2**30,
+    "bmask_flags": 2**30,
 
-    'maskflags': 2**0,
+    "maskflags": 2**0,
 }
 
 
@@ -102,7 +102,7 @@ def _show_mbobs(mer):
         [rgb,
          mer.seg,
          mer.detim],
-        titles=['image', 'seg', 'detim'],
+        titles=["image", "seg", "detim"],
     )
 
 
@@ -126,8 +126,8 @@ def test_detect(ntrial=1, show=False):
         mbobs = sim.get_mbobs()
         mer = detect.MEDSifier(
             mbobs=mbobs,
-            sx_config=config['sx'],
-            meds_config=config['meds'],
+            sx_config=config["sx"],
+            meds_config=config["meds"],
         )
 
         mbm = mer.get_multiband_meds()
@@ -138,7 +138,7 @@ def test_detect(ntrial=1, show=False):
         if show:
             _show_mbobs(mer)
             if ntrial > 1 and trial != (ntrial-1):
-                if 'q' == input("hit a key: "):
+                if "q" == input("hit a key: "):
                     return
 
     total_time = time.time()-tm0
@@ -164,18 +164,18 @@ def test_detect_masking(ntrial=1, show=False):
         mbobs = sim.get_mbobs()
         for obslist in mbobs:
             for obs in obslist:
-                obs.bmask = obs.bmask | config['maskflags']
+                obs.bmask = obs.bmask | config["maskflags"]
 
         mer = detect.MEDSifier(
             mbobs=mbobs,
-            sx_config=config['sx'],
-            meds_config=config['meds'],
-            maskflags=config['maskflags'],
+            sx_config=config["sx"],
+            meds_config=config["meds"],
+            maskflags=config["maskflags"],
         )
         assert mer.cat.size == 0
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect(model):
     """
     test full metadetection
@@ -204,7 +204,7 @@ def test_metadetect(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
@@ -239,7 +239,7 @@ def test_metadetect_mfrac(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_mfrac_all(model):
     """
     test full metadetection w/ mfrac all 1
@@ -264,7 +264,7 @@ def test_metadetect_mfrac_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_zero_weight_all(model):
     """
     test full metadetection w/ all zero weight
@@ -289,7 +289,7 @@ def test_metadetect_zero_weight_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_zero_weight_some(model):
     """
     test full metadetection w/ some zero weight
@@ -315,7 +315,7 @@ def test_metadetect_zero_weight_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_maskflags_all(model):
     """
     test full metadetection w/ all bmask all maskflags
@@ -342,7 +342,7 @@ def test_metadetect_maskflags_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 def test_metadetect_bmask_some(model):
     """
     test full metadetection w/ some bmask all maskflags
@@ -370,7 +370,7 @@ def test_metadetect_bmask_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gauss"])
+@pytest.mark.parametrize("model", ["wmom", "gauss", "ksigma"])
 @pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
 def test_metadetect_flux(model, nband, nshear):
     """
@@ -385,7 +385,7 @@ def test_metadetect_flux(model, nband, nshear):
     sim = Sim(rng, config={"nband": nband})
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config['model'] = model
+    config["model"] = model
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
@@ -416,24 +416,25 @@ def test_metadetect_flux(model, nband, nshear):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize('nobj', [1, 2, 11])
-def test_metadetect_wavg_comp_single_band(nobj):
+@pytest.mark.parametrize("fitter,model", [(Moments, "wmom"), (KSigmaMoments, "ksigma")])
+@pytest.mark.parametrize("nobj", [1, 2, 11])
+def test_metadetect_wavg_comp_single_band(nobj, fitter, model):
     """test that computing the weighted averages with one band gives the
     same result as the inputs.
     """
     # sim the mbobs list
     mbobs_list = make_mbobs_sim(134341, nobj, 1)[0]
-    momres = Moments(
+    momres = fitter(
         {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
         rng=np.random.RandomState(seed=12),
     ).go(mbobs_list)
 
     # now we make an Metadetect object
     # note we are making a sim here but not using it
-    sim = Sim(np.random.RandomState(seed=329058), config={'nband': 1})
+    sim = Sim(np.random.RandomState(seed=329058), config={"nband": 1})
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config["model"] = 'wmom'
+    config["model"] = model
     sim_mbobs = sim.get_mbobs()
     mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
 
@@ -446,8 +447,9 @@ def test_metadetect_wavg_comp_single_band(nobj):
             wgts, all_bres, all_is_shear_band, mbobs
         )
         for col in [
-            "wmom_T", "wmom_T_err", 'wmom_g', "wmom_g_cov", "wmom_s2n",
-            "flags", "wmom_T_ratio", "wmom_flags", "psf_T", "psf_g",
+            f"{model}_T", f"{model}_T_err", f"{model}_g", f"{model}_g_cov",
+            f"{model}_s2n", "flags", f"{model}_T_ratio", f"{model}_flags",
+            "psf_T", "psf_g",
         ]:
             if np.any(res[col] > 0):
                 any_nonzero = True
@@ -456,14 +458,15 @@ def test_metadetect_wavg_comp_single_band(nobj):
     assert any_nonzero
 
 
-@pytest.mark.parametrize('nband', [2, 3, 4])
-@pytest.mark.parametrize('nobj', [1, 2, 11])
-def test_metadetect_wavg_comp(nband, nobj):
+@pytest.mark.parametrize("fitter,model", [(Moments, "wmom"), (KSigmaMoments, "ksigma")])
+@pytest.mark.parametrize("nband", [2, 3, 4])
+@pytest.mark.parametrize("nobj", [1, 2, 11])
+def test_metadetect_wavg_comp(nband, nobj, fitter, model):
     """test that the weighted averages for shear are computed correctly."""
     # sim the mbobs list
     band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
     band_momres = [
-        Moments(
+        fitter(
             {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
             rng=np.random.RandomState(seed=12),
         ).go(mbobs_list)
@@ -472,10 +475,10 @@ def test_metadetect_wavg_comp(nband, nobj):
 
     # now we make an Metadetect object
     # note we are making a sim here but not using it
-    sim = Sim(np.random.RandomState(seed=329058), config={'nband': nband})
+    sim = Sim(np.random.RandomState(seed=329058), config={"nband": nband})
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config["model"] = 'wmom'
+    config["model"] = model
     sim_mbobs = sim.get_mbobs()
     mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
 
@@ -496,9 +499,9 @@ def test_metadetect_wavg_comp(nband, nobj):
         )
         # check a subset and don't go crazy
         for col in [
-            "flags", "wmom_flags", "psf_T", "psf_g",
-            "wmom_band_flux", "wmom_band_flux_err",
-            "wmom_s2n", "wmom_g", "wmom_T",
+            "flags", f"{model}_flags", "psf_T", "psf_g",
+            f"{model}_band_flux", f"{model}_band_flux_err",
+            f"{model}_s2n", f"{model}_g", f"{model}_T",
         ]:
             if np.any(res[col] > 0):
                 any_nonzero = True
@@ -507,40 +510,40 @@ def test_metadetect_wavg_comp(nband, nobj):
                 val = np.sum([
                     wgt * momres[col][i:i+1] for wgt, momres in zip(wgts, band_momres)
                 ], axis=0)
-            elif col in ["flags", "wmom_flags"]:
+            elif col in ["flags", f"{model}_flags"]:
                 val = 0
                 for momres in band_momres:
                     val |= momres[col][i:i+1]
-            elif col in ["wmom_band_flux", "wmom_band_flux_err"]:
+            elif col in [f"{model}_band_flux", f"{model}_band_flux_err"]:
                 val = np.array([
                     momres[col.replace("band_", "")][i:i+1]
                     for momres in band_momres
                 ]).T
-            elif col in ["wmom_T"]:
+            elif col in [f"{model}_T"]:
                 val = np.sum([
-                    wgt * momres["wmom_raw_mom"][i:i+1, 1]
+                    wgt * momres[f"{model}_raw_mom"][i:i+1, 1]
                     for wgt, momres in zip(wgts, band_momres)
                 ], axis=0)
                 val /= np.sum([
-                    wgt * momres["wmom_raw_mom"][i:i+1, 0]
+                    wgt * momres[f"{model}_raw_mom"][i:i+1, 0]
                     for wgt, momres in zip(wgts, band_momres)
                 ], axis=0)
-            elif col in ["wmom_s2n"]:
+            elif col in [f"{model}_s2n"]:
                 val = np.sum([
-                    wgt * momres["wmom_raw_mom"][i, 0]
+                    wgt * momres[f"{model}_raw_mom"][i, 0]
                     for wgt, momres in zip(wgts, band_momres)
                 ])
                 val /= np.sqrt(np.sum([
-                    wgt**2 * momres["wmom_raw_mom_cov"][i, 0, 0]
+                    wgt**2 * momres[f"{model}_raw_mom_cov"][i, 0, 0]
                     for wgt, momres in zip(wgts, band_momres)
                 ]))
-            elif col in ["wmom_g"]:
+            elif col in [f"{model}_g"]:
                 val = np.sum([
-                    wgt * momres["wmom_raw_mom"][i:i+1, 2:]
+                    wgt * momres[f"{model}_raw_mom"][i:i+1, 2:]
                     for wgt, momres in zip(wgts, band_momres)
                 ], axis=0)
                 val /= np.sum([
-                    wgt * momres["wmom_raw_mom"][i:i+1, 1]
+                    wgt * momres[f"{model}_raw_mom"][i:i+1, 1]
                     for wgt, momres in zip(wgts, band_momres)
                 ], axis=0)
             else:
@@ -551,14 +554,15 @@ def test_metadetect_wavg_comp(nband, nobj):
     assert any_nonzero
 
 
-def test_metadetect_wavg_flagging():
+@pytest.mark.parametrize("fitter,model", [(Moments, "wmom"), (KSigmaMoments, "ksigma")])
+def test_metadetect_wavg_flagging(fitter, model):
     """test that the weighted averages for shear are computed correctly."""
     # sim the mbobs list
     nband = 2
     nobj = 4
     band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
     band_momres = [
-        Moments(
+        fitter(
             {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
             rng=np.random.RandomState(seed=12),
         ).go(mbobs_list)
@@ -567,10 +571,10 @@ def test_metadetect_wavg_flagging():
 
     # now we make an Metadetect object
     # note we are making a sim here but not using it
-    sim = Sim(np.random.RandomState(seed=329058), config={'nband': nband})
+    sim = Sim(np.random.RandomState(seed=329058), config={"nband": nband})
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config["model"] = 'wmom'
+    config["model"] = model
     sim_mbobs = sim.get_mbobs()
     mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
 
@@ -600,5 +604,5 @@ def test_metadetect_wavg_flagging():
         )
 
         if i in [0, 1, 2]:
-            assert (res['flags'] & procflags.OBJ_FAILURE) != 0
-            assert (res['wmom_flags'] & procflags.OBJ_FAILURE) != 0
+            assert (res["flags"] & procflags.OBJ_FAILURE) != 0
+            assert (res[f"{model}_flags"] & procflags.OBJ_FAILURE) != 0
