@@ -69,6 +69,7 @@ class Sim(dict):
                 jacobian=self._jacobian,
                 psf=self._psf_obs.copy(),
                 noise=nse,
+                ignore_zero_weight=False,
             )
 
             obslist = ngmix.ObsList()
