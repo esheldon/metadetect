@@ -11,6 +11,7 @@ import ngmix
 
 from .. import detect
 from .. import metadetect
+from .. import procflags
 from ..fitting import Moments
 from .sim import Sim, make_mbobs_sim
 
@@ -203,33 +204,6 @@ def test_metadetect(model):
     print("time per:", total_time/ntrial)
 
 
-def test_metadetect_masking():
-    """
-    test full metadetection with masking
-    """
-
-    ntrial = 1
-    rng = np.random.RandomState(seed=116)
-
-    sim = Sim(rng)
-    config = {}
-    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
-    config["model"] = "wmom"
-
-    for trial in range(ntrial):
-        print("trial: %d/%d" % (trial+1, ntrial))
-
-        mbobs = sim.get_mbobs()
-
-        for obslist in mbobs:
-            for obs in obslist:
-                obs.bmask = obs.bmask | config['maskflags']
-
-        res = metadetect.do_metadetect(config, mbobs, rng)
-        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
-            assert res[shear] is None
-
-
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
 def test_metadetect_mfrac(model):
     """
@@ -263,6 +237,137 @@ def test_metadetect_mfrac(model):
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_mfrac_all(model):
+    """
+    test full metadetection w/ mfrac all 1
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].mfrac = np.ones_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_all(model):
+    """
+    test full metadetection w/ all zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].weight = np.zeros_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_zero_weight_some(model):
+    """
+    test full metadetection w/ some zero weight
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            if band == 1:
+                mbobs[band][0].weight = np.zeros_like(mbobs[band][0].image)
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_maskflags_all(model):
+    """
+    test full metadetection w/ all bmask all maskflags
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            mbobs[band][0].bmask = np.ones_like(
+                mbobs[band][0].image, dtype=np.int32
+            )
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
+
+
+@pytest.mark.parametrize("model", ["wmom", "gauss"])
+def test_metadetect_bmask_some(model):
+    """
+    test full metadetection w/ some bmask all maskflags
+    """
+
+    ntrial = 1
+    rng = np.random.RandomState(seed=53341)
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        for band in range(len(mbobs)):
+            if band == 1:
+                mbobs[band][0].bmask = np.ones_like(
+                    mbobs[band][0].image, dtype=np.int32
+                )
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        assert res is None
 
 
 @pytest.mark.parametrize("model", ["wmom", "gauss"])
@@ -337,7 +442,9 @@ def test_metadetect_wavg_comp_single_band(nobj):
     any_nonzero = False
     for i, mbobs in enumerate(mbobs_list):
         all_bres = [momres[i:i+1]]
-        res = mdet._compute_wavg_fitter_mbobs_sep(wgts, all_bres, all_is_shear_band)
+        res = mdet._compute_wavg_fitter_mbobs_sep(
+            wgts, all_bres, all_is_shear_band, mbobs
+        )
         for col in [
             "wmom_T", "wmom_T_err", 'wmom_g', "wmom_g_cov", "wmom_s2n",
             "flags", "wmom_T_ratio", "wmom_flags", "psf_T", "psf_g",
@@ -375,18 +482,23 @@ def test_metadetect_wavg_comp(nband, nobj):
     all_is_shear_band = [True] * nband
     any_nonzero = False
     for i in range(nobj):
+        shear_mbobs = ngmix.MultiBandObsList()
+        for band in range(nband):
+            shear_mbobs.append(band_mbobs_list[band][i][0])
         all_bres = [momres[i:i+1] for momres in band_momres]
         wgts = np.array(
             [band_mbobs_list[b][i][0][0].meta["wgt"] for b in range(nband)]
         )
         wgts /= np.sum(wgts)
-        res = mdet._compute_wavg_fitter_mbobs_sep(wgts, all_bres, all_is_shear_band)
+        res = mdet._compute_wavg_fitter_mbobs_sep(
+            wgts, all_bres, all_is_shear_band,
+            shear_mbobs,
+        )
         # check a subset and don't go crazy
         for col in [
             "flags", "wmom_flags", "psf_T", "psf_g",
             "wmom_band_flux", "wmom_band_flux_err",
-            # "wmom_s2n",
-            "wmom_g", "wmom_T",
+            "wmom_s2n", "wmom_g", "wmom_T",
         ]:
             if np.any(res[col] > 0):
                 any_nonzero = True
@@ -415,11 +527,11 @@ def test_metadetect_wavg_comp(nband, nobj):
                 ], axis=0)
             elif col in ["wmom_s2n"]:
                 val = np.sum([
-                    wgt * momres[i:i+1]["wmom_raw_mom"][0]
+                    wgt * momres["wmom_raw_mom"][i, 0]
                     for wgt, momres in zip(wgts, band_momres)
                 ])
                 val /= np.sqrt(np.sum([
-                    wgt**2 * momres[i:i+1]["wmom_raw_mom_cov"][0, 0, 0]
+                    wgt**2 * momres["wmom_raw_mom_cov"][i, 0, 0]
                     for wgt, momres in zip(wgts, band_momres)
                 ]))
             elif col in ["wmom_g"]:
@@ -437,3 +549,56 @@ def test_metadetect_wavg_comp(nband, nobj):
             assert np.allclose(res[col], val), col
 
     assert any_nonzero
+
+
+def test_metadetect_wavg_flagging():
+    """test that the weighted averages for shear are computed correctly."""
+    # sim the mbobs list
+    nband = 2
+    nobj = 4
+    band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
+    band_momres = [
+        Moments(
+            {"weight": {"fwhm": 1.2}, "bmask_flags": 0},
+            rng=np.random.RandomState(seed=12),
+        ).go(mbobs_list)
+        for mbobs_list in band_mbobs_list
+    ]
+
+    # now we make an Metadetect object
+    # note we are making a sim here but not using it
+    sim = Sim(np.random.RandomState(seed=329058), config={'nband': nband})
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = 'wmom'
+    sim_mbobs = sim.get_mbobs()
+    mdet = metadetect.Metadetect(config, sim_mbobs, np.random.RandomState(seed=14328))
+
+    all_is_shear_band = [True] * nband
+    for i in range(nobj):
+        shear_mbobs = ngmix.MultiBandObsList()
+        for band in range(nband):
+            shear_mbobs.append(band_mbobs_list[band][i][0])
+        all_bres = [momres[i:i+1] for momres in band_momres]
+        wgts = np.array(
+            [band_mbobs_list[b][i][0][0].meta["wgt"] for b in range(nband)]
+        )
+        wgts /= np.sum(wgts)
+
+        nonshear_mbobs = None
+        if i == 0:
+            shear_mbobs[1] = ngmix.ObsList()
+        elif i == 1:
+            wgts[0] = 0.0
+        elif i == 2:
+            nonshear_mbobs = ngmix.MultiBandObsList()
+            nonshear_mbobs.append(ngmix.ObsList())
+
+        res = mdet._compute_wavg_fitter_mbobs_sep(
+            wgts, all_bres, all_is_shear_band,
+            shear_mbobs, nonshear_mbobs=nonshear_mbobs,
+        )
+
+        if i in [0, 1, 2]:
+            assert (res['flags'] & procflags.OBJ_FAILURE) != 0
+            assert (res['wmom_flags'] & procflags.OBJ_FAILURE) != 0
