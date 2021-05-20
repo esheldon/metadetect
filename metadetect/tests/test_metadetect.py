@@ -12,8 +12,13 @@ import ngmix
 from .. import detect
 from .. import metadetect
 from .. import procflags
-from ..fitting import Moments, KSigmaMoments
+from ..fitting import Moments
 from .sim import Sim, make_mbobs_sim
+
+try:
+    from ..fitting import KSigmaMoments
+except ImportError:
+    KSigmaMoments = None
 
 TEST_METADETECT_CONFIG = {
     "model": "wmom",
@@ -180,6 +185,8 @@ def test_metadetect(model):
     """
     test full metadetection
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=116)
@@ -209,6 +216,8 @@ def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -244,6 +253,8 @@ def test_metadetect_mfrac_all(model):
     """
     test full metadetection w/ mfrac all 1
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -269,6 +280,8 @@ def test_metadetect_zero_weight_all(model):
     """
     test full metadetection w/ all zero weight
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -294,6 +307,8 @@ def test_metadetect_zero_weight_some(model):
     """
     test full metadetection w/ some zero weight
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -320,6 +335,8 @@ def test_metadetect_maskflags_all(model):
     """
     test full metadetection w/ all bmask all maskflags
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -347,6 +364,8 @@ def test_metadetect_bmask_some(model):
     """
     test full metadetection w/ some bmask all maskflags
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -376,6 +395,8 @@ def test_metadetect_flux(model, nband, nshear):
     """
     test full metadetection w/ fluxes
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
 
     ntrial = 1
     rng = np.random.RandomState(seed=116)
@@ -422,6 +443,9 @@ def test_metadetect_wavg_comp_single_band(nobj, fitter, model):
     """test that computing the weighted averages with one band gives the
     same result as the inputs.
     """
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
+
     # sim the mbobs list
     mbobs_list = make_mbobs_sim(134341, nobj, 1)[0]
     momres = fitter(
@@ -463,6 +487,9 @@ def test_metadetect_wavg_comp_single_band(nobj, fitter, model):
 @pytest.mark.parametrize("nobj", [1, 2, 11])
 def test_metadetect_wavg_comp(nband, nobj, fitter, model):
     """test that the weighted averages for shear are computed correctly."""
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
+
     # sim the mbobs list
     band_mbobs_list = make_mbobs_sim(134341, nobj, nband)
     band_momres = [
@@ -557,6 +584,9 @@ def test_metadetect_wavg_comp(nband, nobj, fitter, model):
 @pytest.mark.parametrize("fitter,model", [(Moments, "wmom"), (KSigmaMoments, "ksigma")])
 def test_metadetect_wavg_flagging(fitter, model):
     """test that the weighted averages for shear are computed correctly."""
+    if KSigmaMoments is None and model == "ksigma":
+        pytest.skip()
+
     # sim the mbobs list
     nband = 2
     nobj = 4
