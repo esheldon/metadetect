@@ -50,7 +50,7 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                     psf_image = obs.psf.image
                     stack_psf = KernelPsf(
                         FixedKernel(
-                            afw_image.ImageD(psf_image.astype(np.float))
+                            afw_image.ImageD(psf_image.astype(float))
                         )
                     )
                     exp.setPsf(stack_psf)

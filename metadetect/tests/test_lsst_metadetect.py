@@ -76,13 +76,10 @@ def test_lsst_metadetect_smoke(cls):
 
     sim_data = make_lsst_sim(116)
     print("")
-    mbc = coadd.MultiBandCoadds(
-        rng=rng,
-        interp_bright=False,
-        replace_bright=False,
+    mbc = coadd.MultiBandCoaddsDM(
         data=sim_data['band_data'],
         coadd_wcs=sim_data['coadd_wcs'],
-        coadd_dims=sim_data['coadd_dims'],
+        coadd_bbox=sim_data['coadd_bbox'],
         psf_dims=sim_data['psf_dims'],
         byband=False,
     )
