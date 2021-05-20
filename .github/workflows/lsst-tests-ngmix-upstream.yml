@@ -1,4 +1,4 @@
-name: lsst-tests
+name: lsst-tests-ngmix-upstream
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
   pull_request: null
 
 jobs:
-  lsst-tests:
-    name: lsst-tests
+  lsst-tests-ngmix-upstream:
+    name: lsst-tests-ngmix-upstream
     strategy:
       matrix:
         pyver: [3.8]
