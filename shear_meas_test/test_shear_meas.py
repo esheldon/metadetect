@@ -222,10 +222,12 @@ def boostrap_m_c(pres, mres):
     return m, merr, c, cerr
 
 
-def run_sim(seed, mdet_seed, **kwargs):
+def run_sim(seed, mdet_seed, model, **kwargs):
     mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0, **kwargs)
+    cfg = copy.deepcopy(TEST_METADETECT_CONFIG)
+    cfg["model"] = model
     _pres = metadetect.do_metadetect(
-        copy.deepcopy(TEST_METADETECT_CONFIG),
+        copy.deepcopy(cfg),
         mbobs_p,
         np.random.RandomState(seed=mdet_seed)
     )
@@ -234,7 +236,7 @@ def run_sim(seed, mdet_seed, **kwargs):
 
     mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0, **kwargs)
     _mres = metadetect.do_metadetect(
-        copy.deepcopy(TEST_METADETECT_CONFIG),
+        copy.deepcopy(cfg),
         mbobs_m,
         np.random.RandomState(seed=mdet_seed)
     )
@@ -245,9 +247,13 @@ def run_sim(seed, mdet_seed, **kwargs):
 
 
 @pytest.mark.parametrize(
-    'snr,ngrid,ntrial', [(1e6, 7, 50), (1e6, None, 10000)]
+    'model,snr,ngrid,ntrial', [
+        ("wmom", 1e6, 7, 50),
+        ("ksigma", 1e6, 7, 50),
+        ("wmom", 1e6, None, 10000),
+    ]
 )
-def test_shear_meas(snr, ngrid, ntrial):
+def test_shear_meas(model, snr, ngrid, ntrial):
     nsub = max(ntrial // 100, 50)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
@@ -264,7 +270,7 @@ def test_shear_meas(snr, ngrid, ntrial):
     for itr in tqdm.trange(nitr):
         jobs = [
             joblib.delayed(run_sim)(
-                seeds[loc+i], mdet_seeds[loc+i], snr=snr, ngrid=ngrid,
+                seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
             )
             for i in range(nsub)
         ]
