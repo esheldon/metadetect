@@ -1,4 +1,4 @@
-name: tests
+name: lsst-tests
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
   pull_request: null
 
 jobs:
-  tests:
-    name: tests
+  lsst-tests:
+    name: lsst-tests
     strategy:
       matrix:
-        pyver: [3.6, 3.7, 3.8]
+        pyver: [3.8]
 
     runs-on: "ubuntu-latest"
 
@@ -34,30 +34,28 @@ jobs:
         shell: bash -l {0}
         run: |
           conda config --set always_yes yes
-          conda install --quiet --yes --file requirements.txt
-          conda install --quiet --yes --file dev-requirements.txt
+          conda install --quiet --yes mamba
+          mamba install --quiet --yes --file requirements.txt
+          mamba install --quiet --yes --file dev-requirements.txt
+          mamba install -q -y stackvana=0 lsstdesc-weaklensingdeblending
+
+          pip install --no-deps git+https://github.com/LSSTDESC/descwl-shear-sims.git
+          pip install --no-deps git+https://github.com/LSSTDESC/descwl_coadd.git
 
           python -m pip install -e .
-
-      - name: lint
-        shell: bash -l {0}
-        run: |
-          flake8 metadetect
 
       - name: test ngmix w/ conda latest
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[1000000.0-7-50]
 
       - name: install ngmix master
         shell: bash -l {0}
         run: |
-          conda uninstall ngmix --force -y
+          mamba uninstall ngmix --force -y
           pip install git+https://github.com/esheldon/ngmix.git
 
       - name: test ngmix w/ master
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[1000000.0-7-50]
