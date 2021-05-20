@@ -39,12 +39,15 @@ jobs:
 
           python -m pip install -e .
 
+          conda uninstall ngmix --force -y
+          python -m pip install git+https://github.com/esheldon/ngmix.git
+
       - name: lint
         shell: bash -l {0}
         run: |
           flake8 metadetect
 
-      - name: test
+      - name: test ngmix w/ conda latest
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
