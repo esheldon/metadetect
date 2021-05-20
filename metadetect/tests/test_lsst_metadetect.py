@@ -46,7 +46,7 @@ def make_lsst_sim(seed):
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
 
-    galaxy_catalog = sim.FixedGalaxyCatalog(
+    galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=20,
@@ -55,7 +55,7 @@ def make_lsst_sim(seed):
         hlr=0.5,
     )
 
-    psf = sim.make_psf(psf_type='gauss')
+    psf = sim.psfs.make_psf(psf_type='gauss')
 
     sim_data = sim.make_sim(
         rng=rng,
