@@ -55,7 +55,7 @@ def make_lsst_sim(seed):
         hlr=0.5,
     )
 
-    psf = sim.psfs.make_psf(psf_type='gauss')
+    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
 
     sim_data = sim.make_sim(
         rng=rng,
