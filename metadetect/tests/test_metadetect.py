@@ -16,6 +16,7 @@ from ..fitting import Moments
 from .sim import Sim, make_mbobs_sim
 
 try:
+    import ngmix.ksigmamom
     from ..fitting import KSigmaMoments
 except ImportError:
     KSigmaMoments = None
