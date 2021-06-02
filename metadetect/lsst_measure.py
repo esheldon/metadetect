@@ -105,10 +105,7 @@ def _get_ormask(*, source, exposure):
     """
     peak = source.getFootprint().getPeaks()[0]
     orig_cen = peak.getI()
-    y = orig_cen.getY()
-    x = orig_cen.getX()
-
-    maskval = exposure.mask.array[y, x]
+    maskval = exposure.mask[orig_cen]
     return maskval
 
 
