@@ -159,30 +159,34 @@ def make_sim(
     return mbobs
 
 
-def _shear_cuts(arr):
+def _shear_cuts(arr, model):
+    if model == "wmom":
+        tmin = 1.2
+    else:
+        tmin = 0.5
     msk = (
         (arr['flags'] == 0)
-        & (arr['wmom_s2n'] > 10)
-        & (arr['wmom_T_ratio'] > 1.2)
+        & (arr[f'{model}_s2n'] > 10)
+        & (arr[f'{model}_T_ratio'] > tmin)
     )
     return msk
 
 
-def _meas_shear_data(res):
-    msk = _shear_cuts(res['noshear'])
-    g1 = np.mean(res['noshear']['wmom_g'][msk, 0])
-    g2 = np.mean(res['noshear']['wmom_g'][msk, 1])
+def _meas_shear_data(res, model):
+    msk = _shear_cuts(res['noshear'], model)
+    g1 = np.mean(res['noshear'][f'{model}_g'][msk, 0])
+    g2 = np.mean(res['noshear'][f'{model}_g'][msk, 1])
 
-    msk = _shear_cuts(res['1p'])
-    g1_1p = np.mean(res['1p']['wmom_g'][msk, 0])
-    msk = _shear_cuts(res['1m'])
-    g1_1m = np.mean(res['1m']['wmom_g'][msk, 0])
+    msk = _shear_cuts(res['1p'], model)
+    g1_1p = np.mean(res['1p'][f'{model}_g'][msk, 0])
+    msk = _shear_cuts(res['1m'], model)
+    g1_1m = np.mean(res['1m'][f'{model}_g'][msk, 0])
     R11 = (g1_1p - g1_1m) / 0.02
 
-    msk = _shear_cuts(res['2p'])
-    g2_2p = np.mean(res['2p']['wmom_g'][msk, 1])
-    msk = _shear_cuts(res['2m'])
-    g2_2m = np.mean(res['2m']['wmom_g'][msk, 1])
+    msk = _shear_cuts(res['2p'], model)
+    g2_2p = np.mean(res['2p'][f'{model}_g'][msk, 1])
+    msk = _shear_cuts(res['2m'], model)
+    g2_2m = np.mean(res['2m'][f'{model}_g'][msk, 1])
     R22 = (g2_2p - g2_2m) / 0.02
 
     dt = [
@@ -222,10 +226,12 @@ def boostrap_m_c(pres, mres):
     return m, merr, c, cerr
 
 
-def run_sim(seed, mdet_seed, **kwargs):
+def run_sim(seed, mdet_seed, model, **kwargs):
     mbobs_p = make_sim(seed=seed, g1=0.02, g2=0.0, **kwargs)
+    cfg = copy.deepcopy(TEST_METADETECT_CONFIG)
+    cfg["model"] = model
     _pres = metadetect.do_metadetect(
-        copy.deepcopy(TEST_METADETECT_CONFIG),
+        copy.deepcopy(cfg),
         mbobs_p,
         np.random.RandomState(seed=mdet_seed)
     )
@@ -234,20 +240,24 @@ def run_sim(seed, mdet_seed, **kwargs):
 
     mbobs_m = make_sim(seed=seed, g1=-0.02, g2=0.0, **kwargs)
     _mres = metadetect.do_metadetect(
-        copy.deepcopy(TEST_METADETECT_CONFIG),
+        copy.deepcopy(cfg),
         mbobs_m,
         np.random.RandomState(seed=mdet_seed)
     )
     if _mres is None:
         return None
 
-    return _meas_shear_data(_pres), _meas_shear_data(_mres)
+    return _meas_shear_data(_pres, model), _meas_shear_data(_mres, model)
 
 
 @pytest.mark.parametrize(
-    'snr,ngrid,ntrial', [(1e6, 7, 50), (1e6, None, 10000)]
+    'model,snr,ngrid,ntrial', [
+        ("wmom", 1e6, 7, 50),
+        ("ksigma", 1e6, 7, 50),
+        ("wmom", 1e6, None, 10000),
+    ]
 )
-def test_shear_meas(snr, ngrid, ntrial):
+def test_shear_meas(model, snr, ngrid, ntrial):
     nsub = max(ntrial // 100, 50)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
@@ -264,11 +274,11 @@ def test_shear_meas(snr, ngrid, ntrial):
     for itr in tqdm.trange(nitr):
         jobs = [
             joblib.delayed(run_sim)(
-                seeds[loc+i], mdet_seeds[loc+i], snr=snr, ngrid=ngrid,
+                seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
             )
             for i in range(nsub)
         ]
-        outputs = joblib.Parallel(n_jobs=-1, verbose=0, backend='loky')(jobs)
+        outputs = joblib.Parallel(n_jobs=-1, verbose=100, backend='loky')(jobs)
 
         for out in outputs:
             if out is None:

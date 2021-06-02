@@ -1,4 +1,4 @@
-name: tests
+name: tests-ngmix-upstream
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
   pull_request: null
 
 jobs:
-  tests:
-    name: tests
+  tests-ngmix-upstream:
+    name: tests-ngmix-upstream
     strategy:
       matrix:
         pyver: [3.6, 3.7, 3.8]
@@ -39,13 +39,17 @@ jobs:
 
           python -m pip install -e .
 
+          conda uninstall ngmix --force -y
+          python -m pip install git+https://github.com/esheldon/ngmix.git
+
       - name: lint
         shell: bash -l {0}
         run: |
           flake8 metadetect
 
-      - name: test
+      - name: test ngmix w/ conda latest
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[ksigma-1000000.0-7-50]

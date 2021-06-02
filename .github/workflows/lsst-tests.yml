@@ -48,14 +48,3 @@ jobs:
         shell: bash -l {0}
         run: |
           pytest -vvs metadetect
-
-      - name: install ngmix master
-        shell: bash -l {0}
-        run: |
-          mamba uninstall ngmix --force -y
-          pip install git+https://github.com/esheldon/ngmix.git
-
-      - name: test ngmix w/ master
-        shell: bash -l {0}
-        run: |
-          pytest -vvs metadetect
