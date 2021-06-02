@@ -372,7 +372,6 @@ class KSigmaMoments(Moments):
         res['numiter'] = 1
         res['g'] = res['e']
         res['g_cov'] = res['e_cov']
-        res['g_err'] = res['e_err']
 
         return res
 
