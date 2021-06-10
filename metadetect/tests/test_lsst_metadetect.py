@@ -76,15 +76,15 @@ def test_lsst_metadetect_smoke(cls):
 
     sim_data = make_lsst_sim(116)
     print("")
-    mbc = coadd.MultiBandCoaddsDM(
-        data=sim_data['band_data'],
+    coadd_obs = coadd.make_coadd_obs(
+        exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
         coadd_bbox=sim_data['coadd_bbox'],
         psf_dims=sim_data['psf_dims'],
-        byband=False,
+        remove_poisson=False,
+        rng=rng,
     )
 
-    coadd_obs = mbc.coadds['all']
     coadd_mbobs = ngmix.MultiBandObsList()
     obslist = ngmix.ObsList()
     obslist.append(coadd_obs)
