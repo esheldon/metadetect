@@ -105,11 +105,6 @@ class LSSTMetadetect(BaseLSSTMetadetect):
             ('col_noshear', 'f4'),  # noshear col
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
-            ('star_frac', 'f4'),  # these are for the whole image, redundant
-            ('tapebump_frac', 'f4'),
-            ('spline_interp_frac', 'f4'),
-            ('noise_interp_frac', 'f4'),
-            ('imperfect_frac', 'f4'),
         ]
         newres = eu.numpy_util.add_fields(
             res,
