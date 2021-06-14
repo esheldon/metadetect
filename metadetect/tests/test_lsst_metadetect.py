@@ -122,7 +122,7 @@ def test_lsst_metadetect_mfrac_ormask(cls):
         coadd_obs.mfrac = rng.uniform(
             size=coadd_obs.image.shape, low=0.2, high=0.8
         )
-        # coadd_obs.ormask = np.ones(coadd_obs.image.shape, dtype='i4')
+        coadd_obs.ormask = np.ones(coadd_obs.image.shape, dtype='i4')
 
         coadd_mbobs = ngmix.MultiBandObsList()
         obslist = ngmix.ObsList()
@@ -138,7 +138,7 @@ def test_lsst_metadetect_mfrac_ormask(cls):
                 (res[shear]["mfrac"] > 0.45)
                 & (res[shear]["mfrac"] < 0.55)
             )
-            # assert np.all(res[shear]["ormask"] == 1)
+            assert np.all(res[shear]["ormask"] == 1)
 
         total_time = time.time()-tm0
         print("time per:", total_time)
