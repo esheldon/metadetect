@@ -9,6 +9,8 @@ from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
 from .lsst_medsifier import LSSTMEDSifier
 from .lsst_measure import measure_weighted_moments
+from . import shearpos
+from .mfrac import measure_mfrac
 
 
 class LSSTMetadetect(BaseLSSTMetadetect):
@@ -84,21 +86,25 @@ class LSSTMetadetect(BaseLSSTMetadetect):
 
         res = self._fitter.go(mbobs_list)
         if res is not None:
-            res = self._add_positions_and_psf(medsifier, res, shear_str)
+            res = self._add_positions_and_psf(medsifier, res, shear_str, mbobs_list)
 
         return res
 
-    def _add_positions_and_psf(self, medsifier, res, shear_str):
+    def _add_positions_and_psf(self, medsifier, res, shear_str, mbobs_list):
         """
         TODO add positionis etc.
         """
 
         new_dt = [
-            ('row', 'f4'),
-            ('col', 'f4'),
-            ('row_noshear', 'f4'),
-            ('col_noshear', 'f4'),
+            ('box_size', 'i4'),
+            ('row0', 'i4'),  # bbox row start
+            ('col0', 'i4'),  # bbox col start
+            ('row', 'f4'),  # row in image. Use row0 to get to global pixel coords
+            ('col', 'f4'),  # col in image. Use col0 to get to global pixel coords
+            ('row_noshear', 'f4'),  # noshear row
+            ('col_noshear', 'f4'),  # noshear col
             ('ormask', 'i4'),
+            ('mfrac', 'f4'),
             ('star_frac', 'f4'),  # these are for the whole image, redundant
             ('tapebump_frac', 'f4'),
             ('spline_interp_frac', 'f4'),
@@ -117,6 +123,7 @@ class LSSTMetadetect(BaseLSSTMetadetect):
 
         sources = medsifier.sources
         det_exp = medsifier.det_exp
+        bbox = det_exp.getBBox()
 
         for i, rec in enumerate(sources):
             orig_cen = det_exp.getWcs().skyToPixel(rec.getCoord())
@@ -126,65 +133,47 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                 peak = rec.getFootprint().getPeaks()[0]
                 orig_cen = peak.getI()
 
-            newres['row'][i] = orig_cen.getY()
-            newres['col'][i] = orig_cen.getX()
-            # print(newres['row'][i], newres['col'][i])
-        '''
-        newres['star_frac'][:] = self.star_frac
-        newres['tapebump_frac'][:] = self.tapebump_frac
-        newres['spline_interp_frac'][:] = self.spline_interp_frac
-        newres['noise_interp_frac'][:] = self.noise_interp_frac
-        newres['imperfect_frac'][:] = self.imperfect_frac
+            newres['box_size'][i] = mbobs_list[i][0][0].image.shape[0]
+            newres['row0'][i] = bbox.getBeginY()
+            newres['col0'][i] = bbox.getBeginX()
+            newres['row'][i] = orig_cen.getY() - newres['row0'][i]
+            newres['col'][i] = orig_cen.getX() - newres['col0'][i]
 
-        if cat.size > 0:
+            newres['ormask'][i] = self.ormask[
+                int(newres['row'][i]), int(newres['col'][i]),
+            ]
+
+        if len(sources) > 0:
+
             obs = self.mbobs[0][0]
 
-            newres['sx_col'] = cat['x']
-            newres['sx_row'] = cat['y']
-
             rows_noshear, cols_noshear = shearpos.unshear_positions(
-                newres['sx_row'],
-                newres['sx_col'],
+                newres['row'],
+                newres['col'],
                 shear_str,
                 obs,  # an example for jacobian and image shape
+                # default is 0.01 but make sure to use the passed in default
+                # if needed
+                step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
             )
+            newres['row_noshear'] = rows_noshear
+            newres['col_noshear'] = cols_noshear
 
-            newres['sx_row_noshear'] = rows_noshear
-            newres['sx_col_noshear'] = cols_noshear
-
-            dims = obs.image.shape
-            rclip = _clip_and_round(rows_noshear, dims[0])
-            cclip = _clip_and_round(cols_noshear, dims[1])
-
-            if 'ormask_region' in self and self['ormask_region'] > 1:
-                logger.debug('ormask_region: %s' % self['ormask_region'])
-                for ind in range(cat.size):
-                    lr = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] - self['ormask_region'])))
-                    ur = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] + self['ormask_region'])))
-
-                    lc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] - self['ormask_region'])))
-                    uc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] + self['ormask_region'])))
-
-                    newres['ormask'][ind] = np.bitwise_or.reduce(
-                        self.ormask[lr:ur+1, lc:uc+1], axis=None)
+            if np.any(self.mfrac > 0):
+                # we are using the positions with the metacal shear removed for
+                # this.
+                newres["mfrac"] = measure_mfrac(
+                    mfrac=self.mfrac,
+                    x=newres["col_noshear"],
+                    y=newres["row_noshear"],
+                    box_sizes=newres["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
             else:
-                newres['ormask'] = self.ormask[rclip, cclip]
-        '''
-        return newres
+                newres["mfrac"] = 0
 
-    def _set_ormask(self):
-        """
-        fake ormask for now
-        """
-        self.ormask = np.zeros(self.mbobs[0][0].image.shape, dtype='i4')
+        return newres
 
     def _set_config(self, config):
         """
@@ -229,9 +218,47 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
         )
 
         if res is not None:
+            obs = mbobs[0][0]
+            self._add_noshear_pos(res, shear_str, obs)
+            self._add_mfrac(res, obs)
+            self._add_ormask(res)
             res = self._add_original_psf(res, shear_str)
 
         return res
+
+    def _add_ormask(self, res):
+        for i in range(res.size):
+            res['ormask'][i] = self.ormask[
+                int(res['row'][i]), int(res['col'][i]),
+            ]
+
+    def _add_noshear_pos(self, res, shear_str, obs):
+        rows_noshear, cols_noshear = shearpos.unshear_positions(
+            res['row'],
+            res['col'],
+            shear_str,
+            obs,  # an example for jacobian and image shape
+            # default is 0.01 but make sure to use the passed in default
+            # if needed
+            step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
+        )
+        res['row_noshear'] = rows_noshear
+        res['col_noshear'] = cols_noshear
+
+    def _add_mfrac(self, res, obs):
+        if np.any(self.mfrac > 0):
+            # we are using the positions with the metacal shear removed for
+            # this.
+            res["mfrac"] = measure_mfrac(
+                mfrac=self.mfrac,
+                x=res["col_noshear"],
+                y=res["row_noshear"],
+                box_sizes=res["box_size"],
+                obs=obs,
+                fwhm=self.get("mfrac_fwhm", None),
+            )
+        else:
+            res["mfrac"] = 0
 
     def _add_original_psf(self, res, shear_str):
         """
