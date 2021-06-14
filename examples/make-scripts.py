@@ -180,7 +180,6 @@ def main():
     else:
         buff = ''
 
-
     for i in range(args.njobs):
 
         while True:
