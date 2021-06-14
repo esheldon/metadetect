@@ -72,9 +72,8 @@ def make_lsst_sim(seed):
 def test_lsst_metadetect_smoke(cls):
     rng = np.random.RandomState(seed=116)
 
-    tm0 = time.time()
-
     sim_data = make_lsst_sim(116)
+
     print("")
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
@@ -84,6 +83,9 @@ def test_lsst_metadetect_smoke(cls):
         remove_poisson=False,
         rng=rng,
     )
+
+    # to avoid flagged edges
+    coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
 
     coadd_mbobs = ngmix.MultiBandObsList()
     obslist = ngmix.ObsList()
@@ -95,6 +97,48 @@ def test_lsst_metadetect_smoke(cls):
     res = md.result
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
 
-    total_time = time.time()-tm0
-    print("time per:", total_time)
+
+@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
+def test_lsst_metadetect_mfrac_ormask(cls):
+    rng = np.random.RandomState(seed=116)
+
+    tm0 = time.time()
+    ntrial = 1
+
+    for trial in range(ntrial):
+        sim_data = make_lsst_sim(116)
+
+        print("")
+        coadd_obs = coadd.make_coadd_obs(
+            exps=sim_data['band_data']['i'],
+            coadd_wcs=sim_data['coadd_wcs'],
+            coadd_bbox=sim_data['coadd_bbox'],
+            psf_dims=sim_data['psf_dims'],
+            remove_poisson=False,
+            rng=rng,
+        )
+        coadd_obs.mfrac = rng.uniform(
+            size=coadd_obs.image.shape, low=0.2, high=0.8
+        )
+        coadd_obs.ormask = np.ones(coadd_obs.image.shape, dtype='i4')
+
+        coadd_mbobs = ngmix.MultiBandObsList()
+        obslist = ngmix.ObsList()
+        obslist.append(coadd_obs)
+        coadd_mbobs.append(obslist)
+
+        md = getattr(lsst_metadetect, cls)(CONFIG, coadd_mbobs, rng)
+        md.go()
+        res = md.result
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert np.any(res[shear]["flags"] == 0)
+            assert np.all(
+                (res[shear]["mfrac"] > 0.45)
+                & (res[shear]["mfrac"] < 0.55)
+            )
+            assert np.all(res[shear]["ormask"] == 1)
+
+        total_time = time.time()-tm0
+        print("time per:", total_time)

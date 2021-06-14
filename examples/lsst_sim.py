@@ -227,7 +227,7 @@ def get_config(args):
             'filter_type': 'conv',
 
             # 7x7 convolution mask of a gaussian PSF with FWHM = 3.0 pixels.
-            'filter_kernel':  [
+            'filter_kernel': [
                 [0.004963, 0.021388, 0.051328, 0.068707, 0.051328, 0.021388, 0.004963],  # noqa
                 [0.021388, 0.092163, 0.221178, 0.296069, 0.221178, 0.092163, 0.021388],  # noqa
                 [0.051328, 0.221178, 0.530797, 0.710525, 0.530797, 0.221178, 0.051328],  # noqa

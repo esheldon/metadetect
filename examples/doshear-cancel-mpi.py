@@ -154,7 +154,7 @@ def read_one(inputs):
 def get_flist(args):
 
     with open(args.flist) as fobj:
-        flist = [l.strip() for l in fobj]
+        flist = [line.strip() for line in fobj]
 
     return flist
 

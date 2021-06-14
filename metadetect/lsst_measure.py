@@ -30,6 +30,7 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
     assert len(mbobs[0]) == 1, 'one epoch only'
 
     exposure = mbobs[0][0].exposure
+    exp_bbox = exposure.getBBox()
 
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
@@ -58,12 +59,12 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         meas_task.callMeasure(source, exposure)
 
         # TODO variable box size
-        bbox = _get_bbox_fixed(
+        stamp_bbox = _get_bbox_fixed(
             exposure=exposure,
             source=source,
             stamp_size=48,
         )
-        subim = _get_padded_sub_image(exposure=exposure, bbox=bbox)
+        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
 
         obs = _extract_obs(
             subim=subim,
@@ -73,7 +74,11 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
         pres = _measure_moments(obs=obs.psf, weight=weight)
         ores = _measure_moments(obs=obs, weight=weight)
 
-        res = _get_output(source=source, res=ores, pres=pres, ormask=ormask)
+        res = _get_output(
+            source=source, res=ores, pres=pres, ormask=ormask,
+            box_size=obs.image.shape[0],
+            exp_bbox=exp_bbox,
+        )
 
         # Remove object
         replacer.removeSource(source.getId())
@@ -533,8 +538,13 @@ def _get_dtype():
     dt = [
         ('flags', 'i4'),
 
-        ('row', 'f4'),
-        ('col', 'f4'),
+        ('box_size', 'i4'),
+        ('row0', 'i4'),  # bbox row start
+        ('col0', 'i4'),  # bbox col start
+        ('row', 'f4'),  # row in image. Use row0 to get to global pixel coords
+        ('col', 'f4'),  # col in image. Use col0 to get to global pixel coords
+        ('row_noshear', 'f4'),  # noshear row in local image, not global wcs
+        ('col_noshear', 'f4'),  # noshear col in local image, not global wcs
 
         ('psfrec_flags', 'i4'),  # psfrec is the original psf
         ('psfrec_g', 'f8', 2),
@@ -545,6 +555,7 @@ def _get_dtype():
         ('psf_T', 'f8'),
 
         ('ormask', 'i4'),
+        ('mfrac', 'f4'),
 
         (n('flags'), 'i4'),
         (n('s2n'), 'f8'),
@@ -559,7 +570,7 @@ def _get_dtype():
     return dt
 
 
-def _get_output(*, source, res, pres, ormask):
+def _get_output(*, source, res, pres, ormask, box_size, exp_bbox):
 
     model = 'wmom'
     n = util.Namer(front=model)
@@ -578,8 +589,11 @@ def _get_output(*, source, res, pres, ormask):
         peak = source.getFootprint().getPeaks()[0]
         orig_cen = peak.getI()
 
-    output['row'] = orig_cen.getY()
-    output['col'] = orig_cen.getX()
+    output['box_size'] = box_size
+    output['row0'] = exp_bbox.getBeginY()
+    output['col0'] = exp_bbox.getBeginX()
+    output['row'] = orig_cen.getY() - output['row0']
+    output['col'] = orig_cen.getX() - output['col0']
     output['ormask'] = ormask
 
     flags = 0
