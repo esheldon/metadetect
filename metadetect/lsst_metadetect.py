@@ -128,15 +128,19 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                 peak = rec.getFootprint().getPeaks()[0]
                 orig_cen = peak.getI()
 
-            newres['box_size'][i] = mbobs_list[i][0][0].image.shape[0]
-            newres['row0'][i] = bbox.getBeginY()
-            newres['col0'][i] = bbox.getBeginX()
-            newres['row'][i] = orig_cen.getY() - newres['row0'][i]
-            newres['col'][i] = orig_cen.getX() - newres['col0'][i]
+            if len(mbobs_list[i]) > 0 and len(mbobs_list[i][0]) > 0:
+                newres['box_size'][i] = mbobs_list[i][0][0].image.shape[0]
+            else:
+                newres['box_size'][i] = -9999
 
-            newres['ormask'][i] = self.ormask[
-                int(newres['row'][i]), int(newres['col'][i]),
-            ]
+                newres['row0'][i] = bbox.getBeginY()
+                newres['col0'][i] = bbox.getBeginX()
+                newres['row'][i] = orig_cen.getY() - newres['row0'][i]
+                newres['col'][i] = orig_cen.getX() - newres['col0'][i]
+
+                newres['ormask'][i] = self.ormask[
+                    int(newres['row'][i]), int(newres['col'][i]),
+                ]
 
         if len(sources) > 0:
 
