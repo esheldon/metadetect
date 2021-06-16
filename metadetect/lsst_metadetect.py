@@ -178,7 +178,7 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                 newres["mfrac"] = 0
 
                 # mark bad bboxes as masked
-                w, = np.where(newres['flags'][i] & procflags.BAD_BBOX != 0)
+                w, = np.where(newres['flags'] & procflags.BAD_BBOX != 0)
                 newres['mfrac'][w] = 1.0
 
         return newres
