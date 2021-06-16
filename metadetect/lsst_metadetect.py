@@ -11,6 +11,7 @@ from .lsst_medsifier import LSSTMEDSifier
 from .lsst_measure import measure_weighted_moments
 from . import shearpos
 from .mfrac import measure_mfrac
+from . import procflags
 
 
 class LSSTMetadetect(BaseLSSTMetadetect):
@@ -128,19 +129,23 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                 peak = rec.getFootprint().getPeaks()[0]
                 orig_cen = peak.getI()
 
+            # these might be crazy if bbox was odd, but we will
+            # set a flag and bbox will be negative
+            newres['row0'][i] = bbox.getBeginY()
+            newres['col0'][i] = bbox.getBeginX()
+            newres['row'][i] = orig_cen.getY() - newres['row0'][i]
+            newres['col'][i] = orig_cen.getX() - newres['col0'][i]
+
             if len(mbobs_list[i]) > 0 and len(mbobs_list[i][0]) > 0:
                 newres['box_size'][i] = mbobs_list[i][0][0].image.shape[0]
-            else:
-                newres['box_size'][i] = -9999
-
-                newres['row0'][i] = bbox.getBeginY()
-                newres['col0'][i] = bbox.getBeginX()
-                newres['row'][i] = orig_cen.getY() - newres['row0'][i]
-                newres['col'][i] = orig_cen.getX() - newres['col0'][i]
 
                 newres['ormask'][i] = self.ormask[
                     int(newres['row'][i]), int(newres['col'][i]),
                 ]
+            else:
+                # the above happens when the bbox is crazy
+                newres['flags'][i] |= procflags.BAD_BBOX
+                newres['box_size'][i] = -9999
 
         if len(sources) > 0:
 
@@ -171,6 +176,10 @@ class LSSTMetadetect(BaseLSSTMetadetect):
                 )
             else:
                 newres["mfrac"] = 0
+
+                # mark bad bboxes as masked
+                w, = np.where(newres['flags'][i] & procflags.BAD_BBOX != 0)
+                newres['mfrac'][w] = 1.0
 
         return newres
 
