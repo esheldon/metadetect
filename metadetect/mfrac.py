@@ -63,7 +63,7 @@ def measure_mfrac(
     mfracs = []
     for i in range(x.shape[0]):
         try:
-            if m['box_size'][i] > 0:
+            if box_sizes[i] > 0:
                 obs = m.get_obs(i, 0)
                 wgt = obs.weight.copy()
                 msk = (obs.bmask & BMASK_EDGE) != 0
