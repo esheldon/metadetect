@@ -99,7 +99,7 @@ def check_skysub(meanvals, errvals, image_noise):
 
     assert np.abs(meansky - true_skyval) < tol
 
-'''
+
 def test_skysub_smoke():
     seed = 5
     rng = np.random.RandomState(seed)
@@ -195,7 +195,7 @@ def test_skysub_sim_fixed_gal():
 
     image_noise = np.median(exp.variance.array)
     check_skysub(meanvals, errvals, image_noise)
-'''
+
 
 @pytest.mark.skipif(
     "CATSIM_DIR" not in os.environ,
