@@ -149,11 +149,10 @@ def test_skysub_pure_noise():
     check_skysub(meanvals, errvals, noise)
 
 
-@pytest.mark.parametrize('gal_type', ['fixed', 'wldeblend'])
 def test_skysub_sim_smoke(gal_type):
     seed = 812
     rng = np.random.RandomState(seed)
-    sim = make_lsst_sim(rng, gal_type=gal_type)
+    sim = make_lsst_sim(rng, gal_type='fixed')
 
     exp = sim['band_data']['i'][0]
     lsst_skysub_mod.skysub(exp)
