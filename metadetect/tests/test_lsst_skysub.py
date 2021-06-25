@@ -180,7 +180,8 @@ def test_skysub_sim_smoke():
 
 def test_skysub_sim_fixed_gal():
     """
-    check the mean sky over all trials is within 1/10 of the noise level
+    check the measured mean sky over all trials is within 1/10 of the noise
+    level
     """
     seed = 184
     rng = np.random.RandomState(seed)
@@ -195,35 +196,24 @@ def test_skysub_sim_fixed_gal():
 
         exp = sim['band_data']['i'][0]
 
+        noise = np.sqrt(np.median(exp.variance.array))
+        true_sky = 0.5 * noise
+        exp.image.array += true_sky
+
         if False:
             show_image(exp)
 
-        # we can send subtract_sky=True but do it separately here
-        # so we can see the mask before and after
         _, _ = lsst_meas_mod.detect_and_deblend(
-            exposure=exp, thresh=5, loglevel=loglevel,
+            exposure=exp, thresh=5, loglevel=loglevel, subtract_sky=True,
         )
-
-        if False:
-            show_mask(exp)
-
-        lsst_skysub_mod.determine_and_subtract_sky(exp)
-
-        _, _ = lsst_meas_mod.detect_and_deblend(
-            exposure=exp, thresh=5, loglevel=loglevel,
-        )
-        if False:
-            show_mask(exp)
-
-        lsst_skysub_mod.determine_and_subtract_sky(exp)
-
         meta = exp.getMetadata()
+        sky_meas = meta['BGMEAN']
 
-        meanvals[itrial] = meta['BGMEAN']
+        meanvals[itrial] = sky_meas
         errvals[itrial] = np.sqrt(meta['BGVAR'])
 
     image_noise = np.median(exp.variance.array)
-    check_skysub(meanvals, errvals, image_noise)
+    check_skysub(meanvals, errvals, image_noise, true_sky=true_sky)
 
 
 @pytest.mark.skipif(
@@ -233,12 +223,11 @@ def test_skysub_sim_fixed_gal():
 @pytest.mark.parametrize('star_density', [20.0])
 def test_skysub_sim_wldeblend_gal(star_density):
     """
-    check the mean sky over all trials is within a fraction of the noise level
+    check the measured mean sky over all trials is within 1/10 of the noise
+    level
 
-    this is a slow test due to large variance in the sky determination
-
-    putting a nominal test at stellar density of 20 but really need to do
-    a full shear recover test to explore this better
+    putting a nominal test at stellar density of 20 but really need to do a
+    full shear recover test to explore this better
     """
     seed = 312
     rng = np.random.RandomState(seed)
@@ -255,32 +244,45 @@ def test_skysub_sim_wldeblend_gal(star_density):
 
         exp = sim['band_data']['i'][0]
 
+        noise = np.sqrt(np.median(exp.variance.array))
+        true_sky = 0.5 * noise
+        exp.image.array += true_sky
+
         if False:
             show_image(exp)
 
-        # we can send subtract_sky=True but do it separately here
-        # so we can see the mask before and after
-        _, _ = lsst_meas_mod.detect_and_deblend(
-            exposure=exp, thresh=5, loglevel=loglevel,
-        )
-        if False:
-            show_mask(exp)
+        if True:
+            _, _ = lsst_meas_mod.detect_and_deblend(
+                exposure=exp, thresh=5, loglevel=loglevel, subtract_sky=True,
+            )
+            meta = exp.getMetadata()
+            sky_meas = meta['BGMEAN']
+        else:
+            # this one is for debugging; we do the iterations ourselves so we
+            # can display the result
+            _, _ = lsst_meas_mod.detect_and_deblend(
+                exposure=exp, thresh=5, loglevel=loglevel,
+            )
+            if False:
+                show_mask(exp)
 
-        lsst_skysub_mod.determine_and_subtract_sky(exp)
+            lsst_skysub_mod.determine_and_subtract_sky(exp)
+            sky_meas = exp.getMetadata()['BGMEAN']
 
-        _, _ = lsst_meas_mod.detect_and_deblend(
-            exposure=exp, thresh=5, loglevel=loglevel,
-        )
-        if False:
-            show_mask(exp)
+            _, _ = lsst_meas_mod.detect_and_deblend(
+                exposure=exp, thresh=5, loglevel=loglevel,
+            )
+            if False:
+                show_mask(exp)
 
-        lsst_skysub_mod.determine_and_subtract_sky(exp)
+            lsst_skysub_mod.determine_and_subtract_sky(exp)
 
-        meta = exp.getMetadata()
+            meta = exp.getMetadata()
+            sky_meas += meta['BGMEAN']
 
-        meanvals[itrial] = meta['BGMEAN']
+        meanvals[itrial] = sky_meas
         errvals[itrial] = np.sqrt(meta['BGVAR'])
 
     image_noise = np.median(exp.variance.array)
 
-    check_skysub(meanvals, errvals, image_noise)
+    check_skysub(meanvals, errvals, image_noise, true_sky=true_sky)
