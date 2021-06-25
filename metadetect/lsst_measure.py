@@ -145,6 +145,7 @@ def detect_and_deblend(
     thresh=10,
     subtract_sky=False,
     loglevel='INFO',
+    niter=2,
 ):
     """
     run detection and deblending, and optionally sky determination
@@ -158,6 +159,9 @@ def detect_and_deblend(
         Default 10
     subtract_sky: bool, optional
         Default False
+    niter: int, optional
+        Number of iterations for detection and sky subtraction.
+        Must be >= 1. Default is 2 which is recommended.
     loglevel: str, optional
         Default 'INFO'
     """
@@ -205,21 +209,16 @@ def detect_and_deblend(
 
     # Detect objects
     table = afw_table.SourceTable.make(schema)
-    result = detection_task.run(table, exposure)
 
     if subtract_sky:
-        # two iterations, determine sky, subtract it, then re-detect and then
-        # determine sky again
-        determine_and_subtract_sky(exposure)
-        sky_meas = exposure.getMetadata()['BGMEAN']
-
+        result = iterate_detection_and_skysub(
+            exposure=exposure,
+            detection_task=detection_task,
+            table=table,
+            niter=niter,
+        )
+    else:
         result = detection_task.run(table, exposure)
-
-        determine_and_subtract_sky(exposure)
-
-        meta = exposure.getMetadata()
-        # this is the sky we subtracted in all iterations
-        meta['BGMEAN'] += sky_meas
 
     sources = result.sources
 
@@ -227,6 +226,45 @@ def detect_and_deblend(
     deblend_task.run(exposure, sources)
 
     return sources, meas_task
+
+
+def iterate_detection_and_skysub(exposure, detection_task, table, niter=2):
+    """
+    Iterate detection and sky subtraction
+
+    Parameters
+    ----------
+    exposure: Exposure
+        The exposure to process
+    detection_task: SourceDetectionTask
+        The detection task from lsst.meas.algorithms
+    table: afw_table.SourceTable
+        The source table to be filled
+    niter: int, optional
+        Number of iterations for detection and sky subtraction.
+        Must be >= 1. Default is 2 which is recommended.
+
+    Returns
+    -------
+    Result from running the detection task
+    """
+    if niter < 1:
+        raise ValueError(f'niter {niter} is less than 1')
+
+    # keep a running sum of each sky that was subtracted
+    sky_meas = 0.0
+    for i in range(niter):
+        result = detection_task.run(table, exposure)
+
+        determine_and_subtract_sky(exposure)
+        sky_meas += exposure.getMetadata()['BGMEAN']
+
+    meta = exposure.getMetadata()
+
+    # this is the overall sky we subtracted in all iterations
+    meta['BGMEAN'] = sky_meas
+
+    return result
 
 
 def _get_noise_replacer(*, exposure, sources):
