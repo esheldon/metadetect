@@ -11,7 +11,7 @@ import lsst.log
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
-from .lsst_skysub import determine_and_subtract_sky
+from .lsst_measure import iterate_detection_and_skysub
 
 
 class LSSTMEDSifier(MEDSifier):
@@ -148,16 +148,15 @@ class LSSTMEDSifier(MEDSifier):
 
         # Detect objects
         table = afw_table.SourceTable.make(schema)
-        result = detection_task.run(table, exposure)
 
         if self.subtract_sky:
-            # two iterations, determine sky, subtract it, then re-detect and then
-            # determine sky again
-            determine_and_subtract_sky(exposure)
-
+            result = iterate_detection_and_skysub(
+                exposure=exposure,
+                detection_task=detection_task,
+                table=table,
+            )
+        else:
             result = detection_task.run(table, exposure)
-
-            determine_and_subtract_sky(exposure)
 
         sources = result.sources
 
