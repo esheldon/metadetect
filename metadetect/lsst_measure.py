@@ -64,55 +64,56 @@ def measure_weighted_moments(
         loglevel=loglevel,
     )
 
-    # ormasks will be different within the loop below due to the replacer
-    ormasks = _get_ormasks(sources=sources, exposure=exposure)
-
-    replacer = _get_noise_replacer(exposure=exposure, sources=sources)
-
     results = []
 
-    for i, source in enumerate(sources):
+    if len(sources) > 0:
+        # ormasks will be different within the loop below due to the replacer
+        ormasks = _get_ormasks(sources=sources, exposure=exposure)
 
-        # Skip parent objects where all children are inserted
-        if source.get('deblend_nChild') != 0:
-            continue
+        replacer = _get_noise_replacer(exposure=exposure, sources=sources)
 
-        ormask = ormasks[i]
+        for i, source in enumerate(sources):
 
-        # This will insert a single source into the image
-        replacer.insertSource(source.getId())
+            # Skip parent objects where all children are inserted
+            if source.get('deblend_nChild') != 0:
+                continue
 
-        meas_task.callMeasure(source, exposure)
+            ormask = ormasks[i]
 
-        # TODO variable box size
-        stamp_bbox = _get_bbox_fixed(
-            exposure=exposure,
-            source=source,
-            stamp_size=48,
-        )
-        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
+            # This will insert a single source into the image
+            replacer.insertSource(source.getId())
 
-        obs = _extract_obs(
-            subim=subim,
-            source=source,
-        )
+            meas_task.callMeasure(source, exposure)
 
-        pres = _measure_moments(obs=obs.psf, weight=weight)
-        ores = _measure_moments(obs=obs, weight=weight)
+            # TODO variable box size
+            stamp_bbox = _get_bbox_fixed(
+                exposure=exposure,
+                source=source,
+                stamp_size=48,
+            )
+            subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
 
-        res = _get_output(
-            source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=obs.image.shape[0],
-            exp_bbox=exp_bbox,
-        )
+            obs = _extract_obs(
+                subim=subim,
+                source=source,
+            )
 
-        # Remove object
-        replacer.removeSource(source.getId())
+            pres = _measure_moments(obs=obs.psf, weight=weight)
+            ores = _measure_moments(obs=obs, weight=weight)
 
-        results.append(res)
+            res = _get_output(
+                source=source, res=ores, pres=pres, ormask=ormask,
+                box_size=obs.image.shape[0],
+                exp_bbox=exp_bbox,
+            )
 
-    # Insert all objects back into image
-    replacer.end()
+            # Remove object
+            replacer.removeSource(source.getId())
+
+            results.append(res)
+
+        # Insert all objects back into image
+        replacer.end()
 
     if len(results) > 0:
         results = eu.numpy_util.combine_arrlist(results)
@@ -220,15 +221,20 @@ def detect_and_deblend(
     else:
         result = detection_task.run(table, exposure)
 
-    sources = result.sources
+    if result is not None:
+        sources = result.sources
 
-    # run the deblender
-    deblend_task.run(exposure, sources)
+        # run the deblender
+        deblend_task.run(exposure, sources)
+    else:
+        sources = []
 
     return sources, meas_task
 
 
-def iterate_detection_and_skysub(exposure, detection_task, table, niter=2):
+def iterate_detection_and_skysub(
+    exposure, detection_task, table, niter=2,
+):
     """
     Iterate detection and sky subtraction
 
@@ -248,21 +254,26 @@ def iterate_detection_and_skysub(exposure, detection_task, table, niter=2):
     -------
     Result from running the detection task
     """
+    from lsst.pex.exceptions import RuntimeError as LSSTRuntimeError
     if niter < 1:
         raise ValueError(f'niter {niter} is less than 1')
 
     # keep a running sum of each sky that was subtracted
-    sky_meas = 0.0
-    for i in range(niter):
-        result = detection_task.run(table, exposure)
+    try:
+        sky_meas = 0.0
+        for i in range(niter):
+            result = detection_task.run(table, exposure)
 
-        determine_and_subtract_sky(exposure)
-        sky_meas += exposure.getMetadata()['BGMEAN']
+            determine_and_subtract_sky(exposure)
+            sky_meas += exposure.getMetadata()['BGMEAN']
 
-    meta = exposure.getMetadata()
+        meta = exposure.getMetadata()
 
-    # this is the overall sky we subtracted in all iterations
-    meta['BGMEAN'] = sky_meas
+        # this is the overall sky we subtracted in all iterations
+        meta['BGMEAN'] = sky_meas
+    except LSSTRuntimeError as err:
+        detection_task.log.info(str(err))
+        result = None
 
     return result
 

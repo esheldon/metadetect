@@ -158,68 +158,72 @@ class LSSTMEDSifier(MEDSifier):
         else:
             result = detection_task.run(table, exposure)
 
-        sources = result.sources
+        if result is not None:
+            sources = result.sources
 
-        if False:
-            plot_positions(sources)
+            if False:
+                plot_positions(sources)
 
-        # run the deblender
-        deblend_task.run(exposure, sources)
+            # run the deblender
+            deblend_task.run(exposure, sources)
 
-        # Run on deblended images
-        noise_replacer_config = NoiseReplacerConfig()
-        footprints = {
-            record.getId(): (record.getParent(), record.getFootprint())
-            for record in result.sources
-        }
+            # Run on deblended images
+            noise_replacer_config = NoiseReplacerConfig()
+            footprints = {
+                record.getId(): (record.getParent(), record.getFootprint())
+                for record in result.sources
+            }
 
-        # This constructor will replace all detected pixels with noise in the
-        # image
-        replacer = NoiseReplacer(
-            noise_replacer_config,
-            exposure=exposure,
-            footprints=footprints,
-        )
+            # This constructor will replace all detected pixels with noise in the
+            # image
+            replacer = NoiseReplacer(
+                noise_replacer_config,
+                exposure=exposure,
+                footprints=footprints,
+            )
 
-        nbad = 0
-        ntry = 0
-        kept_sources = []
+            nbad = 0
+            ntry = 0
+            kept_sources = []
 
-        for record in result.sources:
+            for record in result.sources:
 
-            # Skip parent objects where all children are inserted
-            if record.get('deblend_nChild') != 0:
-                continue
+                # Skip parent objects where all children are inserted
+                if record.get('deblend_nChild') != 0:
+                    continue
 
-            ntry += 1
+                ntry += 1
 
-            # This will insert a single source into the image
-            replacer.insertSource(record.getId())    # Get the peak as before
+                # This will insert a single source into the image
+                replacer.insertSource(record.getId())    # Get the peak as before
 
-            # peak = record.getFootprint().getPeaks()[0]
+                # peak = record.getFootprint().getPeaks()[0]
 
-            # The bounding box will be for the parent object
-            # bbox = record.getFootprint().getBBox()
+                # The bounding box will be for the parent object
+                # bbox = record.getFootprint().getBBox()
 
-            meas_task.callMeasure(record, exposure)
+                meas_task.callMeasure(record, exposure)
 
-            # Remove object
-            replacer.removeSource(record.getId())
+                # Remove object
+                replacer.removeSource(record.getId())
 
-            if record.getCentroidFlag():
-                nbad += 1
+                if record.getCentroidFlag():
+                    nbad += 1
 
-            kept_sources.append(record)
+                kept_sources.append(record)
 
-        # Insert all objects back into image
-        replacer.end()
+            # Insert all objects back into image
+            replacer.end()
 
-        if ntry > 0:
-            self.log.debug('nbad center: %d frac: %d' % (nbad, nbad/ntry))
+            if ntry > 0:
+                self.log.debug('nbad center: %d frac: %d' % (nbad, nbad/ntry))
 
-        nkeep = len(kept_sources)
-        ntot = len(result.sources)
-        self.log.debug('kept %d/%d non parents' % (nkeep, ntot))
+            nkeep = len(kept_sources)
+            ntot = len(result.sources)
+            self.log.debug('kept %d/%d non parents' % (nkeep, ntot))
+        else:
+            kept_sources = []
+
         self.sources = kept_sources
 
 
