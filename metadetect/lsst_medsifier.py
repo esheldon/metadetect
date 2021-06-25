@@ -15,6 +15,22 @@ from .lsst_skysub import determine_and_subtract_sky
 
 
 class LSSTMEDSifier(MEDSifier):
+    """
+    Medsifier for LSST
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations
+    meds_config: dict
+        config for meds making
+    thresh: float, optional
+        Default 10, meaning S/N of 10
+    subtract_sky: bool, optional
+        Default False
+    loglevel: str, optional
+        Default 'info'
+    """
     def __init__(
         self, *,
         mbobs,
