@@ -255,6 +255,7 @@ def iterate_detection_and_skysub(
     Result from running the detection task
     """
     from lsst.pex.exceptions import RuntimeError as LSSTRuntimeError
+    from lsst.pipe.base.task import TaskError
     if niter < 1:
         raise ValueError(f'niter {niter} is less than 1')
 
@@ -272,7 +273,12 @@ def iterate_detection_and_skysub(
         # this is the overall sky we subtracted in all iterations
         meta['BGMEAN'] = sky_meas
     except LSSTRuntimeError as err:
-        detection_task.log.info(str(err))
+        err = str(err).replace('lsst::pex::exceptions::RuntimeError:', '')
+        detection_task.log.warn(err)
+        result = None
+    except TaskError as err:
+        err = str(err).replace('lsst.pipe.base.task.TaskError:', '')
+        detection_task.log.warn(err)
         result = None
 
     return result
