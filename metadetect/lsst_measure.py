@@ -33,6 +33,24 @@ def measure_weighted_moments(
     thresh=10,
     loglevel='INFO',
 ):
+    """
+    run detection, deblending and measure weighted moments.  These things are
+    combined because of the way that the deblending works to produce
+    neighbor-subtracted images, where the image is temporarily modified
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations, currently single band
+    weight: weight GMix
+        For calculating weighted moments
+    subtract_sky: bool, optional
+        Default False
+    thresh: float, optional
+        Default 10
+    loglevel: str, optional
+        Default 'INFO'
+    """
     assert len(mbobs) == 1, 'one combined band for now'
     assert len(mbobs[0]) == 1, 'one epoch only'
 
@@ -128,7 +146,21 @@ def detect_and_deblend(
     subtract_sky=False,
     loglevel='INFO',
 ):
+    """
+    run detection and deblending, and optionally sky determination
+    and subtraction
 
+    Parameters
+    ----------
+    exposure: Exposure
+        The exposure to process
+    thresh: float, optional
+        Default 10
+    subtract_sky: bool, optional
+        Default False
+    loglevel: str, optional
+        Default 'INFO'
+    """
     loglevel = loglevel.upper()
 
     schema = afw_table.SourceTable.makeMinimalSchema()
