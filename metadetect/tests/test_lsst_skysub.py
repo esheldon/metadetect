@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pytest
+import tqdm
 
 lsst_skysub_mod = pytest.importorskip(
     'metadetect.lsst_skysub',
@@ -75,29 +76,44 @@ def make_exp(dims):
     return exp
 
 
-def check_skysub(meanvals, errvals, image_noise):
+def show_mask(exp):
+    import lsst.afw.display as afw_display
+    display = afw_display.getDisplay(backend='ds9')
+    display.mtv(exp.mask)
+    input('hit a key')
+
+
+def show_image(exp):
+    import lsst.afw.display as afw_display
+    display = afw_display.getDisplay(backend='ds9')
+    display.mtv(exp)
+    display.scale('log', 'minmax')
+    input('hit a key')
+
+
+def check_skysub(meanvals, errvals, image_noise, true_sky=0):
 
     meansky = meanvals.mean()
     stdsky = meanvals.std()
     errsky = stdsky/np.sqrt(meanvals.size)
     errmean = errvals.mean()
 
-    # is this low enough?
-    tol = image_noise / 3
+    tol = image_noise / 10
 
     # we want the uncertainty on the mean sky to be small enough for a
     # meaningful test
     assert errsky < tol / 3
 
     # our sims have no sky in them
-    true_skyval = 0.0
 
-    print('true sky value is', true_skyval)
+    print('image_noise:', image_noise)
+    print('tol:', tol)
+    print('true sky value is', true_sky)
     print('mean of all trials: %g +/- %g' % (meansky, errsky))
     print('sky error from trials:', stdsky)
     print('mean predicted error:', errmean)
 
-    assert np.abs(meansky - true_skyval) < tol
+    assert np.abs(meansky - true_sky) < tol
 
 
 def test_skysub_smoke():
@@ -112,7 +128,7 @@ def test_skysub_smoke():
     exp.image.array[:, :] = rng.normal(scale=noise, size=dims, loc=skyval)
     exp.variance.array[:, :] = noise**2
 
-    lsst_skysub_mod.skysub(exp)
+    lsst_skysub_mod.determine_and_subtract_sky(exp)
 
     meta = exp.getMetadata()
     assert 'BGMEAN' in meta
@@ -139,14 +155,14 @@ def test_skysub_pure_noise():
         exp.image.array[:, :] = rng.normal(scale=noise, size=dims, loc=skyval)
         exp.variance.array[:, :] = noise**2
 
-        lsst_skysub_mod.skysub(exp)
+        lsst_skysub_mod.determine_and_subtract_sky(exp)
 
         meta = exp.getMetadata()
 
         meanvals[itrial] = meta['BGMEAN']
         errvals[itrial] = np.sqrt(meta['BGVAR'])
 
-    check_skysub(meanvals, errvals, noise)
+    check_skysub(meanvals, errvals, noise, true_sky=0)
 
 
 def test_skysub_sim_smoke():
@@ -155,7 +171,7 @@ def test_skysub_sim_smoke():
     sim = make_lsst_sim(rng, gal_type='fixed')
 
     exp = sim['band_data']['i'][0]
-    lsst_skysub_mod.skysub(exp)
+    lsst_skysub_mod.determine_and_subtract_sky(exp)
 
     meta = exp.getMetadata()
     assert 'BGMEAN' in meta
@@ -166,10 +182,11 @@ def test_skysub_sim_fixed_gal():
     """
     check the mean sky over all trials is within 1/10 of the noise level
     """
-    seed = 481
+    seed = 184
     rng = np.random.RandomState(seed)
+    loglevel = 'WARN'
 
-    ntrial = 100
+    ntrial = 20
     meanvals = np.zeros(ntrial)
     errvals = np.zeros(ntrial)
 
@@ -177,15 +194,28 @@ def test_skysub_sim_fixed_gal():
         sim = make_lsst_sim(rng, gal_type='fixed')
 
         exp = sim['band_data']['i'][0]
+
         if False:
-            import lsst.afw.display as afw_display
-            display = afw_display.getDisplay(backend='ds9')
-            display.mtv(exp)
-            display.scale('log', 'minmax')
+            show_image(exp)
 
-        _, _ = lsst_meas_mod.detect_and_deblend(exposure=exp, thresh=5)
+        # we can send subtract_sky=True but do it separately here
+        # so we can see the mask before and after
+        _, _ = lsst_meas_mod.detect_and_deblend(
+            exposure=exp, thresh=5, loglevel=loglevel,
+        )
 
-        lsst_skysub_mod.skysub(exp)
+        if False:
+            show_mask(exp)
+
+        lsst_skysub_mod.determine_and_subtract_sky(exp)
+
+        _, _ = lsst_meas_mod.detect_and_deblend(
+            exposure=exp, thresh=5, loglevel=loglevel,
+        )
+        if False:
+            show_mask(exp)
+
+        lsst_skysub_mod.determine_and_subtract_sky(exp)
 
         meta = exp.getMetadata()
 
@@ -210,28 +240,41 @@ def test_skysub_sim_wldeblend_gal(star_density):
     putting a nominal test at stellar density of 20 but really need to do
     a full shear recover test to explore this better
     """
-    seed = 213
+    seed = 312
     rng = np.random.RandomState(seed)
+    loglevel = 'WARN'
 
-    ntrial = 500
+    ntrial = 20
     meanvals = np.zeros(ntrial)
     errvals = np.zeros(ntrial)
 
-    for itrial in range(ntrial):
+    for itrial in tqdm.trange(ntrial):
         sim = make_lsst_sim(
             rng, gal_type='wldeblend', star_density=star_density,
         )
 
         exp = sim['band_data']['i'][0]
+
         if False:
-            import lsst.afw.display as afw_display
-            display = afw_display.getDisplay(backend='ds9')
-            display.mtv(exp)
-            display.scale('log', 'minmax')
+            show_image(exp)
 
-        _, _ = lsst_meas_mod.detect_and_deblend(exposure=exp, thresh=5)
+        # we can send subtract_sky=True but do it separately here
+        # so we can see the mask before and after
+        _, _ = lsst_meas_mod.detect_and_deblend(
+            exposure=exp, thresh=5, loglevel=loglevel,
+        )
+        if False:
+            show_mask(exp)
 
-        lsst_skysub_mod.skysub(exp)
+        lsst_skysub_mod.determine_and_subtract_sky(exp)
+
+        _, _ = lsst_meas_mod.detect_and_deblend(
+            exposure=exp, thresh=5, loglevel=loglevel,
+        )
+        if False:
+            show_mask(exp)
+
+        lsst_skysub_mod.determine_and_subtract_sky(exp)
 
         meta = exp.getMetadata()
 
