@@ -211,10 +211,15 @@ def detect_and_deblend(
         # two iterations, determine sky, subtract it, then re-detect and then
         # determine sky again
         determine_and_subtract_sky(exposure)
+        sky_meas = exposure.getMetadata()['BGMEAN']
 
         result = detection_task.run(table, exposure)
 
         determine_and_subtract_sky(exposure)
+
+        meta = exposure.getMetadata()
+        # this is the sky we subtracted in all iterations
+        meta['BGMEAN'] += sky_meas
 
     sources = result.sources
 
