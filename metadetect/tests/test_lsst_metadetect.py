@@ -4,6 +4,7 @@ test using lsst simple sim
 import numpy as np
 import time
 import pytest
+from copy import deepcopy
 
 import ngmix
 
@@ -38,6 +39,7 @@ CONFIG = {
     "detect": {
         "thresh": 10.0,
     },
+    "subtract_sky": False,
     'meds': {},
 }
 
@@ -69,7 +71,8 @@ def make_lsst_sim(seed):
 
 
 @pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
-def test_lsst_metadetect_smoke(cls):
+@pytest.mark.parametrize('subtract_sky', [False, True])
+def test_lsst_metadetect_smoke(cls, subtract_sky):
     rng = np.random.RandomState(seed=116)
 
     sim_data = make_lsst_sim(116)
@@ -92,7 +95,11 @@ def test_lsst_metadetect_smoke(cls):
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    md = getattr(lsst_metadetect, cls)(CONFIG, coadd_mbobs, rng)
+    config = deepcopy(CONFIG)
+    config['subtract_sky'] = subtract_sky
+    md = getattr(lsst_metadetect, cls)(
+        config, coadd_mbobs, rng,
+    )
     md.go()
     res = md.result
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
