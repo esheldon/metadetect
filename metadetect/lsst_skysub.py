@@ -8,7 +8,7 @@ BP_TO_SKIP = [
 ]
 
 
-def skysub(exp):
+def determine_and_subtract_sky(exp):
     back_config = SubtractBackgroundConfig(
         ignoredPixelMask=BP_TO_SKIP,
     )
