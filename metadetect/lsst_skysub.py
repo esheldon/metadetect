@@ -9,6 +9,15 @@ BP_TO_SKIP = [
 
 
 def determine_and_subtract_sky(exp):
+    """
+    Determine and subtract the sky from the input exposure.
+    The exposure is modified.
+
+    Parameters
+    ----------
+    exp: Exposure
+        The exposure to be processed
+    """
     back_config = SubtractBackgroundConfig(
         ignoredPixelMask=BP_TO_SKIP,
     )
