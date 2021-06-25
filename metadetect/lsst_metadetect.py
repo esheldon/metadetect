@@ -15,14 +15,38 @@ from . import procflags
 
 
 class LSSTMetadetect(BaseLSSTMetadetect):
-    def __init__(self, *args, **kw):
-        loglevel = kw.pop('loglevel', 'info').upper()
+    """
+    Metadetect for LSST
 
-        super().__init__(*args, **kw)
+    Parameters
+    ----------
+    config: dict
+        The configuration
+    mbobs: ngmix.MultiBandObsList
+        The observations
+    rng: np.random.RandomState
+        the random state
+    show: bool, optional
+        If True will show images
+    loglevel: str, optional
+        Defaults to 'INFO'
+    """
 
-        self.log = lsst.log.Log.getLogger("LSSTMetadetect")
-        self.log.setLevel(getattr(lsst.log, loglevel))
-        self.loglevel = loglevel
+    name = 'LSSTMetadetect'
+
+    def __init__(
+        self, config, mbobs, rng,
+        show=False, loglevel='INFO',
+    ):
+
+        self._set_logger(loglevel)
+
+        super().__init__(config=config, mbobs=mbobs, rng=rng, show=show)
+
+    def _set_logger(self, loglevel):
+        self.loglevel = loglevel.upper()
+        self.log = lsst.log.Log.getLogger(self.name)
+        self.log.setLevel(getattr(lsst.log, self.loglevel))
 
     def _get_all_metacal(self):
         """
@@ -71,6 +95,7 @@ class LSSTMetadetect(BaseLSSTMetadetect):
             mbobs=mbobs,
             meds_config=self['meds'],
             thresh=self['detect']['thresh'],
+            subtract_sky=self['subtract_sky'],
             loglevel=self.loglevel,
         )
 
@@ -197,14 +222,33 @@ class LSSTMetadetect(BaseLSSTMetadetect):
 
 
 class LSSTDeblendMetadetect(LSSTMetadetect):
-    def __init__(self, *args, **kw):
-        loglevel = kw.pop('loglevel', 'info').upper()
+    """
+    Metadetect for LSST with deblending at the measurement
+    level
 
-        super(LSSTMetadetect, self).__init__(*args, **kw)
+    Parameters
+    ----------
+    config: dict
+        The configuration
+    mbobs: ngmix.MultiBandObsList
+        The observations
+    rng: np.random.RandomState
+        the random state
+    show: bool, optional
+        If True will show images
+    loglevel: str, optional
+        Defaults to 'INFO'
+    """
 
-        self.log = lsst.log.Log.getLogger("LSSTDeblendMetadetect")
-        self.log.setLevel(getattr(lsst.log, loglevel))
-        self.loglevel = loglevel
+    name = 'LSSTDeblendMetadetect'
+
+    def __init__(
+        self, config, mbobs, rng,
+        show=False, loglevel='INFO',
+    ):
+        super().__init__(
+            config=config, mbobs=mbobs, rng=rng, show=show,
+        )
 
         self._set_weight()
 
@@ -224,6 +268,7 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
             mbobs=mbobs,
             weight=self.weight,
             thresh=self['detect']['thresh'],
+            subtract_sky=self['subtract_sky'],
         )
 
         if res is not None:

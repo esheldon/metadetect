@@ -11,13 +11,22 @@ import lsst.log
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
+from .lsst_skysub import determine_and_subtract_sky
 
 
 class LSSTMEDSifier(MEDSifier):
-    def __init__(self, *, mbobs, meds_config, thresh=10.0, loglevel='info'):
+    def __init__(
+        self, *,
+        mbobs,
+        meds_config,
+        thresh=10.0,
+        subtract_sky=False,
+        loglevel='info',
+    ):
         self.mbobs = mbobs
         self.nband = len(mbobs)
         self.thresh = thresh
+        self.subtract_sky = subtract_sky
 
         assert len(mbobs) == 1, 'multi band not supported yet'
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
@@ -124,6 +133,16 @@ class LSSTMEDSifier(MEDSifier):
         # Detect objects
         table = afw_table.SourceTable.make(schema)
         result = detection_task.run(table, exposure)
+
+        if self.subtract_sky:
+            # two iterations, determine sky, subtract it, then re-detect and then
+            # determine sky again
+            determine_and_subtract_sky(exposure)
+
+            result = detection_task.run(table, exposure)
+
+            determine_and_subtract_sky(exposure)
+
         sources = result.sources
 
         if False:

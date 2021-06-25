@@ -17,6 +17,7 @@ from lsst.pex.exceptions import (
     InvalidParameterError,
     LogicError,
 )
+from .lsst_skysub import determine_and_subtract_sky
 
 import lsst.log
 
@@ -25,7 +26,13 @@ from . import procflags
 from .lsst_mbobs_extractor import MBObsMissingDataError
 
 
-def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
+def measure_weighted_moments(
+    mbobs,
+    weight,
+    subtract_sky=False,
+    thresh=10,
+    loglevel='INFO',
+):
     assert len(mbobs) == 1, 'one combined band for now'
     assert len(mbobs[0]) == 1, 'one epoch only'
 
@@ -35,6 +42,7 @@ def measure_weighted_moments(*, mbobs, weight, thresh=10, loglevel='INFO'):
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
         thresh=thresh,
+        subtract_sky=subtract_sky,
         loglevel=loglevel,
     )
 
@@ -114,7 +122,12 @@ def _get_ormask(*, source, exposure):
     return maskval
 
 
-def detect_and_deblend(*, exposure, thresh=10, loglevel='INFO'):
+def detect_and_deblend(
+    exposure,
+    thresh=10,
+    subtract_sky=False,
+    loglevel='INFO',
+):
 
     loglevel = loglevel.upper()
 
@@ -161,6 +174,16 @@ def detect_and_deblend(*, exposure, thresh=10, loglevel='INFO'):
     # Detect objects
     table = afw_table.SourceTable.make(schema)
     result = detection_task.run(table, exposure)
+
+    if subtract_sky:
+        # two iterations, determine sky, subtract it, then re-detect and then
+        # determine sky again
+        determine_and_subtract_sky(exposure)
+
+        result = detection_task.run(table, exposure)
+
+        determine_and_subtract_sky(exposure)
+
     sources = result.sources
 
     # run the deblender
