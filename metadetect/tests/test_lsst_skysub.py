@@ -149,7 +149,7 @@ def test_skysub_pure_noise():
     check_skysub(meanvals, errvals, noise)
 
 
-def test_skysub_sim_smoke(gal_type):
+def test_skysub_sim_smoke():
     seed = 812
     rng = np.random.RandomState(seed)
     sim = make_lsst_sim(rng, gal_type='fixed')
