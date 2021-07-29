@@ -95,7 +95,7 @@ class LSSTMetadetect(BaseLSSTMetadetect):
             mbobs=mbobs,
             meds_config=self['meds'],
             thresh=self['detect']['thresh'],
-            subtract_sky=self['subtract_sky'],
+            subtract_sky=self.get('subtract_sky', False),
             loglevel=self.loglevel,
         )
 

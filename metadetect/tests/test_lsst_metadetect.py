@@ -71,7 +71,7 @@ def make_lsst_sim(seed):
 
 
 @pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
-@pytest.mark.parametrize('subtract_sky', [False, True])
+@pytest.mark.parametrize('subtract_sky', [None, False, True])
 def test_lsst_metadetect_smoke(cls, subtract_sky):
     rng = np.random.RandomState(seed=116)
 
@@ -96,7 +96,8 @@ def test_lsst_metadetect_smoke(cls, subtract_sky):
     coadd_mbobs.append(obslist)
 
     config = deepcopy(CONFIG)
-    config['subtract_sky'] = subtract_sky
+    if subtract_sky is not None:
+        config['subtract_sky'] = subtract_sky
     md = getattr(lsst_metadetect, cls)(
         config, coadd_mbobs, rng,
     )
