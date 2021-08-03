@@ -11,12 +11,19 @@ from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
+from .masks import (
+    expand_masks_mbobs,
+    expand_masks_mfrac,
+    expand_masks_bit_mask,
+)
 from .mfrac import measure_mfrac
 
 logger = logging.getLogger(__name__)
 
 
-def do_metadetect(config, mbobs, rng, nonshear_mbobs=None):
+def do_metadetect(
+    config, mbobs, rng, nonshear_mbobs=None, mask_catalog=None, mask_expand_rad=0
+):
     """Run metadetect on the multi-band observations.
 
     Parameters
@@ -37,13 +44,24 @@ def do_metadetect(config, mbobs, rng, nonshear_mbobs=None):
         If not None and 'flux' is given in the config, then this mbobs will
         be sheared and have flux measurements made at the detected positions in
         the `mbobs`.
+    mask_catalog: np.ndarray, optional
+        If not None, this array should have columns 'x', 'y' and 'radius_pixels'
+        that gives the location and radius of any masked objects in the image.
+        Default of None indicates no catalog.
+    mask_expand_rad: float, optional
+        The amount in pixels to expand the radius of the masked regions in the mask
+        catalog after applying the metacal shears. Default is zero.
 
     Returns
     -------
     res: dict
         The fitting data keyed on the shear component.
     """
-    md = Metadetect(config, mbobs, rng, nonshear_mbobs=nonshear_mbobs)
+    md = Metadetect(
+        config, mbobs, rng, nonshear_mbobs=nonshear_mbobs,
+        mask_catalog=mask_catalog,
+        mask_expand_rad=mask_expand_rad,
+    )
     md.go()
     return md.result
 
@@ -59,6 +77,10 @@ class Metadetect(dict):
            is a moment computed from the inverse variance weighted average across
            the bands.
 
+    ksigma - Perform a pre-PSF weighted moments measurement. The shear measurement
+           is a moment computed from the inverse variance weighted average across
+           the bands.
+
     gauss - Perform a joint fit of a Gaussian across the bands.
 
     If `nonshear_mbobs` is given, then metacal images for these additional observations
@@ -66,6 +88,8 @@ class Metadetect(dict):
     options, this works slightly differently.
 
     wmom - Perform a post-PSF weighted flux measurement.
+
+    ksigma - Perform a pre-PSF weighted flux measurement.
 
     gauss - Peform a second joint fit across all bands used for shear and the ones
             non-shear bands, keeping only the fluxes. We repeat the measurements
@@ -90,8 +114,21 @@ class Metadetect(dict):
     nonshear_mbobs: ngmix.MultiBandObsList, optional
         If not None athen this mbobs will be sheared and have flux measurements
         made at the detected positions in the `mbobs`.
+    mask_catalog: np.ndarray, optional
+        If not None, this array should have columns 'x', 'y' and 'radius_pixels'
+        that gives the location and radius of any masked objects in the image.
+        Default of None indicates no catalog.
+    mask_expand_rad: float, optional
+        The amount in pixels to expand the radius of the masked regions in the mask
+        catalog after applying the metacal shears. Default is zero.
     """
-    def __init__(self, config, mbobs, rng, show=False, nonshear_mbobs=None):
+    def __init__(
+        self, config, mbobs, rng, show=False, nonshear_mbobs=None,
+        mask_catalog=None, mask_expand_rad=0
+    ):
+
+        self.mask_catalog = mask_catalog
+        self.mask_expand_rad = mask_expand_rad
 
         self._show = show
 
@@ -276,6 +313,13 @@ class Metadetect(dict):
 
         we then do flux measurements on the nonshear_mbobs as well if it is given.
         """
+
+        if self.mask_catalog is not None and self.mask_expand_rad > 0:
+            mbobs = expand_masks_mbobs(
+                mbobs, self.mask_catalog,
+                self.mask_expand_rad,
+                self['maskflags'],
+            )
 
         medsifier = self._do_detect(mbobs)
         if self._show:
@@ -618,6 +662,24 @@ class Metadetect(dict):
         add catalog positions to the result
         """
 
+        if self.mask_catalog is not None and self.mask_expand_rad > 0:
+            bmask = expand_masks_bit_mask(
+                self.bmask, self.mask_catalog,
+                self.mask_expand_rad,
+                self['maskflags']
+            )
+            mfrac = expand_masks_mfrac(
+                self.mfrac, self.mask_catalog,
+                self.mask_expand_rad,
+            )
+        else:
+            bmask = self.bmask
+            mfrac = self.mfrac
+
+        # ormask has or of flags from SE images and so we don't track change
+        # when we expand the star masks
+        ormask = self.ormask
+
         new_dt = [
             ('sx_row', 'f4'),
             ('sx_col', 'f4'),
@@ -626,6 +688,7 @@ class Metadetect(dict):
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
+            ('flux_auto', 'f4'),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -651,6 +714,7 @@ class Metadetect(dict):
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
+            newres['flux_auto'] = cat['flux_auto']
 
             rows_noshear, cols_noshear = shearpos.unshear_positions(
                 newres['sx_row'],
@@ -681,11 +745,11 @@ class Metadetect(dict):
             else:
                 bmask_region = 1
 
-                logger.debug(
-                    'ormask|bmask region: %s|%s',
-                    ormask_region,
-                    bmask_region,
-                )
+            logger.debug(
+                'ormask|bmask region: %s|%s',
+                ormask_region,
+                bmask_region,
+            )
 
             if ormask_region > 1:
                 for ind in range(cat.size):
@@ -704,11 +768,11 @@ class Metadetect(dict):
                         max(0, cclip[ind] + ormask_region)))
 
                     newres['ormask'][ind] = np.bitwise_or.reduce(
-                        self.ormask[lr:ur+1, lc:uc+1],
+                        ormask[lr:ur+1, lc:uc+1],
                         axis=None,
                     )
             else:
-                newres['ormask'] = self.ormask[rclip, cclip]
+                newres['ormask'] = ormask[rclip, cclip]
 
             if bmask_region > 1:
                 for ind in range(cat.size):
@@ -727,17 +791,17 @@ class Metadetect(dict):
                         max(0, cclip[ind] + bmask_region)))
 
                     newres['bmask'][ind] = np.bitwise_or.reduce(
-                        self.bmask[lr:ur+1, lc:uc+1],
+                        bmask[lr:ur+1, lc:uc+1],
                         axis=None,
                     )
             else:
-                newres['bmask'] = self.bmask[rclip, cclip]
+                newres['bmask'] = bmask[rclip, cclip]
 
-            if np.any(self.mfrac > 0):
+            if np.any(mfrac > 0):
                 # we are using the positions with the metacal shear removed
                 # for this.
                 newres["mfrac"] = measure_mfrac(
-                    mfrac=self.mfrac,
+                    mfrac=mfrac,
                     x=newres["sx_col_noshear"],
                     y=newres["sx_row_noshear"],
                     box_sizes=cat["box_size"],
