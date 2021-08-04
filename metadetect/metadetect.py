@@ -12,9 +12,9 @@ from . import fitting
 from . import procflags
 from . import shearpos
 from .masks import (
-    expand_masks_mbobs,
-    expand_masks_mfrac,
-    expand_masks_bit_mask,
+    apply_mask_mbobs,
+    apply_mask_mfrac,
+    apply_mask_bit_mask,
 )
 from .mfrac import measure_mfrac
 
@@ -47,10 +47,8 @@ def do_metadetect(
     mask_catalog: np.ndarray, optional
         If not None, this array should have columns 'x', 'y' and 'radius_pixels'
         that gives the location and radius of any masked objects in the image.
-        Default of None indicates no catalog.
-    mask_expand_rad: float, optional
-        The amount in pixels to expand the radius of the masked regions in the mask
-        catalog after applying the metacal shears. Default is zero.
+        Default of None indicates no catalog. This mask will be applied to each
+        of the metacalibration images after they are sheared.
 
     Returns
     -------
@@ -60,7 +58,6 @@ def do_metadetect(
     md = Metadetect(
         config, mbobs, rng, nonshear_mbobs=nonshear_mbobs,
         mask_catalog=mask_catalog,
-        mask_expand_rad=mask_expand_rad,
     )
     md.go()
     return md.result
@@ -117,18 +114,15 @@ class Metadetect(dict):
     mask_catalog: np.ndarray, optional
         If not None, this array should have columns 'x', 'y' and 'radius_pixels'
         that gives the location and radius of any masked objects in the image.
-        Default of None indicates no catalog.
-    mask_expand_rad: float, optional
-        The amount in pixels to expand the radius of the masked regions in the mask
-        catalog after applying the metacal shears. Default is zero.
+        Default of None indicates no catalog. This mask will be applied to each
+        of the metacalibration images after they are sheared.
     """
     def __init__(
         self, config, mbobs, rng, show=False, nonshear_mbobs=None,
-        mask_catalog=None, mask_expand_rad=0
+        mask_catalog=None,
     ):
 
         self.mask_catalog = mask_catalog
-        self.mask_expand_rad = mask_expand_rad
 
         self._show = show
 
@@ -313,11 +307,9 @@ class Metadetect(dict):
 
         we then do flux measurements on the nonshear_mbobs as well if it is given.
         """
-
-        if self.mask_catalog is not None and self.mask_expand_rad > 0:
-            mbobs = expand_masks_mbobs(
+        if self.mask_catalog is not None:
+            apply_mask_mbobs(
                 mbobs, self.mask_catalog,
-                self.mask_expand_rad,
                 self['maskflags'],
             )
 
@@ -663,14 +655,12 @@ class Metadetect(dict):
         """
 
         if self.mask_catalog is not None and self.mask_expand_rad > 0:
-            bmask = expand_masks_bit_mask(
+            bmask = apply_mask_bit_mask(
                 self.bmask, self.mask_catalog,
-                self.mask_expand_rad,
                 self['maskflags']
             )
-            mfrac = expand_masks_mfrac(
+            mfrac = apply_mask_mfrac(
                 self.mfrac, self.mask_catalog,
-                self.mask_expand_rad,
             )
         else:
             bmask = self.bmask
@@ -730,8 +720,8 @@ class Metadetect(dict):
             newres['sx_col_noshear'] = cols_noshear
 
             dims = obs.image.shape
-            rclip = _clip_and_round(rows_noshear, dims[0])
-            cclip = _clip_and_round(cols_noshear, dims[1])
+            rclip = _clip_and_round(newres['sx_row'], dims[0])
+            cclip = _clip_and_round(newres['sx_col'], dims[1])
 
             if 'ormask_region' in self and self['ormask_region'] > 1:
                 ormask_region = self['ormask_region']
@@ -798,12 +788,10 @@ class Metadetect(dict):
                 newres['bmask'] = bmask[rclip, cclip]
 
             if np.any(mfrac > 0):
-                # we are using the positions with the metacal shear removed
-                # for this.
                 newres["mfrac"] = measure_mfrac(
                     mfrac=mfrac,
-                    x=newres["sx_col_noshear"],
-                    y=newres["sx_row_noshear"],
+                    x=newres["sx_col"],
+                    y=newres["sx_row"],
                     box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
