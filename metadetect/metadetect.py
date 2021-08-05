@@ -654,17 +654,16 @@ class Metadetect(dict):
         add catalog positions to the result
         """
 
-        if self.mask_catalog is not None and self.mask_expand_rad > 0:
-            bmask = apply_mask_bit_mask(
-                self.bmask, self.mask_catalog,
+        bmask = self.bmask.copy()
+        mfrac = self.mfrac.copy()
+        if self.mask_catalog is not None:
+            apply_mask_bit_mask(
+                bmask, self.mask_catalog,
                 self['maskflags']
             )
-            mfrac = apply_mask_mfrac(
-                self.mfrac, self.mask_catalog,
+            apply_mask_mfrac(
+                mfrac, self.mask_catalog,
             )
-        else:
-            bmask = self.bmask
-            mfrac = self.mfrac
 
         # ormask has or of flags from SE images and so we don't track change
         # when we expand the star masks
@@ -678,7 +677,6 @@ class Metadetect(dict):
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
-            ('flux_auto', 'f4'),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -704,7 +702,6 @@ class Metadetect(dict):
 
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
-            newres['flux_auto'] = cat['flux_auto']
 
             rows_noshear, cols_noshear = shearpos.unshear_positions(
                 newres['sx_row'],
