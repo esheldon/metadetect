@@ -147,11 +147,39 @@ class MBObsExtractor(object):
         """
 
         try:
+            # the exception is always being raised...
             stamp_radius, stamp_size = self._compute_stamp_size(rec)
             bbox = _project_box(rec, imobj.getWcs(), stamp_radius)
         except LogicError as err:
             self.log.debug(str(err))
+
+            sconf = self.config['stamps']
+
             bbox = rec.getFootprint().getBBox()
+            max_size = max(bbox.width, bbox.height)
+
+            resize = False
+            if bbox.width != bbox.height:
+                resize = True
+
+            if max_size < sconf['min_stamp_size']:
+                print('setting to size from %s to %s' % (
+                    max_size, sconf['min_stamp_size']
+                ))
+                max_size = sconf['min_stamp_size']
+                resize = True
+
+            if resize:
+
+                start = geom.Point2I(bbox.beginX, bbox.beginY)
+                end = geom.Point2I(
+                    bbox.beginX + max_size - 1,
+                    bbox.beginY + max_size - 1,
+                )
+                bbox = geom.Box2I(
+                    minimum=start,
+                    maximum=end,
+                )
 
         return bbox
 

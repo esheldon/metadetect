@@ -124,6 +124,8 @@ class BaseLSSTMetadetect(dict):
 
         if self['model'] == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
+        elif self['model'] == 'ksigma':
+            self._fitter = fitting.KSigmaMoments(self, self.rng)
         elif self['model'] == 'gauss':
             if ngmix.__version__[0:2] == 'v1':
                 self._fitter = fitting.MaxLikeNgmixv1(
