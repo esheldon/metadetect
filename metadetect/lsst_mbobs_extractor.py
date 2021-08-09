@@ -163,7 +163,7 @@ class MBObsExtractor(object):
                 resize = True
 
             if max_size < sconf['min_stamp_size']:
-                print('setting to size from %s to %s' % (
+                self.log.debug('setting to size from %s to %s' % (
                     max_size, sconf['min_stamp_size']
                 ))
                 max_size = sconf['min_stamp_size']
