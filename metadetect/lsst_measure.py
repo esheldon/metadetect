@@ -268,12 +268,6 @@ def iterate_detection_and_skysub(
 
             sky_meas += exposure.getMetadata()['BGMEAN']
 
-
-            # result = detection_task.run(table, exposure)
-            #
-            # determine_and_subtract_sky(exposure)
-            # sky_meas += exposure.getMetadata()['BGMEAN']
-
         meta = exposure.getMetadata()
 
         # this is the overall sky we subtracted in all iterations
