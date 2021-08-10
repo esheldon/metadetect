@@ -4,6 +4,7 @@ PSF_FAILURE = 2**2
 OBJ_FAILURE = 2**3
 NOMOMENTS_FAILURE = 2**4
 BAD_BBOX = 2**5
+BMASK_NODET = 2**6
 
 NAME_MAP = {
     # no attempt was made to measure this object, usually
