@@ -717,8 +717,8 @@ class Metadetect(dict):
             newres['sx_col_noshear'] = cols_noshear
 
             dims = obs.image.shape
-            rclip = _clip_and_round(newres['sx_row'], dims[0])
-            cclip = _clip_and_round(newres['sx_col'], dims[1])
+            rclip = _clip_and_round(newres['sx_row_noshear'], dims[0])
+            cclip = _clip_and_round(newres['sx_col_noshear'], dims[1])
 
             if 'ormask_region' in self and self['ormask_region'] > 1:
                 ormask_region = self['ormask_region']
@@ -787,8 +787,8 @@ class Metadetect(dict):
             if np.any(mfrac > 0):
                 newres["mfrac"] = measure_mfrac(
                     mfrac=mfrac,
-                    x=newres["sx_col"],
-                    y=newres["sx_row"],
+                    x=newres["sx_col_noshear"],
+                    y=newres["sx_row_noshear"],
                     box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
