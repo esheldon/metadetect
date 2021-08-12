@@ -61,6 +61,10 @@ class Metadetect(dict):
 
     gauss - Perform a joint fit of a Gaussian across the bands.
 
+    ksigma - Perform a pre-PSF weighted moments measurement. The shear measurement
+           is a moment computed from the inverse variance weighted average across
+           the bands.
+
     If `nonshear_mbobs` is given, then metacal images for these additional observations
     are made, but only used to get a flux measurement. For the different fitting
     options, this works slightly differently.
@@ -71,6 +75,8 @@ class Metadetect(dict):
             non-shear bands, keeping only the fluxes. We repeat the measurements
             on the bands used for shear so that colors from the flux measurements
             have the same effective aperture.
+
+    ksigma - Perform a pre-PSF weighted flux measurement.
 
     Parameters
     ----------
@@ -681,11 +687,11 @@ class Metadetect(dict):
             else:
                 bmask_region = 1
 
-                logger.debug(
-                    'ormask|bmask region: %s|%s',
-                    ormask_region,
-                    bmask_region,
-                )
+            logger.debug(
+                'ormask|bmask region: %s|%s',
+                ormask_region,
+                bmask_region,
+            )
 
             if ormask_region > 1:
                 for ind in range(cat.size):
