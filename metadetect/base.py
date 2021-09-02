@@ -125,12 +125,7 @@ class BaseLSSTMetadetect(dict):
         if self['model'] == 'wmom':
             self._fitter = fitting.Moments(self, self.rng)
         elif self['model'] == 'gauss':
-            if ngmix.__version__[0:2] == 'v1':
-                self._fitter = fitting.MaxLikeNgmixv1(
-                    self, self.rng, self.nband,
-                )
-            else:
-                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+            self._fitter = fitting.MaxLike(self, self.rng, self.nband)
         else:
             raise ValueError("bad model: '%s'" % self['model'])
 

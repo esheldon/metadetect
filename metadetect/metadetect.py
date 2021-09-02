@@ -5,8 +5,9 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
+from ngmix.util import get_ratio_var, get_ratio_error
 
-from .util import Namer, get_ratio_var, get_ratio_error
+from .util import Namer
 from . import detect
 from . import fitting
 from . import procflags
@@ -198,18 +199,11 @@ class Metadetect(dict):
             if self.nonshear_mbobs is not None:
                 self._nonshear_fitter = fitting.KSigmaMoments(self, self.rng)
         elif self['model'] == 'gauss':
-            if ngmix.__version__[0:2] == 'v1':
-                self._fitter = fitting.MaxLikeNgmixv1(self, self.rng, self.nband)
-                if self.nonshear_mbobs is not None:
-                    self._nonshear_fitter = fitting.MaxLikeNgmixv1(
-                        self, self.rng, self.nband + self.nonshear_nband,
-                    )
-            else:
-                self._fitter = fitting.MaxLike(self, self.rng, self.nband)
-                if self.nonshear_mbobs is not None:
-                    self._nonshear_fitter = fitting.MaxLike(
-                        self, self.rng, self.nband + self.nonshear_nband,
-                    )
+            self._fitter = fitting.MaxLike(self, self.rng, self.nband)
+            if self.nonshear_mbobs is not None:
+                self._nonshear_fitter = fitting.MaxLike(
+                    self, self.rng, self.nband + self.nonshear_nband,
+                )
         else:
             raise ValueError("bad model: '%s'" % self['model'])
 

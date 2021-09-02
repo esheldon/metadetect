@@ -6,6 +6,6 @@ pyyaml
 numba
 esutil
 sep
-ngmix
+ngmix!=1
 meds
 des-sxdes
