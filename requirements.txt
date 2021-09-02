@@ -9,3 +9,4 @@ sep
 ngmix
 meds
 des-sxdes
+scipy
