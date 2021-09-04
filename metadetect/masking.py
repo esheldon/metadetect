@@ -6,7 +6,7 @@ from .interpolate import interpolate_image_at_mask
 def apply_foreground_masking_corrections(
     *, mbobs, xm, ym, rm, method, mask_expand_rad,
     mask_bit_val, expand_mask_bit_val, interp_bit_val,
-    symmetrize, ap_rad, iso_rad,
+    symmetrize, ap_rad, iso_buff, rng,
 ):
     """
     Apply corrections for masks of large foreground objects like local galaxies
@@ -28,7 +28,8 @@ def apply_foreground_masking_corrections(
             mask_bit_val=mask_bit_val,
             interp_bit_val=interp_bit_val,
             fill_isolated_with_noise=False,
-            iso_rad=iso_rad,
+            iso_buff=iso_buff,
+            rng=rng,
         )
     elif method == 'interp-noise':
         _apply_mask_interp(
@@ -40,7 +41,8 @@ def apply_foreground_masking_corrections(
             mask_bit_val=mask_bit_val,
             interp_bit_val=interp_bit_val,
             fill_isolated_with_noise=True,
-            iso_rad=iso_rad,
+            iso_buff=iso_buff,
+            rng=rng,
         )
     elif method == 'apodize':
         _apply_mask_apodize(
@@ -84,7 +86,8 @@ def _apply_mask_interp(
     mask_bit_val,
     interp_bit_val,
     fill_isolated_with_noise,
-    iso_rad,
+    iso_buff,
+    rng,
 ):
 
     # masking is same for all, just take the first
@@ -116,19 +119,25 @@ def _apply_mask_interp(
                     obs.weight[wbad] = 0.0
 
                     if not np.all(bad_logic):
+                        wmsk = obs.weight > 0
+                        wgt = np.median(obs.weight[wmsk])
                         interp_image = interpolate_image_at_mask(
                             image=obs.image,
                             bad_msk=bad_logic,
                             maxfrac=1.0,
-                            iso_rad=iso_rad,
+                            iso_buff=iso_buff,
                             fill_isolated_with_noise=fill_isolated_with_noise,
+                            rng=rng,
+                            weight=wgt,
                         )
                         interp_noise = interpolate_image_at_mask(
                             image=obs.noise,
                             bad_msk=bad_logic,
                             maxfrac=1.0,
-                            iso_rad=iso_rad,
+                            iso_buff=iso_buff,
                             fill_isolated_with_noise=fill_isolated_with_noise,
+                            rng=rng,
+                            weight=wgt,
                         )
                     else:
                         interp_image = None
