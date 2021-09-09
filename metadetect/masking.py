@@ -16,6 +16,31 @@ def apply_foreground_masking_corrections(
     ----------
     mbobs: ngmix.MultiBandObsList
         The observations to mask
+    xm: np.ndarray
+        The x/column location of the mask holes in zero-indexed pixels.
+    ym: np.ndarray
+        The y/row location of the mask holes in zero-indexed pixels.
+    rm: np.ndarray
+        The radii of the mask holes in pixels.
+    method: str
+        The method to use for masking corrections. It should be one of 'interp',
+        'interp-noise', or 'apodize'.
+    mask_bit_val: int
+        The bit to set in the bit mask for areas inside the mask holes.
+    expand_mask_bit_val: int
+        The bit to set in the bit mask for areas inside the expanded mask holes.
+    interp_bit_val: int
+        The bit to set for areas in the mask that are interpolated.
+    symmetrize: bool
+        If True, the mask holes will be symmetrized via a 90 degree rotation.
+    ap_rad: float
+        When apodizing, the scale of the kernel. The total kernel goes from 0 to 1
+        over 6*ap_rad.
+    iso_buff: float
+        When using 'interp-noise', the number of pixels away from a good pixel a
+        given pixel must be to be noise interpolated.
+    rng: np.random.RandomState
+        An RNG to use when doing 'interp-noise'.
     """
 
     if method == 'interp':
