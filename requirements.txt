@@ -3,9 +3,10 @@ scipy
 galsim
 fitsio>=1.0
 pyyaml
-numba
+numba!=0.54.0
 esutil
 sep
 ngmix
 meds
 des-sxdes
+scipy
