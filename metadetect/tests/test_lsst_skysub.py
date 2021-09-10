@@ -17,7 +17,7 @@ sim = pytest.importorskip(
 )
 
 
-def make_lsst_sim(rng, gal_type, star_density=0):
+def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
     coadd_dim = 251
 
     # the EDGE region is 5 pixels wide but, give a bit more space because the
@@ -65,6 +65,7 @@ def make_lsst_sim(rng, gal_type, star_density=0):
         g2=0.00,
         psf=psf,
         se_dim=coadd_dim,
+        sky_n_sigma=sky_n_sigma,
     )
     return sim_data
 
@@ -91,7 +92,7 @@ def show_image(exp):
     input('hit a key')
 
 
-def check_skysub(meanvals, errvals, image_noise, true_sky=0):
+def check_skysub(meanvals, errvals, image_noise, true_sky):
 
     meansky = meanvals.mean()
     stdsky = meanvals.std()
@@ -168,7 +169,7 @@ def test_skysub_pure_noise():
 def test_skysub_sim_smoke():
     seed = 812
     rng = np.random.RandomState(seed)
-    sim = make_lsst_sim(rng, gal_type='fixed')
+    sim = make_lsst_sim(rng, gal_type='fixed', sky_n_sigma=3)
 
     exp = sim['band_data']['i'][0]
     lsst_skysub_mod.determine_and_subtract_sky(exp)
@@ -178,8 +179,8 @@ def test_skysub_sim_smoke():
     assert 'BGVAR' in meta
 
 
-@pytest.mark.parametrize('rel_sky_val', [0.5, 2.0, 100.0])
-def test_skysub_sim_fixed_gal(rel_sky_val):
+@pytest.mark.parametrize('sky_n_sigma', [-0.5, -2.0, -100.0])
+def test_skysub_sim_fixed_gal(sky_n_sigma):
     """
     check the measured mean sky over all trials is within 1/10 of the noise
     level
@@ -193,13 +194,12 @@ def test_skysub_sim_fixed_gal(rel_sky_val):
     errvals = np.zeros(ntrial)
 
     for itrial in range(ntrial):
-        sim = make_lsst_sim(rng, gal_type='fixed')
+        sim = make_lsst_sim(rng, gal_type='fixed', sky_n_sigma=sky_n_sigma)
 
         exp = sim['band_data']['i'][0]
 
         noise = np.sqrt(np.median(exp.variance.array))
-        true_sky = rel_sky_val * noise
-        exp.image.array += true_sky
+        true_sky = sky_n_sigma * noise
 
         if False:
             show_image(exp)
@@ -225,8 +225,8 @@ def test_skysub_sim_fixed_gal(rel_sky_val):
     reason='simulation input data is not present',
 )
 @pytest.mark.parametrize('star_density', [20.0])
-@pytest.mark.parametrize('rel_sky_val', [0.5, 2.0, 100.0])
-def test_skysub_sim_wldeblend_gal(star_density, rel_sky_val):
+@pytest.mark.parametrize('sky_n_sigma', [0.5, 2.0, 100.0])
+def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
     """
     check the measured mean sky over all trials is within 1/10 of the noise
     level
@@ -245,13 +245,13 @@ def test_skysub_sim_wldeblend_gal(star_density, rel_sky_val):
     for itrial in tqdm.trange(ntrial):
         sim = make_lsst_sim(
             rng, gal_type='wldeblend', star_density=star_density,
+            sky_n_sigma=sky_n_sigma,
         )
 
         exp = sim['band_data']['i'][0]
 
         noise = np.sqrt(np.median(exp.variance.array))
-        true_sky = rel_sky_val * noise
-        exp.image.array += true_sky
+        true_sky = sky_n_sigma * noise
 
         if False:
             show_image(exp)
