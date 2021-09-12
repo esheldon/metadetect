@@ -204,8 +204,8 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
         if False:
             show_image(exp)
 
-        _, _ = lsst_meas_mod.detect_and_deblend(
-            exposure=exp, thresh=5, loglevel=loglevel, subtract_sky=True,
+        lsst_meas_mod.iterate_detection_and_skysub(
+            exposure=exp, thresh=5,
         )
         meta = exp.getMetadata()
         if 'BGMEAN' not in meta:
@@ -225,7 +225,7 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
     reason='simulation input data is not present',
 )
 @pytest.mark.parametrize('star_density', [20.0])
-@pytest.mark.parametrize('sky_n_sigma', [0.5, 2.0, 100.0])
+@pytest.mark.parametrize('sky_n_sigma', [-0.5, -2.0, -100.0])
 def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
     """
     check the measured mean sky over all trials is within 1/10 of the noise
@@ -257,8 +257,8 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
             show_image(exp)
 
         if True:
-            _, _ = lsst_meas_mod.detect_and_deblend(
-                exposure=exp, thresh=5, loglevel=loglevel, subtract_sky=True,
+            lsst_meas_mod.iterate_detection_and_skysub(
+                exposure=exp, thresh=5,
             )
             meta = exp.getMetadata()
             sky_meas = meta['BGMEAN']

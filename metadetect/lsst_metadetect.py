@@ -12,6 +12,7 @@ from .lsst_measure import measure_weighted_moments
 from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
+from .lsst_measure import iterate_detection_and_skysub
 
 
 class LSSTMetadetect(BaseLSSTMetadetect):
@@ -42,6 +43,25 @@ class LSSTMetadetect(BaseLSSTMetadetect):
         self._set_logger(loglevel)
 
         super().__init__(config=config, mbobs=mbobs, rng=rng, show=show)
+
+        subtract_sky = self.get('subtract_sky', False)
+        if subtract_sky:
+            self._subtract_sky()
+
+    def _subtract_sky(self):
+        for obslist in self.mbobs:
+            for obs in obslist:
+                _ = iterate_detection_and_skysub(
+                    exposure=obs.coadd_exp,
+                    thresh=self['detect']['thresh'],
+                )
+                # propagate the changes to the obs image
+                obs.image = obs.coadd_exp.image.array
+
+                # exp = obs.coadd_exp
+                # flags = exp.mask.getPlaneBitMask('EDGE')
+                # w = np.where((exp.mask.array & flags) == 0)
+                # print('mean:', obs.image[w].mean())
 
     def _set_logger(self, loglevel):
         self.loglevel = loglevel.upper()
@@ -95,7 +115,6 @@ class LSSTMetadetect(BaseLSSTMetadetect):
             mbobs=mbobs,
             meds_config=self['meds'],
             thresh=self['detect']['thresh'],
-            subtract_sky=self.get('subtract_sky', False),
             loglevel=self.loglevel,
         )
 
@@ -268,7 +287,6 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
             mbobs=mbobs,
             weight=self.weight,
             thresh=self['detect']['thresh'],
-            subtract_sky=self['subtract_sky'],
         )
 
         if res is not None:

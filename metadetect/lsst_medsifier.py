@@ -26,8 +26,6 @@ class LSSTMEDSifier(MEDSifier):
         config for meds making
     thresh: float, optional
         Default 10, meaning S/N of 10
-    subtract_sky: bool, optional
-        Default False
     loglevel: str, optional
         Default 'info'
     """
@@ -36,13 +34,11 @@ class LSSTMEDSifier(MEDSifier):
         mbobs,
         meds_config,
         thresh=10.0,
-        subtract_sky=False,
         loglevel='info',
     ):
         self.mbobs = mbobs
         self.nband = len(mbobs)
         self.thresh = thresh
-        self.subtract_sky = subtract_sky
 
         assert len(mbobs) == 1, 'multi band not supported yet'
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
@@ -149,14 +145,7 @@ class LSSTMEDSifier(MEDSifier):
         # Detect objects
         table = afw_table.SourceTable.make(schema)
 
-        if self.subtract_sky:
-            result = iterate_detection_and_skysub(
-                exposure=exposure,
-                detection_task=detection_task,
-                table=table,
-            )
-        else:
-            result = detection_task.run(table, exposure)
+        result = detection_task.run(table, exposure)
 
         if result is not None:
             sources = result.sources
