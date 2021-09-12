@@ -299,6 +299,8 @@ def subtract_sky_mbobs(mbobs, thresh):
                 thresh=thresh,
             )
 
+            obs.image = exp.image.array
+
 
 def _get_noise_replacer(*, exposure, sources):
     noise_replacer_config = NoiseReplacerConfig()

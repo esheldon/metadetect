@@ -205,7 +205,7 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
             show_image(exp)
 
         lsst_meas_mod.iterate_detection_and_skysub(
-            exposure=exp, thresh=5,
+            exposure=exp, thresh=5, loglevel=loglevel,
         )
         meta = exp.getMetadata()
         if 'BGMEAN' not in meta:
@@ -258,7 +258,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
 
         if True:
             lsst_meas_mod.iterate_detection_and_skysub(
-                exposure=exp, thresh=5,
+                exposure=exp, thresh=5, loglevel=loglevel,
             )
             meta = exp.getMetadata()
             sky_meas = meta['BGMEAN']

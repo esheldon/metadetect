@@ -12,7 +12,6 @@ import lsst.log
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
-from .lsst_measure import iterate_detection_and_skysub
 
 
 class LSSTMEDSifier(MEDSifier):
