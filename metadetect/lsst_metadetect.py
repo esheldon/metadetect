@@ -8,11 +8,10 @@ from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
 from .lsst_medsifier import LSSTMEDSifier
-from .lsst_measure import measure_weighted_moments
+from .lsst_measure import measure_weighted_moments, subtract_sky_mbobs
 from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
-from .lsst_measure import iterate_detection_and_skysub
 
 
 class LSSTMetadetect(BaseLSSTMetadetect):
@@ -46,27 +45,12 @@ class LSSTMetadetect(BaseLSSTMetadetect):
 
         subtract_sky = self.get('subtract_sky', False)
         if subtract_sky:
-            self._subtract_sky()
-
-    def _subtract_sky(self):
-        for obslist in self.mbobs:
-            for obs in obslist:
-                _ = iterate_detection_and_skysub(
-                    exposure=obs.coadd_exp,
-                    thresh=self['detect']['thresh'],
-                )
-                # propagate the changes to the obs image
-                obs.image = obs.coadd_exp.image.array
-
-                # exp = obs.coadd_exp
-                # flags = exp.mask.getPlaneBitMask('EDGE')
-                # w = np.where((exp.mask.array & flags) == 0)
-                # print('mean:', obs.image[w].mean())
+            subtract_sky_mbobs(mbobs=self.mbobs, thresh=self['detect']['thresh'])
 
     def _set_logger(self, loglevel):
-        self.loglevel = loglevel.upper()
+        self.loglevel = loglevel
         self.log = lsst.log.Log.getLogger(self.name)
-        self.log.setLevel(getattr(lsst.log, self.loglevel))
+        self.log.setLevel(getattr(lsst.log, self.loglevel.upper()))
 
     def _get_all_metacal(self):
         """

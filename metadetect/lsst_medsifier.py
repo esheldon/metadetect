@@ -7,6 +7,7 @@ from lsst.meas.base import (
     NoiseReplacerConfig,
     NoiseReplacer,
 )
+import logging
 import lsst.log
 
 from .detect import MEDSifier
@@ -34,7 +35,7 @@ class LSSTMEDSifier(MEDSifier):
         mbobs,
         meds_config,
         thresh=10.0,
-        loglevel='info',
+        loglevel='INFO',
     ):
         self.mbobs = mbobs
         self.nband = len(mbobs)
@@ -44,9 +45,9 @@ class LSSTMEDSifier(MEDSifier):
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
         self._set_meds_config(meds_config)
-        self.loglevel = loglevel.upper()
+        self.loglevel = loglevel
         self.log = lsst.log.Log.getLogger("LSSTMEDSifier")
-        self.log.setLevel(getattr(lsst.log, self.loglevel))
+        self.log.setLevel(getattr(lsst.log, self.loglevel.upper()))
 
         self.log.debug('setting detection exposure')
         self._set_detim_exposure()
@@ -132,15 +133,16 @@ class LSSTMEDSifier(MEDSifier):
         )
 
         # setup detection config
+        # these use regular python loggers
         detection_config = SourceDetectionConfig()
         detection_config.reEstimateBackground = False
         detection_config.thresholdValue = self.thresh
         detection_task = SourceDetectionTask(config=detection_config)
-        detection_task.log.setLevel(getattr(lsst.log, self.loglevel))
+        detection_task.log.setLevel(getattr(logging, self.loglevel.upper()))
 
         deblend_config = SourceDeblendConfig()
         deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
-        deblend_task.log.setLevel(getattr(lsst.log, self.loglevel))
+        deblend_task.log.setLevel(getattr(logging, self.loglevel.upper()))
 
         # Detect objects
         table = afw_table.SourceTable.make(schema)
