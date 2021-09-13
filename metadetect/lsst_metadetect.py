@@ -254,6 +254,11 @@ def run_metadetect(config, mbobs, rng, show=False, loglevel=DEFAULT_LOGLEVEL):
         config['metacal']['psf'] is set to 'fitgauss' and the fitting fails
     """
     config = get_config(config)
+    metacal_config = {
+        'use_noise_image': True,
+        'psf': config['metacal_psf']
+    }
+    stamp_size = get_stamp_size(meas_type=config['meas_type'])
 
     if config['subtract_sky']:
         subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect_thresh'])
@@ -266,7 +271,9 @@ def run_metadetect(config, mbobs, rng, show=False, loglevel=DEFAULT_LOGLEVEL):
     ormask, bmask = get_ormask_and_bmask(mbobs)
     mfrac = get_mfrac(mbobs)
 
-    odict = get_all_metacal(config=config, mbobs=mbobs, rng=rng, show=show)
+    odict = get_all_metacal(
+        metacal_config=metacal_config, mbobs=mbobs, rng=rng, show=show,
+    )
 
     if odict is None:
         result = None
@@ -280,7 +287,7 @@ def run_metadetect(config, mbobs, rng, show=False, loglevel=DEFAULT_LOGLEVEL):
             res = detect_and_measure(
                 exposure=exposure,
                 fitter=fitter,
-                stamp_size=config['stamp_size'],
+                stamp_size=stamp_size,
                 thresh=config['detect_thresh'],
                 use_deblended_stamps=config['use_deblended_stamps'],
                 loglevel=loglevel,
@@ -304,9 +311,6 @@ def add_noshear_pos(config, res, shear_str, obs):
         res['col'],
         shear_str,
         obs,  # an example for jacobian and image shape
-        # default is 0.01 but make sure to use the passed in default
-        # if needed
-        step=config['metacal'].get("step", shearpos.DEFAULT_STEP),
     )
     res['row_noshear'] = rows_noshear
     res['col_noshear'] = cols_noshear
@@ -361,7 +365,7 @@ def get_fitter(config):
     return fitter
 
 
-def get_all_metacal(config, mbobs, rng, show=False):
+def get_all_metacal(metacal_config, mbobs, rng, show=False):
     """
     get the sheared versions of the observations
 
@@ -375,7 +379,7 @@ def get_all_metacal(config, mbobs, rng, show=False):
         odict = ngmix.metacal.get_all_metacal(
             orig_mbobs,
             rng=rng,
-            **config['metacal']
+            **metacal_config,
         )
     except BootPSFFailure:
         # this can happen if we were using psf='fitgauss'
@@ -520,18 +524,19 @@ def get_config(config):
     config_new = copy.deepcopy(DEFAULT_MDET_CONFIG)
     config_new.update(copy.deepcopy(config))
 
-    config_new['metacal'] = {
-        'use_noise_image': True,
-        'psf': config_new.pop('metacal_psf'),
-    }
-
-    if 'stamp_size' not in config_new:
-        if config_new['meas_type'] == 'wmom':
-            config_new['stamp_size'] = 32
-        elif config_new['meas_type'] == 'ksigma':
-            config_new['stamp_size'] = 64
-
     return config_new
+
+
+def get_stamp_size(meas_type):
+    if meas_type == 'wmom':
+        stamp_size = 32
+    elif meas_type == 'ksigma':
+        # TODO figure this out
+        stamp_size = 64
+    else:
+        raise ValueError('bad meas type: %s' % meas_type)
+
+    return stamp_size
 
 
 '''
