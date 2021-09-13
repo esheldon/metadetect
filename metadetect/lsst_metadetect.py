@@ -39,8 +39,8 @@ def run_metadetect(config, mbobs, rng, show=False, loglevel=DEFAULT_LOGLEVEL):
     -------
     result dict
         This is keyed by shear string 'noshear', '1p', ... or None if there was
-        a problem doing the metacal steps; this only happens if the seting
-        config['metacal']['psf'] is set to 'fitgauss' and the fitting fails
+        a problem doing the metacal steps; this only happens if the setting
+        metacal_psf is set to 'fitgauss' and the fitting fails
     """
     config = get_config(config)
     metacal_config = {
