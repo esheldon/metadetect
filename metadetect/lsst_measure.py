@@ -71,9 +71,9 @@ def detect_and_measure(
 
     return measure(
         exposure=exposure,
-        meas_task=meas_task,
         sources=sources,
         fitter=fitter,
+        meas_task=meas_task,
         stamp_size=stamp_size,
         use_deblended_stamps=use_deblended_stamps,
     )
@@ -81,9 +81,9 @@ def detect_and_measure(
 
 def measure(
     exposure,
-    meas_task,
     sources,
     fitter,
+    meas_task=None,
     stamp_size=DEFAULT_STAMP_SIZE,
     use_deblended_stamps=True,
 ):
@@ -97,13 +97,14 @@ def measure(
     ----------
     exp: ExposureF
         The exposure on which to detect and measure
-    meas_task: SingleFrameMeasurementTask
-        The measurement task; this should do basic things like finding the
-        centroid
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    meas_task: SingleFrameMeasurementTask
+        An optional measurement task; if you already have centeroids etc. for
+        sources, no need to send it.  Otherwise this should do basic things
+        like finding the centroid
     stamp_size: int
         Size for postage stamps
     use_deblended_stamps: bool
@@ -134,7 +135,8 @@ def measure(
                 # This will insert a single source into the image
                 replacer.insertSource(source.getId())
 
-            meas_task.callMeasure(source, exposure)
+            if meas_task is not None:
+                meas_task.callMeasure(source, exposure)
 
             # TODO variable box size
             stamp_bbox = _get_bbox_fixed(
@@ -143,20 +145,8 @@ def measure(
                 stamp_size=stamp_size,
             )
             subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
-            if False:
-                import descwl_coadd.vis
-                descwl_coadd.vis.show_image_and_mask(subim)
-                input('hit a key')
 
-            obs = _extract_obs(
-                subim=subim,
-                source=source,
-            )
-            if False:
-                from descwl_coadd import vis
-                vis.show_2images(
-                    obs.image, obs.weight,
-                )
+            obs = _extract_obs(subim=subim, source=source)
 
             pres = _measure_one(obs=obs.psf, fitter=fitter)
             ores = _measure_one(obs=obs, fitter=fitter)

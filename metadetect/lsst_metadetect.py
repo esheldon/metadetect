@@ -2,6 +2,9 @@
 
 TODO
     - add logging
+    - tests
+    - remove lsst_mbobs_extractor.py
+    - remove lsst_medsifier.py
     - more TODO are in the code
 """
 import copy
