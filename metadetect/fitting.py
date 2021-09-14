@@ -2,7 +2,6 @@ import numpy as np
 import logging
 import ngmix
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
-import esutil as eu
 from .util import Namer
 from . import procflags
 
@@ -85,7 +84,7 @@ class Moments(FitterBase):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _get_max_psf_size(self, mbobs):
         sizes = []
@@ -485,7 +484,7 @@ class MaxLike(Moments):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _print_result(self, data):
         mess = "        s2n: %g Trat: %g"
@@ -640,7 +639,7 @@ class MaxLikeNgmixv1(Moments):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _print_result(self, data):
         mess = "        s2n: %g Trat: %g"
