@@ -351,7 +351,7 @@ def iterate_detection_and_skysub(
 
 def subtract_sky_mbobs(mbobs, thresh):
     """
-    subtract sky and zero the edges
+    subtract sky
 
     We combine these because both involve resetting the image
     and noise image
