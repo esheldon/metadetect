@@ -66,6 +66,12 @@ def run_metadetect(
     psf_stats = fit_original_psfs(config=config, mbobs=mbobs, rng=rng)
 
     fitter = get_fitter(config)
+    if config['meas_type'] == 'wmom':
+        psf_fitter = fitter
+    else:
+        # TODO ksigma on psf 
+        psf_fitter = None
+
     ormask, bmask = get_ormask_and_bmask(mbobs)
     mfrac = get_mfrac(mbobs)
 
@@ -85,6 +91,7 @@ def run_metadetect(
             res = detect_and_measure(
                 exposure=exposure,
                 fitter=fitter,
+                psf_fitter=psf_fitter,
                 stamp_size=stamp_size,
                 thresh=config['detect_thresh'],
                 use_deblended_stamps=config['use_deblended_stamps'],
@@ -344,9 +351,6 @@ def get_config(config=None):
 
     config_new = copy.deepcopy(DEFAULT_MDET_CONFIG)
     config_new.update(copy.deepcopy(config))
-
-    if config_new['meas_type'] == 'ksigma':
-        raise ValueError('implement psf measurement for ksigma')
 
     return config_new
 

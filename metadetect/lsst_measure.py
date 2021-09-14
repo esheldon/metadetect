@@ -35,6 +35,7 @@ DEFAULT_THRESH = 5.0
 def detect_and_measure(
     exposure,
     fitter,
+    psf_fitter=None,
     thresh=DEFAULT_THRESH,
     stamp_size=DEFAULT_STAMP_SIZE,
     use_deblended_stamps=True,
@@ -51,6 +52,8 @@ def detect_and_measure(
         The exposure on which to detect and measure
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    psf_fitter: e.g. ngmix.gaussmom.GaussMom
+        Fitter for psf
     thresh: float
         Threshold for detection.
     stamp_size: int
@@ -72,6 +75,7 @@ def detect_and_measure(
         exposure=exposure,
         sources=sources,
         fitter=fitter,
+        psf_fitter=psf_fitter,
         meas_task=meas_task,
         stamp_size=stamp_size,
         use_deblended_stamps=use_deblended_stamps,
@@ -82,6 +86,7 @@ def measure(
     exposure,
     sources,
     fitter,
+    psf_fitter=None,
     meas_task=None,
     stamp_size=DEFAULT_STAMP_SIZE,
     use_deblended_stamps=True,
@@ -100,6 +105,8 @@ def measure(
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    psf_fitter: e.g. ngmix.gaussmom.GaussMom
+        Fitter for psf
     meas_task: SingleFrameMeasurementTask
         An optional measurement task; if you already have centeroids etc. for
         sources, no need to send it.  Otherwise this should do basic things
@@ -147,7 +154,11 @@ def measure(
 
             obs = _extract_obs(subim=subim, source=source)
 
-            pres = _measure_one(obs=obs.psf, fitter=fitter)
+            if psf_fitter is not None:
+                pres = _measure_one(obs=obs.psf, fitter=fitter)
+            else:
+                pres = None
+
             ores = _measure_one(obs=obs, fitter=fitter)
 
             res = _get_output(
@@ -697,11 +708,10 @@ def _extract_jacobian(subim, source):
     return jacob
 
 
-def _get_dtype():
+def _get_dtype(meas_type):
 
-    model = 'wmom'
     npars = 6
-    n = util.Namer(front=model)
+    n = util.Namer(front=meas_type)
     dt = [
         ('flags', 'i4'),
 
@@ -739,15 +749,14 @@ def _get_dtype():
 
 def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
 
-    model_name = _get_model_name(fitter)
-    n = util.Namer(front=model_name)
+    meas_type = _get_meas_type(fitter)
+    n = util.Namer(front=meas_type)
 
-    dt = _get_dtype()
+    dt = _get_dtype(meas_type)
     output = np.zeros(1, dtype=dt)
 
     output['psfrec_flags'] = procflags.NO_ATTEMPT
 
-    output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
 
     orig_cen = source.getCentroid()
@@ -764,15 +773,21 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
-    if pres['flags'] != 0:
-        flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
         flags |= procflags.OBJ_FAILURE
 
-    if pres['flags'] == 0:
-        output['psf_g'] = pres['g']
-        output['psf_T'] = pres['T']
+    if pres is not None:
+        if pres['flags'] != 0:
+            flags |= procflags.PSF_FAILURE
+        output['psf_flags'] = pres['flags']
+        if pres['flags'] == 0:
+            output['psf_g'] = pres['g']
+            output['psf_T'] = pres['T']
+    else:
+        output['psf_flags'] = procflags.NO_ATTEMPT
+        output['psf_g'] = -9999
+        output['psf_T'] = 9999
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
@@ -782,24 +797,26 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
 
-        if pres['flags'] == 0:
+        if pres is not None and pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
+        else:
+            output[n('T_ratio')] = -9999
 
     output['flags'] = flags
     return output
 
 
-def _get_model_name(fitter):
+def _get_meas_type(fitter):
     if isinstance(fitter, ngmix.gaussmom.GaussMom):
-        model_name = 'wmom'
+        meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
-        model_name = 'ksigma'
+        meas_type = 'ksigma'
     else:
         raise ValueError(
             "don't know how to get name for fitter %s" % repr(fitter)
         )
 
-    return model_name
+    return meas_type
 
 
 class MissingDataError(Exception):
