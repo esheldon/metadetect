@@ -117,7 +117,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
     else:
         gname = '%s_g' % meas_type
 
-    assert gname  in res['noshear'].dtype.names
+    assert gname in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
