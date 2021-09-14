@@ -3,8 +3,6 @@
 TODO
     - add logging
     - tests
-    - remove lsst_mbobs_extractor.py
-    - remove lsst_medsifier.py
     - more TODO are in the code
 """
 import copy
@@ -15,7 +13,6 @@ from ngmix.gexceptions import BootPSFFailure
 from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
-# from .lsst_medsifier import LSSTMEDSifier
 from .lsst_measure import detect_and_measure, subtract_sky_mbobs
 from . import shearpos
 from .mfrac import measure_mfrac

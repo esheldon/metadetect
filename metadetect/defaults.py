@@ -36,4 +36,3 @@ DEFAULT_MDET_CONFIG = {
     # do sky sub on each coadd input
     'subtract_sky': False,
 }
-

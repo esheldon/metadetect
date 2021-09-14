@@ -23,7 +23,6 @@ import logging
 
 from . import util
 from . import procflags
-from .lsst_mbobs_extractor import MBObsMissingDataError
 from .defaults import DEFAULT_LOGLEVEL
 
 # this is good for ksigma
@@ -572,7 +571,7 @@ def _extract_psf_image(*, exposure, orig_cen):
         psfobj = exposure.getPsf()
         psfim = psfobj.computeKernelImage(orig_cen).array
     except InvalidParameterError:
-        raise MBObsMissingDataError("could not reconstruct PSF")
+        raise MissingDataError("could not reconstruct PSF")
 
     psfim = np.array(psfim, dtype='f4', copy=False)
 
@@ -818,3 +817,16 @@ def _get_model_name(fitter):
         )
 
     return model_name
+
+
+class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
