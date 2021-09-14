@@ -47,22 +47,6 @@ jobs:
           mamba uninstall ngmix --force -y
           python -m pip install git+https://github.com/esheldon/ngmix.git
 
-          git clone --branch u/erykoff/onlinecoadd https://github.com/lsst/pipe_tasks.git /tmp/pipe_tasks
-
-      - name: temporarily use branch
-        shell: bash -l {0}
-        run: |
-            env
-
-            setup -j -r /tmp/pipe_tasks
-
-            pushd /tmp/pipe_tasks
-            # this might partly fail but that's ok
-            scons || echo "ok scons fails"
-            popd
-
-            pip install --no-deps -e .
-
       - name: test
         shell: bash -l {0}
         run: |

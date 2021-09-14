@@ -143,8 +143,8 @@ def test_lsst_metadetect_mfrac_ormask(cls):
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.any(res[shear]["flags"] == 0)
             assert np.all(
-                (res[shear]["mfrac"] > 0.45)
-                & (res[shear]["mfrac"] < 0.55)
+                (res[shear]["mfrac"] > 0.40)
+                & (res[shear]["mfrac"] < 0.60)
             )
             assert np.all(res[shear]["ormask"] == 1)
 
