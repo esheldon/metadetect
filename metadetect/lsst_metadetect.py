@@ -22,7 +22,10 @@ from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
 from . import fitting
-from .defaults import DEFAULT_LOGLEVEL, DEFAULT_MDET_CONFIG
+from .defaults import (
+    DEFAULT_LOGLEVEL, DEFAULT_MDET_CONFIG,
+    DEFAULT_WEIGHT_FWHMS, DEFAULT_STAMP_SIZES,
+)
 
 
 def run_metadetect(
@@ -162,10 +165,15 @@ def get_fitter(config):
     get the fitter based on the 'fitter' input
     """
 
+    if 'weight_fwhm' in config:
+        fwhm = config['weight_fwhm']
+    else:
+        fwhm = get_default_weight_fwhm(config['meas_type'])
+
     if config['meas_type'] == 'wmom':
-        fitter = ngmix.gaussmom.GaussMom(fwhm=config['weight_fwhm'])
+        fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
     elif config['meas_type'] == 'ksigma':
-        fitter = ngmix.ksigmamom.KSigmaMom(fwhm=config['weight_fwhm'])
+        fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
     else:
         raise ValueError("bad meas_type: '%s'" % config['meas_type'])
 
@@ -351,14 +359,19 @@ def get_config(config=None):
 
 def get_default_stamp_size(meas_type):
     """
-    get defautl stamp size for the input measurement type
+    get default stamp size for the input measurement type
     """
-    if meas_type == 'wmom':
-        stamp_size = 32
-    elif meas_type == 'ksigma':
-        # TODO figure this out
-        stamp_size = 64
-    else:
+    if meas_type not in DEFAULT_STAMP_SIZES:
         raise ValueError('bad meas type: %s' % meas_type)
 
-    return stamp_size
+    return DEFAULT_STAMP_SIZES[meas_type]
+
+
+def get_default_weight_fwhm(meas_type):
+    """
+    get default weight fwhm for the input measurement type
+    """
+    if meas_type not in DEFAULT_WEIGHT_FWHMS:
+        raise ValueError('bad meas type: %s' % meas_type)
+
+    return DEFAULT_WEIGHT_FWHMS[meas_type]

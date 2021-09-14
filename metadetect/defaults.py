@@ -19,8 +19,6 @@ ALLOWED_BOX_SIZES = [
 DEFAULT_MDET_CONFIG = {
     # wmom or ksigma
     'meas_type': 'wmom',
-    # 1.2 prob. good for wmom, 2.0 for ksigma but need to test
-    'weight_fwhm': 1.2,
 
     # fitgauss or gauss
     'metacal_psf': 'fitgauss',
@@ -34,4 +32,16 @@ DEFAULT_MDET_CONFIG = {
 
     # do sky sub on each coadd input
     'subtract_sky': False,
+}
+
+DEFAULT_WEIGHT_FWHMS = {
+    'wmom': 1.2,
+    'ksigma': 2.0,
+}
+
+DEFAULT_STAMP_SIZES = {
+    'wmom': 32,
+    # TODO determine a good value for this. We used 48 in DES
+    # which would be 64 for lsst
+    'ksigma': 64,
 }
