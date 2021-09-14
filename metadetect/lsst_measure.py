@@ -1,6 +1,5 @@
 import numpy as np
 import ngmix
-import esutil as eu
 
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
@@ -166,7 +165,7 @@ def measure(
             replacer.end()
 
     if len(results) > 0:
-        results = eu.numpy_util.combine_arrlist(results)
+        results = np.hstack(results)
     else:
         results = None
 
