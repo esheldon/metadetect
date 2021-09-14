@@ -19,18 +19,17 @@ ALLOWED_BOX_SIZES = [
 DEFAULT_MDET_CONFIG = {
     # wmom or ksigma
     'meas_type': 'wmom',
+    # 1.2 prob. good for wmom, 2.0 for ksigma but need to test
+    'weight_fwhm': 1.2,
 
     # fitgauss or gauss
     'metacal_psf': 'fitgauss',
 
-    # 1.2 prob. good for wmom, 2.0 for ksigma but need to test
-    'weight_fwhm': 1.2,
-
-    # default for lsst is 5
+    # In units of sky noise.  Default for lsst is 5
     'detect_thresh': 5.0,
 
-    # deblending always occurs, this says to do measurements on deblended
-    # stamps
+    # deblending always occurs; this says to do the shear measurements on
+    # deblended stamps
     'use_deblended_stamps': False,
 
     # do sky sub on each coadd input
