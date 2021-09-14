@@ -1,12 +1,13 @@
 """
 
 TODO
-    - add logging
     - more tests
     - full shear test like in /shear_meas_test/test_shear_meas.py ?
-    - TODO
-    - understand why we are trimming the psf to odd dims
-    - more TODO are in the code
+    - understand why we are trimming the psf to even dims
+    - maybe make weight_fwhm not have a default, since the default
+      will most likely depend on the meas_type: wmom will have a smaller
+      weight function parhaps
+    - more TODO are in the code, here and in lsst_measure.py
 """
 import copy
 import numpy as np
