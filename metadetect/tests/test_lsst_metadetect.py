@@ -69,9 +69,7 @@ def make_lsst_sim(seed):
     return sim_data
 
 
-# ksigma psf measure not implemented yet
-# @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
-@pytest.mark.parametrize('meas_type', [None, 'wmom'])
+@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('use_deblended_stamps', [None, False, True])
 def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
@@ -113,6 +111,13 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
+
+    if meas_type is None:
+        gname = 'wmom_g'
+    else:
+        gname = '%s_g' % meas_type
+
+    assert gname  in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)

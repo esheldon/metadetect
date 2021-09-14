@@ -35,7 +35,6 @@ DEFAULT_THRESH = 5.0
 def detect_and_measure(
     exposure,
     fitter,
-    psf_fitter=None,
     thresh=DEFAULT_THRESH,
     stamp_size=DEFAULT_STAMP_SIZE,
     use_deblended_stamps=True,
@@ -52,8 +51,6 @@ def detect_and_measure(
         The exposure on which to detect and measure
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
-    psf_fitter: e.g. ngmix.gaussmom.GaussMom
-        Fitter for psf
     thresh: float
         Threshold for detection.
     stamp_size: int
@@ -75,7 +72,6 @@ def detect_and_measure(
         exposure=exposure,
         sources=sources,
         fitter=fitter,
-        psf_fitter=psf_fitter,
         meas_task=meas_task,
         stamp_size=stamp_size,
         use_deblended_stamps=use_deblended_stamps,
@@ -86,7 +82,6 @@ def measure(
     exposure,
     sources,
     fitter,
-    psf_fitter=None,
     meas_task=None,
     stamp_size=DEFAULT_STAMP_SIZE,
     use_deblended_stamps=True,
@@ -105,8 +100,6 @@ def measure(
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
-    psf_fitter: e.g. ngmix.gaussmom.GaussMom
-        Fitter for psf
     meas_task: SingleFrameMeasurementTask
         An optional measurement task; if you already have centeroids etc. for
         sources, no need to send it.  Otherwise this should do basic things
@@ -154,11 +147,7 @@ def measure(
 
             obs = _extract_obs(subim=subim, source=source)
 
-            if psf_fitter is not None:
-                pres = _measure_one(obs=obs.psf, fitter=fitter)
-            else:
-                pres = None
-
+            pres = _measure_one(obs=obs.psf, fitter=fitter)
             ores = _measure_one(obs=obs, fitter=fitter)
 
             res = _get_output(
@@ -188,7 +177,12 @@ def _measure_one(obs, fitter):
     """
     run a measurement on an input observation
     """
-    res = fitter.go(obs)
+    from ngmix.ksigmamom import KSigmaMom
+
+    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+        res = fitter.go(obs, no_psf=True)
+    else:
+        res = fitter.go(obs)
 
     if res['flags'] != 0:
         return res
@@ -757,6 +751,7 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     output['psfrec_flags'] = procflags.NO_ATTEMPT
 
+    output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
 
     orig_cen = source.getCentroid()
@@ -773,21 +768,15 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
+    if pres['flags'] != 0:
+        flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
         flags |= procflags.OBJ_FAILURE
 
-    if pres is not None:
-        if pres['flags'] != 0:
-            flags |= procflags.PSF_FAILURE
-        output['psf_flags'] = pres['flags']
-        if pres['flags'] == 0:
-            output['psf_g'] = pres['g']
-            output['psf_T'] = pres['T']
-    else:
-        output['psf_flags'] = procflags.NO_ATTEMPT
-        output['psf_g'] = -9999
-        output['psf_T'] = 9999
+    if pres['flags'] == 0:
+        output['psf_g'] = pres['g']
+        output['psf_T'] = pres['T']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
@@ -797,10 +786,8 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
 
-        if pres is not None and pres['flags'] == 0:
+        if pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
-        else:
-            output[n('T_ratio')] = -9999
 
     output['flags'] = flags
     return output
