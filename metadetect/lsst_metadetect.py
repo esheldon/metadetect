@@ -165,7 +165,7 @@ def get_fitter(config):
     elif config['meas_type'] == 'ksigma':
         fitter = ngmix.ksigmamom.KSigmaMom(fwhm=config['weight_fwhm'])
     else:
-        raise ValueError("bad meas_type: '%s'" % meas_type)
+        raise ValueError("bad meas_type: '%s'" % config['meas_type'])
 
     return fitter
 
