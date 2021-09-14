@@ -704,7 +704,6 @@ def _extract_jacobian(subim, source):
 
 def _get_dtype(meas_type):
 
-    npars = 6
     n = util.Namer(front=meas_type)
     dt = [
         ('flags', 'i4'),
@@ -730,12 +729,13 @@ def _get_dtype(meas_type):
 
         (n('flags'), 'i4'),
         (n('s2n'), 'f8'),
-        (n('pars'), 'f8', npars),
         (n('g'), 'f8', 2),
         (n('g_cov'), 'f8', (2, 2)),
         (n('T'), 'f8'),
         (n('T_err'), 'f8'),
         (n('T_ratio'), 'f8'),
+        (n('flux'), 'f8'),
+        (n('flux_err'), 'f8'),
     ]
 
     return dt
@@ -780,11 +780,12 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
-        output[n('pars')] = res['pars']
         output[n('g')] = res['g']
         output[n('g_cov')] = res['g_cov']
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
 
         if pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
