@@ -137,7 +137,7 @@ def measure(
             if meas_task is not None:
                 meas_task.callMeasure(source, exposure)
 
-            # TODO variable box size
+            # TODO variable box size?
             stamp_bbox = _get_bbox_fixed(
                 exposure=exposure,
                 source=source,
@@ -151,10 +151,8 @@ def measure(
             ores = _measure_one(obs=obs, fitter=fitter)
 
             res = _get_output(
-                fitter=fitter,
-                source=source, res=ores, pres=pres, ormask=ormask,
-                box_size=obs.image.shape[0],
-                exp_bbox=exp_bbox,
+                fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
+                box_size=obs.image.shape[0], exp_bbox=exp_bbox,
             )
 
             if use_deblended_stamps:
@@ -175,7 +173,26 @@ def measure(
     return results
 
 
+def _measure_one(obs, fitter):
+    """
+    run a measurement on an input observation
+    """
+    res = fitter.go(obs)
+
+    if res['flags'] != 0:
+        return res
+
+    res['numiter'] = 1
+    res['g'] = res['e']
+    res['g_cov'] = res['e_cov']
+
+    return res
+
+
 def _get_ormasks(*, sources, exposure):
+    """
+    get a list of all the ormasks for the sources
+    """
     ormasks = []
     for source in sources:
         ormask = _get_ormask(source=source, exposure=exposure)
@@ -354,7 +371,10 @@ def subtract_sky_mbobs(mbobs, thresh):
             obs.image = exp.image.array
 
 
-def _get_noise_replacer(*, exposure, sources):
+def _get_noise_replacer(exposure, sources):
+    """
+    get a noise replacer for the input exposure and source list
+    """
     noise_replacer_config = NoiseReplacerConfig()
     footprints = {
         source.getId(): (source.getParent(), source.getFootprint())
@@ -370,7 +390,7 @@ def _get_noise_replacer(*, exposure, sources):
     )
 
 
-def _extract_obs(*, subim, source):
+def _extract_obs(subim, source):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -437,7 +457,10 @@ def _extract_obs(*, subim, source):
     return obs
 
 
-def _get_bbox_fixed(*, exposure, source, stamp_size):
+def _get_bbox_fixed(exposure, source, stamp_size):
+    """
+    get a fixed sized bounding box
+    """
     radius = stamp_size/2
     radius = int(np.ceil(radius))
 
@@ -449,12 +472,16 @@ def _get_bbox_fixed(*, exposure, source, stamp_size):
     return bbox
 
 
-def _get_bbox_calc(*,
-                   exposure,
-                   source,
-                   min_stamp_size,
-                   max_stamp_size,
-                   sigma_factor):
+def _get_bbox_calc(
+    exposure,
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
+    """
+    get a bounding box with size based on measurements
+    """
     try:
         stamp_radius, stamp_size = _compute_stamp_size(
             source=source,
@@ -473,11 +500,12 @@ def _get_bbox_calc(*,
     return bbox
 
 
-def _compute_stamp_size(*,
-                        source,
-                        min_stamp_size,
-                        max_stamp_size,
-                        sigma_factor):
+def _compute_stamp_size(
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
     """
     calculate a stamp radius for the input object, to
     be used for constructing postage stamp sizes
@@ -505,7 +533,7 @@ def _compute_stamp_size(*,
     return radius, stamp_size
 
 
-def _project_box(*, source, wcs, radius):
+def _project_box(source, wcs, radius):
     """
     create a box for the input source
     """
@@ -516,7 +544,7 @@ def _project_box(*, source, wcs, radius):
     return box
 
 
-def _get_padded_sub_image(*, exposure, bbox):
+def _get_padded_sub_image(exposure, bbox):
     """
     extract a sub-image, padded out when it is not contained
     """
@@ -556,7 +584,7 @@ def _get_padded_sub_image(*, exposure, bbox):
     return result
 
 
-def _extract_psf_image(*, exposure, orig_cen):
+def _extract_psf_image(exposure, orig_cen):
     """
     get the psf associated with this image
 
@@ -615,40 +643,8 @@ def _extract_weight(subim):
 
     return weight
 
-    """
-    # TODO set the ignore bits
-    bitnames_to_ignore = self.config['stamps']['bits_to_ignore_for_weight']
 
-    bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
-
-    maskobj = subim.mask
-    mask = maskobj.array
-    wuse = np.where(
-        (var_image > 0) &
-        ((mask & bits_to_ignore) == 0)
-    )
-
-    if wuse[0].size > 0:
-        medvar = np.median(var_image[wuse])
-        weight[:, :] = 1.0/medvar
-    else:
-        self.log.debug('    weight is all zero, found '
-                       'none that passed cuts')
-        # _print_bits(maskobj, bitnames_to_ignore)
-
-    bitnames_to_null = self.config['stamps']['bits_to_null']
-    if len(bitnames_to_null) > 0:
-        bits_to_null = util.get_ored_bits(maskobj, bitnames_to_null)
-        wnull = np.where((mask & bits_to_null) != 0)
-        if wnull[0].size > 0:
-            self.log.debug('    nulling %d in weight' % wnull[0].size)
-            weight[wnull] = 0.0
-
-    return weight
-    """
-
-
-def _extract_jacobian(*, subim, source):
+def _extract_jacobian(subim, source):
     """
     extract an ngmix.Jacobian from the image object
     and object record
@@ -699,19 +695,6 @@ def _extract_jacobian(*, subim, source):
     )
 
     return jacob
-
-
-def _measure_one(obs, fitter):
-    res = fitter.go(obs)
-
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
-
-    return res
 
 
 def _get_dtype():
