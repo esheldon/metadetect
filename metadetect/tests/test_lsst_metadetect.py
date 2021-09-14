@@ -4,7 +4,6 @@ test using lsst simple sim
 import numpy as np
 import time
 import pytest
-from copy import deepcopy
 
 import ngmix
 
@@ -70,14 +69,18 @@ def make_lsst_sim(seed):
     return sim_data
 
 
-@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
+# ksigma psf measure not implemented yet
+# @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
+@pytest.mark.parametrize('meas_type', [None, 'wmom'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
-def test_lsst_metadetect_smoke(cls, subtract_sky):
+@pytest.mark.parametrize('use_deblended_stamps', [None, False, True])
+def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
     rng = np.random.RandomState(seed=116)
 
     sim_data = make_lsst_sim(116)
 
-    print("")
+    print()
+
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
@@ -95,21 +98,28 @@ def test_lsst_metadetect_smoke(cls, subtract_sky):
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    config = deepcopy(CONFIG)
+    config = {}
+
     if subtract_sky is not None:
         config['subtract_sky'] = subtract_sky
-    md = getattr(lsst_metadetect, cls)(
-        config, coadd_mbobs, rng,
+
+    if meas_type is not None:
+        config['meas_type'] = meas_type
+
+    if use_deblended_stamps is not None:
+        config['use_deblended_stamps'] = use_deblended_stamps
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
     )
-    md.go()
-    res = md.result
+
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
 
-@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
-def test_lsst_metadetect_mfrac_ormask(cls):
+def test_lsst_metadetect_mfrac_ormask():
     rng = np.random.RandomState(seed=116)
 
     tm0 = time.time()
@@ -137,14 +147,16 @@ def test_lsst_metadetect_mfrac_ormask(cls):
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        md = getattr(lsst_metadetect, cls)(CONFIG, coadd_mbobs, rng)
-        md.go()
-        res = md.result
+        res = lsst_metadetect.run_metadetect(
+            mbobs=coadd_mbobs, rng=rng,
+        )
+
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.any(res[shear]["flags"] == 0)
+            print(res[shear]["mfrac"].min(), res[shear]["mfrac"].max())
             assert np.all(
-                (res[shear]["mfrac"] > 0.45)
-                & (res[shear]["mfrac"] < 0.55)
+                (res[shear]["mfrac"] > 0.40)
+                & (res[shear]["mfrac"] < 0.60)
             )
             assert np.all(res[shear]["ormask"] == 1)
 
