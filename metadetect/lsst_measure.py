@@ -19,7 +19,7 @@ from lsst.pex.exceptions import (
 )
 from .lsst_skysub import determine_and_subtract_sky
 
-import lsst.log
+import logging
 
 from . import util
 from . import procflags
@@ -29,7 +29,6 @@ from .lsst_mbobs_extractor import MBObsMissingDataError
 def measure_weighted_moments(
     mbobs,
     weight,
-    subtract_sky=False,
     thresh=10,
     loglevel='INFO',
 ):
@@ -44,8 +43,6 @@ def measure_weighted_moments(
         The observations, currently single band
     weight: weight GMix
         For calculating weighted moments
-    subtract_sky: bool, optional
-        Default False
     thresh: float, optional
         Default 10
     loglevel: str, optional
@@ -60,7 +57,6 @@ def measure_weighted_moments(
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
         thresh=thresh,
-        subtract_sky=subtract_sky,
         loglevel=loglevel,
     )
 
@@ -144,7 +140,6 @@ def _get_ormask(*, source, exposure):
 def detect_and_deblend(
     exposure,
     thresh=10,
-    subtract_sky=False,
     loglevel='INFO',
     niter=2,
 ):
@@ -158,15 +153,12 @@ def detect_and_deblend(
         The exposure to process
     thresh: float, optional
         Default 10
-    subtract_sky: bool, optional
-        Default False
     niter: int, optional
         Number of iterations for detection and sky subtraction.
         Must be >= 1. Default is 2 which is recommended.
     loglevel: str, optional
         Default 'INFO'
     """
-    loglevel = loglevel.upper()
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -198,28 +190,21 @@ def detect_and_deblend(
     )
 
     # setup detection config
+    # these use regular python loggers
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
     detection_config.thresholdValue = thresh
     detection_task = SourceDetectionTask(config=detection_config)
-    detection_task.log.setLevel(getattr(lsst.log, loglevel))
+    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
 
     deblend_config = SourceDeblendConfig()
     deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
-    deblend_task.log.setLevel(getattr(lsst.log, loglevel))
+    deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
 
     # Detect objects
     table = afw_table.SourceTable.make(schema)
 
-    if subtract_sky:
-        result = iterate_detection_and_skysub(
-            exposure=exposure,
-            detection_task=detection_task,
-            table=table,
-            niter=niter,
-        )
-    else:
-        result = detection_task.run(table, exposure)
+    result = detection_task.run(table, exposure)
 
     if result is not None:
         sources = result.sources
@@ -233,7 +218,7 @@ def detect_and_deblend(
 
 
 def iterate_detection_and_skysub(
-    exposure, detection_task, table, niter=2,
+    exposure, thresh, niter=2, loglevel='INFO',
 ):
     """
     Iterate detection and sky subtraction
@@ -242,10 +227,8 @@ def iterate_detection_and_skysub(
     ----------
     exposure: Exposure
         The exposure to process
-    detection_task: SourceDetectionTask
-        The detection task from lsst.meas.algorithms
-    table: afw_table.SourceTable
-        The source table to be filled
+    thresh: float
+        threshold for detection
     niter: int, optional
         Number of iterations for detection and sky subtraction.
         Must be >= 1. Default is 2 which is recommended.
@@ -258,6 +241,15 @@ def iterate_detection_and_skysub(
     from lsst.pipe.base.task import TaskError
     if niter < 1:
         raise ValueError(f'niter {niter} is less than 1')
+
+    schema = afw_table.SourceTable.makeMinimalSchema()
+    detection_config = SourceDetectionConfig()
+    detection_config.reEstimateBackground = False
+    detection_config.thresholdValue = thresh
+    detection_task = SourceDetectionTask(config=detection_config)
+    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
+
+    table = afw_table.SourceTable.make(schema)
 
     # keep a running sum of each sky that was subtracted
     try:
@@ -282,6 +274,32 @@ def iterate_detection_and_skysub(
         result = None
 
     return result
+
+
+def subtract_sky_mbobs(mbobs, thresh):
+    """
+    subtract sky and zero the edges
+
+    We combine these because both involve resetting the image
+    and noise image
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations to sky subtract
+    thresh: float
+        Threshold for detection
+    """
+    for obslist in mbobs:
+        for obs in obslist:
+            exp = obs.coadd_exp
+
+            _ = iterate_detection_and_skysub(
+                exposure=exp,
+                thresh=thresh,
+            )
+
+            obs.image = exp.image.array
 
 
 def _get_noise_replacer(*, exposure, sources):
@@ -397,7 +415,6 @@ def _get_bbox_calc(*,
             wcs=exposure.getWcs(),
             radius=stamp_radius,
         )
-    # except LogicError as err:
     except LogicError:
         bbox = source.getFootprint().getBBox()
 

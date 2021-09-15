@@ -7,11 +7,11 @@ from lsst.meas.base import (
     NoiseReplacerConfig,
     NoiseReplacer,
 )
+import logging
 import lsst.log
 
 from .detect import MEDSifier
 from .lsst_mbobs_extractor import MBObsExtractor
-from .lsst_measure import iterate_detection_and_skysub
 
 
 class LSSTMEDSifier(MEDSifier):
@@ -26,8 +26,6 @@ class LSSTMEDSifier(MEDSifier):
         config for meds making
     thresh: float, optional
         Default 10, meaning S/N of 10
-    subtract_sky: bool, optional
-        Default False
     loglevel: str, optional
         Default 'info'
     """
@@ -36,21 +34,19 @@ class LSSTMEDSifier(MEDSifier):
         mbobs,
         meds_config,
         thresh=10.0,
-        subtract_sky=False,
-        loglevel='info',
+        loglevel='INFO',
     ):
         self.mbobs = mbobs
         self.nband = len(mbobs)
         self.thresh = thresh
-        self.subtract_sky = subtract_sky
 
         assert len(mbobs) == 1, 'multi band not supported yet'
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
         self._set_meds_config(meds_config)
-        self.loglevel = loglevel.upper()
+        self.loglevel = loglevel
         self.log = lsst.log.Log.getLogger("LSSTMEDSifier")
-        self.log.setLevel(getattr(lsst.log, self.loglevel))
+        self.log.setLevel(getattr(lsst.log, self.loglevel.upper()))
 
         self.log.debug('setting detection exposure')
         self._set_detim_exposure()
@@ -136,27 +132,21 @@ class LSSTMEDSifier(MEDSifier):
         )
 
         # setup detection config
+        # these use regular python loggers
         detection_config = SourceDetectionConfig()
         detection_config.reEstimateBackground = False
         detection_config.thresholdValue = self.thresh
         detection_task = SourceDetectionTask(config=detection_config)
-        detection_task.log.setLevel(getattr(lsst.log, self.loglevel))
+        detection_task.log.setLevel(getattr(logging, self.loglevel.upper()))
 
         deblend_config = SourceDeblendConfig()
         deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
-        deblend_task.log.setLevel(getattr(lsst.log, self.loglevel))
+        deblend_task.log.setLevel(getattr(logging, self.loglevel.upper()))
 
         # Detect objects
         table = afw_table.SourceTable.make(schema)
 
-        if self.subtract_sky:
-            result = iterate_detection_and_skysub(
-                exposure=exposure,
-                detection_task=detection_task,
-                table=table,
-            )
-        else:
-            result = detection_task.run(table, exposure)
+        result = detection_task.run(table, exposure)
 
         if result is not None:
             sources = result.sources

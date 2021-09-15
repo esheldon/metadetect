@@ -8,7 +8,7 @@ from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
 from .lsst_medsifier import LSSTMEDSifier
-from .lsst_measure import measure_weighted_moments
+from .lsst_measure import measure_weighted_moments, subtract_sky_mbobs
 from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
@@ -43,10 +43,14 @@ class LSSTMetadetect(BaseLSSTMetadetect):
 
         super().__init__(config=config, mbobs=mbobs, rng=rng, show=show)
 
+        subtract_sky = self.get('subtract_sky', False)
+        if subtract_sky:
+            subtract_sky_mbobs(mbobs=self.mbobs, thresh=self['detect']['thresh'])
+
     def _set_logger(self, loglevel):
-        self.loglevel = loglevel.upper()
+        self.loglevel = loglevel
         self.log = lsst.log.Log.getLogger(self.name)
-        self.log.setLevel(getattr(lsst.log, self.loglevel))
+        self.log.setLevel(getattr(lsst.log, self.loglevel.upper()))
 
     def _get_all_metacal(self):
         """
@@ -95,7 +99,6 @@ class LSSTMetadetect(BaseLSSTMetadetect):
             mbobs=mbobs,
             meds_config=self['meds'],
             thresh=self['detect']['thresh'],
-            subtract_sky=self.get('subtract_sky', False),
             loglevel=self.loglevel,
         )
 
@@ -268,7 +271,6 @@ class LSSTDeblendMetadetect(LSSTMetadetect):
             mbobs=mbobs,
             weight=self.weight,
             thresh=self['detect']['thresh'],
-            subtract_sky=self['subtract_sky'],
         )
 
         if res is not None:
