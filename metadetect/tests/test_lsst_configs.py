@@ -40,12 +40,16 @@ def test_psf_configs(model):
     config = lsst_configs.get_config({'psf': psf_config})
 
     if model == 'admom':
+        assert 'ntry' in config['psf']
         assert config['psf']['ntry'] == psf_config['ntry']
     elif model == 'wmom':
+        assert 'weight_fwhm' in config['psf']
         assert config['psf']['weight_fwhm'] == psf_config['weight_fwhm']
     else:
-        assert config['psf']['ntry'] == psf_config['ntry']
+        assert 'ntry' in config['psf']
         assert 'lm_pars' in config['psf']
+
+        assert config['psf']['ntry'] == psf_config['ntry']
 
         for key in config['psf']['lm_pars']:
             assert config['psf']['lm_pars'][key] == psf_config['lm_pars'][key]
