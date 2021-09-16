@@ -46,7 +46,7 @@ def detect_deblend_and_measure(
 
     Parameters
     ----------
-    exp: ExposureF
+    exposure: Exposure
         The exposure on which to detect and measure
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
@@ -86,25 +86,28 @@ def measure(
     use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
 ):
     """
-    run measurements on the input exposure, given the input measurement
-    task, list of sources, and fitter.  These steps are combined
-    because of the way that the deblending works to produce neighbor-subtracted
-    images, where the image is temporarily modified
+    run measurements on the input exposure, given the input measurement task,
+    list of sources, and fitter.  These steps are combined because of the way
+    that the deblending works to produce noise-replaced images for neighbors
+    where the image is temporarily modified.
+
+    To avoid data inconsistency in the case an exception is raised, a copy of
+    the exposure is made when using the noise replacer.
 
     Parameters
     ----------
-    exp: ExposureF
+    exposure: Exposure
         The exposure on which to detect and measure
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    stamp_size: int
+        Size for postage stamps
     meas_task: SingleFrameMeasurementTask
         An optional measurement task; if you already have centeroids etc. for
         sources, no need to send it.  Otherwise this should do basic things
         like finding the centroid
-    stamp_size: int
-        Size for postage stamps
     use_deblended_stamps: bool
         If True, use deblended postage stamps for the measurements.
         Note deblending is run in either case
@@ -112,27 +115,19 @@ def measure(
 
     if len(sources) > 0:
         if use_deblended_stamps:
-            # remove all objects and replace with noise
-            noise_replacer = _get_noise_replacer(
-                exposure=exposure, sources=sources,
-            )
+            # this makes a copy of everything, including pixels
+            exp_send = afw_image.ExposureF(exposure, deep=True)
         else:
-            noise_replacer = None
+            exp_send = exposure
 
-        try:
-            results = _do_measure(
-                exposure=exposure,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=stamp_size,
-                noise_replacer=noise_replacer,
-                meas_task=meas_task,
-                use_deblended_stamps=use_deblended_stamps,
-            )
-        finally:
-            if use_deblended_stamps:
-                # Insert all objects back into image
-                noise_replacer.end()
+        results = _do_measure(
+            exposure=exp_send,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=stamp_size,
+            meas_task=meas_task,
+            use_deblended_stamps=use_deblended_stamps,
+        )
     else:
         results = []
 
@@ -144,34 +139,20 @@ def _do_measure(
     sources,
     fitter,
     stamp_size,
-    noise_replacer=None,
-    meas_task=None,
-    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+    meas_task,
+    use_deblended_stamps,
 ):
     """
-    run measurements on the input exposure, given the input measurement
-    task, list of sources, and fitter.  These steps are combined
-    because of the way that the deblending works to produce neighbor-subtracted
-    images, where the image is temporarily modified
-
-    Parameters
-    ----------
-    exp: ExposureF
-        The exposure on which to detect and measure
-    sources: list of sources
-        From a detection task
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
-        For calculating moments
-    meas_task: SingleFrameMeasurementTask
-        An optional measurement task; if you already have centeroids etc. for
-        sources, no need to send it.  Otherwise this should do basic things
-        like finding the centroid
-    stamp_size: int
-        Size for postage stamps
-    use_deblended_stamps: bool
-        If True, use deblended postage stamps for the measurements.
-        Note deblending is run in either case
+    See docs for measure()
     """
+
+    if use_deblended_stamps:
+        # remove all objects and replace with noise
+        noise_replacer = _get_noise_replacer(
+            exposure=exposure, sources=sources,
+        )
+    else:
+        noise_replacer = None
 
     exp_bbox = exposure.getBBox()
     results = []
@@ -187,7 +168,7 @@ def _do_measure(
 
         ormask = ormasks[i]
 
-        if noise_replacer is not None:
+        if use_deblended_stamps:
             # This will insert a single source into the image
             noise_replacer.insertSource(source.getId())
 
@@ -213,11 +194,15 @@ def _do_measure(
             box_size=obs.image.shape[0], exp_bbox=exp_bbox,
         )
 
-        if noise_replacer is not None:
+        if use_deblended_stamps:
             # Remove object
             noise_replacer.removeSource(source.getId())
 
         results.append(res)
+
+    if use_deblended_stamps:
+        # put exposure back as it was input
+        noise_replacer.end()
 
     if len(results) > 0:
         results = np.hstack(results)
