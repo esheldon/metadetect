@@ -22,27 +22,27 @@ import logging
 
 from . import util
 from . import procflags
-from .defaults import DEFAULT_LOGLEVEL
-
-# this is good for ksigma
-DEFAULT_STAMP_SIZE = 64
-
-# threshold in units of the standard deviation of the sky noise
-DEFAULT_THRESH = 5.0
+from .defaults import (
+    DEFAULT_LOGLEVEL,
+    DEFAULT_THRESH,
+    DEFAULT_USE_DEBLENDED_STAMPS,
+)
 
 
 def detect_and_measure(
     exposure,
     fitter,
-    thresh=DEFAULT_THRESH,
-    stamp_size=DEFAULT_STAMP_SIZE,
-    use_deblended_stamps=True,
+    stamp_size,
+    thresh,
+    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
     loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection, deblending and measurements .  These steps are combined
-    because of the way that the deblending works to produce neighbor-subtracted
-    images, where the image is temporarily modified
+    run detection and measurements.
+
+    Note deblending is always a part of the hierarchical detection process for
+    the DM stack, but the user has a choice whether touse deblended postage
+    stamps for the measurement.
 
     Parameters
     ----------
@@ -81,9 +81,72 @@ def measure(
     exposure,
     sources,
     fitter,
+    stamp_size,
     meas_task=None,
-    stamp_size=DEFAULT_STAMP_SIZE,
-    use_deblended_stamps=True,
+    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+):
+    """
+    run measurements on the input exposure, given the input measurement
+    task, list of sources, and fitter.  These steps are combined
+    because of the way that the deblending works to produce neighbor-subtracted
+    images, where the image is temporarily modified
+
+    Parameters
+    ----------
+    exp: ExposureF
+        The exposure on which to detect and measure
+    sources: list of sources
+        From a detection task
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    meas_task: SingleFrameMeasurementTask
+        An optional measurement task; if you already have centeroids etc. for
+        sources, no need to send it.  Otherwise this should do basic things
+        like finding the centroid
+    stamp_size: int
+        Size for postage stamps
+    use_deblended_stamps: bool
+        If True, use deblended postage stamps for the measurements.
+        Note deblending is run in either case
+    """
+
+    if len(sources) > 0:
+        if use_deblended_stamps:
+            # remove all objects and replace with noise
+            noise_replacer = _get_noise_replacer(
+                exposure=exposure, sources=sources,
+            )
+        else:
+            noise_replacer = None
+
+        try:
+            results = _do_measure(
+                exposure=exposure,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=stamp_size,
+                noise_replacer=noise_replacer,
+                meas_task=meas_task,
+                use_deblended_stamps=use_deblended_stamps,
+            )
+        finally:
+            if use_deblended_stamps:
+                # Insert all objects back into image
+                noise_replacer.end()
+    else:
+        results = []
+
+    return results
+
+
+def _do_measure(
+    exposure,
+    sources,
+    fitter,
+    stamp_size,
+    noise_replacer=None,
+    meas_task=None,
+    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
 ):
     """
     run measurements on the input exposure, given the input measurement
@@ -113,56 +176,48 @@ def measure(
     exp_bbox = exposure.getBBox()
     results = []
 
-    if len(sources) > 0:
-        # ormasks will be different within the loop below due to the replacer
-        ormasks = _get_ormasks(sources=sources, exposure=exposure)
+    # ormasks will be different within the loop below due to the replacer
+    ormasks = _get_ormasks(sources=sources, exposure=exposure)
 
-        if use_deblended_stamps:
-            # remove all objects and replace with noise
-            replacer = _get_noise_replacer(exposure=exposure, sources=sources)
+    for i, source in enumerate(sources):
 
-        for i, source in enumerate(sources):
+        # Skip parent objects where all children are inserted
+        if source.get('deblend_nChild') != 0:
+            continue
 
-            # Skip parent objects where all children are inserted
-            if source.get('deblend_nChild') != 0:
-                continue
+        ormask = ormasks[i]
 
-            ormask = ormasks[i]
+        if noise_replacer is not None:
+            # This will insert a single source into the image
+            noise_replacer.insertSource(source.getId())
 
-            if use_deblended_stamps:
-                # This will insert a single source into the image
-                replacer.insertSource(source.getId())
+        if meas_task is not None:
+            # results are stored in the source
+            meas_task.callMeasure(source, exposure)
 
-            if meas_task is not None:
-                meas_task.callMeasure(source, exposure)
+        # TODO variable box size?
+        stamp_bbox = _get_bbox_fixed(
+            exposure=exposure,
+            source=source,
+            stamp_size=stamp_size,
+        )
+        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
 
-            # TODO variable box size?
-            stamp_bbox = _get_bbox_fixed(
-                exposure=exposure,
-                source=source,
-                stamp_size=stamp_size,
-            )
-            subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
+        obs = _extract_obs(subim=subim, source=source)
 
-            obs = _extract_obs(subim=subim, source=source)
+        pres = _measure_one(obs=obs.psf, fitter=fitter)
+        ores = _measure_one(obs=obs, fitter=fitter)
 
-            pres = _measure_one(obs=obs.psf, fitter=fitter)
-            ores = _measure_one(obs=obs, fitter=fitter)
+        res = _get_output(
+            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
+            box_size=obs.image.shape[0], exp_bbox=exp_bbox,
+        )
 
-            res = _get_output(
-                fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-                box_size=obs.image.shape[0], exp_bbox=exp_bbox,
-            )
+        if noise_replacer is not None:
+            # Remove object
+            noise_replacer.removeSource(source.getId())
 
-            if use_deblended_stamps:
-                # Remove object
-                replacer.removeSource(source.getId())
-
-            results.append(res)
-
-        if use_deblended_stamps:
-            # Insert all objects back into image
-            replacer.end()
+        results.append(res)
 
     if len(results) > 0:
         results = np.hstack(results)
