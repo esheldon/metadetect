@@ -1,6 +1,5 @@
 import numpy as np
 import ngmix
-import esutil as eu
 
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
@@ -23,36 +22,44 @@ import logging
 
 from . import util
 from . import procflags
-from .lsst_mbobs_extractor import MBObsMissingDataError
+from .defaults import (
+    DEFAULT_LOGLEVEL,
+    DEFAULT_THRESH,
+    DEFAULT_USE_DEBLENDED_STAMPS,
+)
 
 
-def measure_weighted_moments(
-    mbobs,
-    weight,
-    thresh=10,
-    loglevel='INFO',
+def detect_deblend_and_measure(
+    exposure,
+    fitter,
+    stamp_size,
+    thresh=DEFAULT_THRESH,
+    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection, deblending and measure weighted moments.  These things are
-    combined because of the way that the deblending works to produce
-    neighbor-subtracted images, where the image is temporarily modified
+    run detection, deblending and measurements.
+
+    Note deblending is always run in a hierarchical detection process, but the
+    user has a choice whether to use deblended postage stamps for the
+    measurement.
 
     Parameters
     ----------
-    mbobs: ngmix.MultiBandObsList
-        The observations, currently single band
-    weight: weight GMix
-        For calculating weighted moments
-    thresh: float, optional
-        Default 10
+    exposure: Exposure
+        The exposure on which to detect and measure
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    thresh: float
+        The detection threshold in units of the sky noise
+    stamp_size: int
+        Size for postage stamps.
+    use_deblended_stamps: bool
+        If True, use deblended postage stamps for the measurements.
+        Note deblending is run in either case
     loglevel: str, optional
-        Default 'INFO'
+        Log level for logger in string form
     """
-    assert len(mbobs) == 1, 'one combined band for now'
-    assert len(mbobs[0]) == 1, 'one epoch only'
-
-    exposure = mbobs[0][0].exposure
-    exp_bbox = exposure.getBBox()
 
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
@@ -60,66 +67,176 @@ def measure_weighted_moments(
         loglevel=loglevel,
     )
 
-    results = []
+    return measure(
+        exposure=exposure,
+        sources=sources,
+        fitter=fitter,
+        meas_task=meas_task,
+        stamp_size=stamp_size,
+        use_deblended_stamps=use_deblended_stamps,
+    )
+
+
+def measure(
+    exposure,
+    sources,
+    fitter,
+    stamp_size,
+    meas_task=None,
+    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+):
+    """
+    run measurements on the input exposure, given the input measurement task,
+    list of sources, and fitter.  These steps are combined because of the way
+    that the deblending works to produce noise-replaced images for neighbors
+    where the image is temporarily modified.
+
+    To avoid data inconsistency in the case an exception is raised, a copy of
+    the exposure is made when using the noise replacer.
+
+    Parameters
+    ----------
+    exposure: Exposure
+        The exposure on which to detect and measure
+    sources: list of sources
+        From a detection task
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    stamp_size: int
+        Size for postage stamps
+    meas_task: SingleFrameMeasurementTask
+        An optional measurement task; if you already have centeroids etc. for
+        sources, no need to send it.  Otherwise this should do basic things
+        like finding the centroid
+    use_deblended_stamps: bool
+        If True, use deblended postage stamps for the measurements.
+        Note deblending is run in either case
+    """
 
     if len(sources) > 0:
-        # ormasks will be different within the loop below due to the replacer
-        ormasks = _get_ormasks(sources=sources, exposure=exposure)
+        if use_deblended_stamps:
+            # this makes a copy of everything, including pixels
+            exp_send = afw_image.ExposureF(exposure, deep=True)
+        else:
+            exp_send = exposure
 
-        replacer = _get_noise_replacer(exposure=exposure, sources=sources)
+        results = _do_measure(
+            exposure=exp_send,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=stamp_size,
+            meas_task=meas_task,
+            use_deblended_stamps=use_deblended_stamps,
+        )
+    else:
+        results = []
 
-        for i, source in enumerate(sources):
+    return results
 
-            # Skip parent objects where all children are inserted
-            if source.get('deblend_nChild') != 0:
-                continue
 
-            ormask = ormasks[i]
+def _do_measure(
+    exposure,
+    sources,
+    fitter,
+    stamp_size,
+    meas_task,
+    use_deblended_stamps,
+):
+    """
+    See docs for measure()
+    """
 
+    if use_deblended_stamps:
+        # remove all objects and replace with noise
+        noise_replacer = _get_noise_replacer(
+            exposure=exposure, sources=sources,
+        )
+    else:
+        noise_replacer = None
+
+    exp_bbox = exposure.getBBox()
+    results = []
+
+    # ormasks will be different within the loop below due to the replacer
+    ormasks = _get_ormasks(sources=sources, exposure=exposure)
+
+    for i, source in enumerate(sources):
+
+        # Skip parent objects where all children are inserted
+        if source.get('deblend_nChild') != 0:
+            continue
+
+        ormask = ormasks[i]
+
+        if use_deblended_stamps:
             # This will insert a single source into the image
-            replacer.insertSource(source.getId())
+            noise_replacer.insertSource(source.getId())
 
+        if meas_task is not None:
+            # results are stored in the source
             meas_task.callMeasure(source, exposure)
 
-            # TODO variable box size
-            stamp_bbox = _get_bbox_fixed(
-                exposure=exposure,
-                source=source,
-                stamp_size=48,
-            )
-            subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
+        # TODO variable box size?
+        stamp_bbox = _get_bbox_fixed(
+            exposure=exposure,
+            source=source,
+            stamp_size=stamp_size,
+        )
+        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
 
-            obs = _extract_obs(
-                subim=subim,
-                source=source,
-            )
+        obs = _extract_obs(subim=subim, source=source)
 
-            pres = _measure_moments(obs=obs.psf, weight=weight)
-            ores = _measure_moments(obs=obs, weight=weight)
+        pres = _measure_one(obs=obs.psf, fitter=fitter)
+        ores = _measure_one(obs=obs, fitter=fitter)
 
-            res = _get_output(
-                source=source, res=ores, pres=pres, ormask=ormask,
-                box_size=obs.image.shape[0],
-                exp_bbox=exp_bbox,
-            )
+        res = _get_output(
+            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
+            box_size=obs.image.shape[0], exp_bbox=exp_bbox,
+        )
 
+        if use_deblended_stamps:
             # Remove object
-            replacer.removeSource(source.getId())
+            noise_replacer.removeSource(source.getId())
 
-            results.append(res)
+        results.append(res)
 
-        # Insert all objects back into image
-        replacer.end()
+    if use_deblended_stamps:
+        # put exposure back as it was input
+        noise_replacer.end()
 
     if len(results) > 0:
-        results = eu.numpy_util.combine_arrlist(results)
+        results = np.hstack(results)
     else:
         results = None
 
     return results
 
 
+def _measure_one(obs, fitter):
+    """
+    run a measurement on an input observation
+    """
+    from ngmix.ksigmamom import KSigmaMom
+
+    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+        res = fitter.go(obs, no_psf=True)
+    else:
+        res = fitter.go(obs)
+
+    if res['flags'] != 0:
+        return res
+
+    res['numiter'] = 1
+    res['g'] = res['e']
+    res['g_cov'] = res['e_cov']
+
+    return res
+
+
 def _get_ormasks(*, sources, exposure):
+    """
+    get a list of all the ormasks for the sources
+    """
     ormasks = []
     for source in sources:
         ormask = _get_ormask(source=source, exposure=exposure)
@@ -139,25 +256,20 @@ def _get_ormask(*, source, exposure):
 
 def detect_and_deblend(
     exposure,
-    thresh=10,
-    loglevel='INFO',
-    niter=2,
+    thresh=DEFAULT_THRESH,
+    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection and deblending, and optionally sky determination
-    and subtraction
+    run detection with deblending
 
     Parameters
     ----------
     exposure: Exposure
         The exposure to process
     thresh: float, optional
-        Default 10
-    niter: int, optional
-        Number of iterations for detection and sky subtraction.
-        Must be >= 1. Default is 2 which is recommended.
+        The detection threshold in units of the sky noise
     loglevel: str, optional
-        Default 'INFO'
+        Log level for logger in string form
     """
 
     schema = afw_table.SourceTable.makeMinimalSchema()
@@ -218,7 +330,7 @@ def detect_and_deblend(
 
 
 def iterate_detection_and_skysub(
-    exposure, thresh, niter=2, loglevel='INFO',
+    exposure, thresh, niter=2, loglevel=DEFAULT_LOGLEVEL,
 ):
     """
     Iterate detection and sky subtraction
@@ -278,7 +390,7 @@ def iterate_detection_and_skysub(
 
 def subtract_sky_mbobs(mbobs, thresh):
     """
-    subtract sky and zero the edges
+    subtract sky
 
     We combine these because both involve resetting the image
     and noise image
@@ -302,7 +414,10 @@ def subtract_sky_mbobs(mbobs, thresh):
             obs.image = exp.image.array
 
 
-def _get_noise_replacer(*, exposure, sources):
+def _get_noise_replacer(exposure, sources):
+    """
+    get a noise replacer for the input exposure and source list
+    """
     noise_replacer_config = NoiseReplacerConfig()
     footprints = {
         source.getId(): (source.getParent(), source.getFootprint())
@@ -318,7 +433,7 @@ def _get_noise_replacer(*, exposure, sources):
     )
 
 
-def _extract_obs(*, subim, source):
+def _extract_obs(subim, source):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -385,7 +500,10 @@ def _extract_obs(*, subim, source):
     return obs
 
 
-def _get_bbox_fixed(*, exposure, source, stamp_size):
+def _get_bbox_fixed(exposure, source, stamp_size):
+    """
+    get a fixed sized bounding box
+    """
     radius = stamp_size/2
     radius = int(np.ceil(radius))
 
@@ -397,12 +515,16 @@ def _get_bbox_fixed(*, exposure, source, stamp_size):
     return bbox
 
 
-def _get_bbox_calc(*,
-                   exposure,
-                   source,
-                   min_stamp_size,
-                   max_stamp_size,
-                   sigma_factor):
+def _get_bbox_calc(
+    exposure,
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
+    """
+    get a bounding box with size based on measurements
+    """
     try:
         stamp_radius, stamp_size = _compute_stamp_size(
             source=source,
@@ -421,11 +543,12 @@ def _get_bbox_calc(*,
     return bbox
 
 
-def _compute_stamp_size(*,
-                        source,
-                        min_stamp_size,
-                        max_stamp_size,
-                        sigma_factor):
+def _compute_stamp_size(
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
     """
     calculate a stamp radius for the input object, to
     be used for constructing postage stamp sizes
@@ -453,7 +576,7 @@ def _compute_stamp_size(*,
     return radius, stamp_size
 
 
-def _project_box(*, source, wcs, radius):
+def _project_box(source, wcs, radius):
     """
     create a box for the input source
     """
@@ -464,7 +587,7 @@ def _project_box(*, source, wcs, radius):
     return box
 
 
-def _get_padded_sub_image(*, exposure, bbox):
+def _get_padded_sub_image(exposure, bbox):
     """
     extract a sub-image, padded out when it is not contained
     """
@@ -504,7 +627,7 @@ def _get_padded_sub_image(*, exposure, bbox):
     return result
 
 
-def _extract_psf_image(*, exposure, orig_cen):
+def _extract_psf_image(exposure, orig_cen):
     """
     get the psf associated with this image
 
@@ -519,7 +642,7 @@ def _extract_psf_image(*, exposure, orig_cen):
         psfobj = exposure.getPsf()
         psfim = psfobj.computeKernelImage(orig_cen).array
     except InvalidParameterError:
-        raise MBObsMissingDataError("could not reconstruct PSF")
+        raise MissingDataError("could not reconstruct PSF")
 
     psfim = np.array(psfim, dtype='f4', copy=False)
 
@@ -563,40 +686,8 @@ def _extract_weight(subim):
 
     return weight
 
-    """
-    # TODO set the ignor bits
-    bitnames_to_ignore = self.config['stamps']['bits_to_ignore_for_weight']
 
-    bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
-
-    maskobj = subim.mask
-    mask = maskobj.array
-    wuse = np.where(
-        (var_image > 0) &
-        ((mask & bits_to_ignore) == 0)
-    )
-
-    if wuse[0].size > 0:
-        medvar = np.median(var_image[wuse])
-        weight[:, :] = 1.0/medvar
-    else:
-        self.log.debug('    weight is all zero, found '
-                       'none that passed cuts')
-        # _print_bits(maskobj, bitnames_to_ignore)
-
-    bitnames_to_null = self.config['stamps']['bits_to_null']
-    if len(bitnames_to_null) > 0:
-        bits_to_null = util.get_ored_bits(maskobj, bitnames_to_null)
-        wnull = np.where((mask & bits_to_null) != 0)
-        if wnull[0].size > 0:
-            self.log.debug('    nulling %d in weight' % wnull[0].size)
-            weight[wnull] = 0.0
-
-    return weight
-    """
-
-
-def _extract_jacobian(*, subim, source):
+def _extract_jacobian(subim, source):
     """
     extract an ngmix.Jacobian from the image object
     and object record
@@ -649,24 +740,9 @@ def _extract_jacobian(*, subim, source):
     return jacob
 
 
-def _measure_moments(*, obs, weight):
-    res = weight.get_weighted_moments(obs=obs, maxrad=1.e9)
+def _get_dtype(meas_type):
 
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
-
-    return res
-
-
-def _get_dtype():
-
-    model = 'wmom'
-    npars = 6
-    n = util.Namer(front=model)
+    n = util.Namer(front=meas_type)
     dt = [
         ('flags', 'i4'),
 
@@ -691,23 +767,24 @@ def _get_dtype():
 
         (n('flags'), 'i4'),
         (n('s2n'), 'f8'),
-        (n('pars'), 'f8', npars),
         (n('g'), 'f8', 2),
         (n('g_cov'), 'f8', (2, 2)),
         (n('T'), 'f8'),
         (n('T_err'), 'f8'),
         (n('T_ratio'), 'f8'),
+        (n('flux'), 'f8'),
+        (n('flux_err'), 'f8'),
     ]
 
     return dt
 
 
-def _get_output(*, source, res, pres, ormask, box_size, exp_bbox):
+def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
 
-    model = 'wmom'
-    n = util.Namer(front=model)
+    meas_type = _get_meas_type(fitter)
+    n = util.Namer(front=meas_type)
 
-    dt = _get_dtype()
+    dt = _get_dtype(meas_type)
     output = np.zeros(1, dtype=dt)
 
     output['psfrec_flags'] = procflags.NO_ATTEMPT
@@ -741,14 +818,41 @@ def _get_output(*, source, res, pres, ormask, box_size, exp_bbox):
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
-        output[n('pars')] = res['pars']
         output[n('g')] = res['g']
         output[n('g_cov')] = res['g_cov']
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
 
         if pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
 
     output['flags'] = flags
     return output
+
+
+def _get_meas_type(fitter):
+    if isinstance(fitter, ngmix.gaussmom.GaussMom):
+        meas_type = 'wmom'
+    elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
+        meas_type = 'ksigma'
+    else:
+        raise ValueError(
+            "don't know how to get name for fitter %s" % repr(fitter)
+        )
+
+    return meas_type
+
+
+class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
