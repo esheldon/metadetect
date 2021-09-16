@@ -2,6 +2,7 @@ import numpy as np
 import logging
 import ngmix
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
+from ngmix.defaults import DEFAULT_LM_PARS
 from .util import Namer
 from . import procflags
 
@@ -699,7 +700,8 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     if 'coellip' in psf_conf['model']:
         ngauss = get_coellip_ngauss(psf_conf['model'])
         fitter = ngmix.fitting.CoellipFitter(
-            ngauss=ngauss, fit_pars=psf_conf['lm_pars'],
+            ngauss=ngauss,
+            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
         )
         guesser = ngmix.guessers.CoellipPSFGuesser(
             rng=rng, ngauss=ngauss,
@@ -714,7 +716,8 @@ def fit_all_psfs(mbobs, psf_conf, rng):
         )
     else:
         fitter = ngmix.fitting.Fitter(
-            model=psf_conf['model'], fit_pars=psf_conf['lm_pars'],
+            model=psf_conf['model'],
+            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
         )
         guesser = ngmix.guessers.SimplePSFGuesser(rng=rng)
 
