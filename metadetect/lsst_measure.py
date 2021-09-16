@@ -29,20 +29,20 @@ from .defaults import (
 )
 
 
-def detect_and_measure(
+def detect_deblend_and_measure(
     exposure,
     fitter,
     stamp_size,
-    thresh,
+    thresh=DEFAULT_THRESH,
     use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
     loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection and measurements.
+    run detection, deblending and measurements.
 
-    Note deblending is always a part of the hierarchical detection process for
-    the DM stack, but the user has a choice whether touse deblended postage
-    stamps for the measurement.
+    Note deblending is always run in a hierarchical detection process, but the
+    user has a choice whether to use deblended postage stamps for the
+    measurement.
 
     Parameters
     ----------
