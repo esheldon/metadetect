@@ -20,28 +20,6 @@ coadd = pytest.importorskip(
     reason='LSST codes need the descwl_coadd module for testing',
 )
 
-CONFIG = {
-    "model": "wmom",
-    "bmask_flags": 0,
-    "metacal": {
-        "use_noise_image": True,
-        "psf": "fitgauss",
-    },
-    "psf": {
-        "model": "gauss",
-        "lm_pars": {},
-        "ntry": 2,
-    },
-    "weight": {
-        "fwhm": 1.2,
-    },
-    "detect": {
-        "thresh": 10.0,
-    },
-    "subtract_sky": False,
-    'meds': {},
-}
-
 
 def make_lsst_sim(seed):
     rng = np.random.RandomState(seed=seed)
