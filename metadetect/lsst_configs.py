@@ -54,6 +54,11 @@ def _fill_config(config):
     if 'weight' not in config or config['weight'] is None:
         config['weight'] = get_default_weight_config(meas_type)
 
+    # note we allow ngmix.metacal.get_all_metacal to do its
+    # own verification
+    _verify_psf_config(config['psf'])
+    _verify_detect_config(config['detect'])
+
 
 def get_default_weight_config(meas_type):
     """
@@ -81,3 +86,47 @@ def get_default_weight_fwhm(meas_type):
         raise ValueError('bad meas type: %s' % meas_type)
 
     return DEFAULT_WEIGHT_FWHMS[meas_type]
+
+
+def _verify_psf_config(config):
+
+    name = 'psf'
+    _check_required_keywords(
+        config=config, required_keys=['model'], name=name,
+    )
+
+    model = config['model']
+    if model == 'admom':
+        allowed_keys = ['model', 'ntry']
+    elif model == 'wmom':
+        allowed_keys = ['model', 'weight_fwhm']
+    else:
+        allowed_keys = ['model', 'lm_pars', 'ntry']
+
+    _check_keywords(
+        config=config,
+        allowed_keys=allowed_keys,
+        name=name,
+    )
+
+
+def _verify_detect_config(config):
+
+    name = 'detect'
+    _check_required_keywords(
+        config=config, required_keys=['thresh'], name=name,
+    )
+
+    _check_keywords(config=config, allowed_keys=['thresh'], name=name)
+
+
+def _check_required_keywords(config, required_keys, name):
+    for key in required_keys:
+        if key not in config:
+            raise ValueError(f'key "{key}" must be present in {name} config')
+
+
+def _check_keywords(config, allowed_keys, name):
+    for key in config:
+        if key not in allowed_keys:
+            raise ValueError(f'key "{key}" not allowed in {name} config')
