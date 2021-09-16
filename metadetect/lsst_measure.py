@@ -129,7 +129,7 @@ def measure(
             use_deblended_stamps=use_deblended_stamps,
         )
     else:
-        results = []
+        results = None
 
     return results
 
