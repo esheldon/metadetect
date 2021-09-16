@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 DEFAULT_LOGLEVEL = 'INFO'
 BMASK_EDGE = 2**30
 DEFAULT_IMAGE_VALUES = {
@@ -15,25 +17,6 @@ ALLOWED_BOX_SIZES = [
     2048,3072,4096,6144  # noqa
 ]
 
-# stamp size is not a default, depends on measurement
-DEFAULT_MDET_CONFIG = {
-    # wmom or ksigma
-    'meas_type': 'wmom',
-
-    # fitgauss or gauss
-    'metacal_psf': 'fitgauss',
-
-    # In units of sky noise.  Default for lsst is 5
-    'detect_thresh': 5.0,
-
-    # deblending always occurs; this says to do the shear measurements on
-    # deblended stamps
-    'use_deblended_stamps': False,
-
-    # do sky sub on each coadd input
-    'subtract_sky': False,
-}
-
 DEFAULT_WEIGHT_FWHMS = {
     'wmom': 1.2,
     'ksigma': 2.0,
@@ -44,4 +27,32 @@ DEFAULT_STAMP_SIZES = {
     # TODO determine a good value for this. We used 48 in DES
     # which would be 64 for lsst
     'ksigma': 64,
+}
+
+DEFAULT_THRESH = 5.0
+DEFAULT_USE_DEBLENDED_STAMPS = False
+DEFAULT_SUBTRACT_SKY = False
+DEFAULT_PSF_CONFIG = {
+    'model': 'admom',
+    'ntry': 4,
+}
+DEFAULT_METACAL_CONFIG = {
+    "use_noise_image": True,
+    "psf": "fitgauss",
+}
+DEFAULT_DETECT_CONFIG = {
+    'thresh': DEFAULT_THRESH,
+}
+
+# the weight subconfig and the stamp_size defaults we be filled in
+# programatically based on the measurement_type
+DEFAULT_MDET_CONFIG = {
+    'meas_type': 'wmom',
+    'subtract_sky': DEFAULT_SUBTRACT_SKY,
+    'use_deblended_stamps': DEFAULT_USE_DEBLENDED_STAMPS,
+    'detect': deepcopy(DEFAULT_DETECT_CONFIG),
+    'psf': deepcopy(DEFAULT_PSF_CONFIG),
+    'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
+    'weight': None,
+    'stamp_size': None,
 }
