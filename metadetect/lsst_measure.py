@@ -51,7 +51,7 @@ def detect_deblend_and_measure(
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
     thresh: float
-        Threshold for detection.
+        The detection threshold in units of the sky noise
     stamp_size: int
         Size for postage stamps.
     use_deblended_stamps: bool
@@ -275,15 +275,14 @@ def detect_and_deblend(
     loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection and deblending, and optionally sky determination
-    and subtraction
+    run detection with deblending
 
     Parameters
     ----------
     exposure: Exposure
         The exposure to process
     thresh: float, optional
-        Default 10
+        The detection threshold in units of the sky noise
     loglevel: str, optional
         Log level for logger in string form
     """
