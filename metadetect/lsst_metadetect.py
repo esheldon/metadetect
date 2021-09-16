@@ -1,6 +1,15 @@
 """
 
 TODO
+    - when using deblended stamps, sources are replaced by noise.
+      We need to make this noise field consistent for the different
+      sheared images.  We have a noise field but it is used already
+      for the correlated noise corrections.  We need another that
+      gets treated in parallel with the the real image: an Observation
+      with noise as the image and another noise field present, and
+      run through the entire metacal process as if it were real data..
+      This can then be sent through as the noiseImage to the
+      NoiseReplacer
     - more tests
     - full shear test like in /shear_meas_test/test_shear_meas.py ?
     - understand why we are trimming the psf to even dims
@@ -17,15 +26,13 @@ from ngmix.gexceptions import BootPSFFailure
 from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
-from .lsst_measure import detect_and_measure, subtract_sky_mbobs
+from .lsst_measure import detect_deblend_and_measure, subtract_sky_mbobs
 from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
 from . import fitting
-from .defaults import (
-    DEFAULT_LOGLEVEL, DEFAULT_MDET_CONFIG,
-    DEFAULT_WEIGHT_FWHMS, DEFAULT_STAMP_SIZES,
-)
+from .defaults import DEFAULT_LOGLEVEL
+from .lsst_configs import get_config
 
 
 def run_metadetect(
@@ -38,9 +45,8 @@ def run_metadetect(
     rng: np.random.RandomState
         Random number generator
     config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, deblend,
-        Entries in this dict override defaults stored in
-        defaults.DEFAULT_MDET_CONFIG
+        Configuration for the fitter, metacal, psf, detect, deblend, Entries
+        in this dict override defaults; see lsst_configs.py
     show: bool, optional
         if True images will be shown
     loglevel: str, optional
@@ -55,18 +61,15 @@ def run_metadetect(
     """
 
     config = get_config(config)
-    metacal_config = {
-        'use_noise_image': True,
-        'psf': config['metacal_psf']
-    }
-    stamp_size = get_default_stamp_size(meas_type=config['meas_type'])
 
     if config['subtract_sky']:
-        subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect_thresh'])
+        subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect']['thresh'])
 
     # TODO we get psf stats for the entire coadd, not location dependent
     # for each object on original image
-    psf_stats = fit_original_psfs(config=config, mbobs=mbobs, rng=rng)
+    psf_stats = fit_original_psfs(
+        psf_config=config['psf'], mbobs=mbobs, rng=rng,
+    )
 
     fitter = get_fitter(config)
 
@@ -74,7 +77,7 @@ def run_metadetect(
     mfrac = get_mfrac(mbobs)
 
     odict = get_all_metacal(
-        metacal_config=metacal_config, mbobs=mbobs, rng=rng, show=show,
+        metacal_config=config['metacal'], mbobs=mbobs, rng=rng, show=show,
     )
 
     if odict is None:
@@ -86,11 +89,11 @@ def run_metadetect(
             assert len(mbobs[0]) == 1, 'no multiepoch'
             obs = mbobs[0][0]
             exposure = obs.exposure
-            res = detect_and_measure(
+            res = detect_deblend_and_measure(
                 exposure=exposure,
                 fitter=fitter,
-                stamp_size=stamp_size,
-                thresh=config['detect_thresh'],
+                stamp_size=config['stamp_size'],
+                thresh=config['detect']['thresh'],
                 use_deblended_stamps=config['use_deblended_stamps'],
                 loglevel=loglevel,
             )
@@ -165,17 +168,15 @@ def get_fitter(config):
     get the fitter based on the 'fitter' input
     """
 
-    if 'weight_fwhm' in config:
-        fwhm = config['weight_fwhm']
-    else:
-        fwhm = get_default_weight_fwhm(config['meas_type'])
+    meas_type = config['meas_type']
+    fwhm = config['weight']['fwhm']
 
-    if config['meas_type'] == 'wmom':
+    if meas_type == 'wmom':
         fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
-    elif config['meas_type'] == 'ksigma':
+    elif meas_type == 'ksigma':
         fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
     else:
-        raise ValueError("bad meas_type: '%s'" % config['meas_type'])
+        raise ValueError("bad meas_type: '%s'" % meas_type)
 
     return fitter
 
@@ -275,7 +276,7 @@ def get_mfrac(mbobs):
     return mfrac
 
 
-def fit_original_psfs(config, mbobs, rng):
+def fit_original_psfs(psf_config, mbobs, rng):
     """
     fit the original psfs and get the mean g1,g2,T across
     all bands
@@ -283,9 +284,8 @@ def fit_original_psfs(config, mbobs, rng):
     This can fail and flags will be set, but we proceed
     """
 
-    psf_config = {'model': 'admom', 'ntry': 4}
     try:
-        fitting.fit_all_psfs(mbobs, psf_config, rng)
+        fitting.fit_all_psfs(mbobs=mbobs, psf_conf=psf_config, rng=rng)
 
         g1sum = 0.0
         g2sum = 0.0
@@ -328,50 +328,3 @@ def fit_original_psfs(config, mbobs, rng):
         'g2': g2,
         'T': T,
     }
-
-
-def get_config(config=None):
-    """
-    extract a full config, overriding defaults with the input
-
-    Parameters
-    ----------
-    config: dict, optional
-        Entries in this dict override defaults stored in
-        defaults.DEFAULT_MDET_CONFIG
-
-    Returns
-    -------
-    Full config
-    """
-    if config is None:
-        config = {}
-
-    for key in config:
-        if key not in DEFAULT_MDET_CONFIG:
-            raise ValueError('bad key in mdet config: %s' % key)
-
-    config_new = copy.deepcopy(DEFAULT_MDET_CONFIG)
-    config_new.update(copy.deepcopy(config))
-
-    return config_new
-
-
-def get_default_stamp_size(meas_type):
-    """
-    get default stamp size for the input measurement type
-    """
-    if meas_type not in DEFAULT_STAMP_SIZES:
-        raise ValueError('bad meas type: %s' % meas_type)
-
-    return DEFAULT_STAMP_SIZES[meas_type]
-
-
-def get_default_weight_fwhm(meas_type):
-    """
-    get default weight fwhm for the input measurement type
-    """
-    if meas_type not in DEFAULT_WEIGHT_FWHMS:
-        raise ValueError('bad meas type: %s' % meas_type)
-
-    return DEFAULT_WEIGHT_FWHMS[meas_type]
