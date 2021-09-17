@@ -30,7 +30,7 @@ DEFAULT_STAMP_SIZES = {
 }
 
 DEFAULT_THRESH = 5.0
-DEFAULT_USE_DEBLENDED_STAMPS = False
+DEFAULT_DEBLEND = False
 DEFAULT_SUBTRACT_SKY = False
 DEFAULT_PSF_CONFIG = {
     'model': 'admom',
@@ -49,8 +49,8 @@ DEFAULT_DETECT_CONFIG = {
 DEFAULT_MDET_CONFIG = {
     'meas_type': 'wmom',
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
-    'use_deblended_stamps': DEFAULT_USE_DEBLENDED_STAMPS,
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
+    'deblend': DEFAULT_DEBLEND,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'weight': None,

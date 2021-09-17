@@ -94,7 +94,7 @@ def run_metadetect(
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
-                use_deblended_stamps=config['use_deblended_stamps'],
+                deblend=config['deblend'],
                 loglevel=loglevel,
             )
 
