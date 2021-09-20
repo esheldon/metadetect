@@ -194,7 +194,7 @@ def _do_measure(
             stamp_size=stamp_size,
         )
         subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
-        if True:
+        if False:
             show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
