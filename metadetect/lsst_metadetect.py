@@ -65,6 +65,10 @@ def run_metadetect(
     if config['subtract_sky']:
         subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect']['thresh'])
 
+    if config['deblend']:
+        # these will be propagated in the metadata through the metacal process
+        set_extra_noise_exps(mbobs=mbobs, rng=rng)
+
     # TODO we get psf stats for the entire coadd, not location dependent
     # for each object on original image
     psf_stats = fit_original_psfs(
@@ -79,7 +83,6 @@ def run_metadetect(
     odict = get_all_metacal(
         metacal_config=config['metacal'], mbobs=mbobs, rng=rng, show=show,
     )
-
     if odict is None:
         result = None
     else:
@@ -88,13 +91,21 @@ def run_metadetect(
             assert len(mbobs) == 1, 'no multiband for now'
             assert len(mbobs[0]) == 1, 'no multiepoch'
             obs = mbobs[0][0]
+
             exposure = obs.exposure
+
+            if config['deblend']:
+                noise_image = obs.meta['extra_noise_exp'].image
+            else:
+                noise_image = None
+
             res = detect_deblend_and_measure(
                 exposure=exposure,
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
-                use_deblended_stamps=config['use_deblended_stamps'],
+                deblend=config['deblend'],
+                noise_image=noise_image,
                 loglevel=loglevel,
             )
 
@@ -108,6 +119,57 @@ def run_metadetect(
             result[shear_str] = res
 
     return result
+
+
+def set_extra_noise_exps(mbobs, rng):
+    """
+    set .meta['extra_noise_exp'] on each observation
+
+    Not removing poission noise, because it should not matter.
+    This noise replacement is not "correct" in any case as deblending is
+    imperfect, and this field is not passing through metacal, so some slight
+    differences from real noise should not matter
+    """
+
+    for obslist in mbobs:
+        assert len(obslist) == 1
+        for obs in obslist:
+            noise_exp, _ = get_noise_exp(exp=obs.coadd_exp, rng=rng)
+
+            obs.meta['extra_noise_exp'] = noise_exp
+
+
+def get_noise_exp(exp, rng):
+    """
+    get a noise image based on the input exposure
+
+    Parameters
+    ----------
+    exp: afw.image.ExposureF
+        The exposure upon which to base the noise
+    rng: np.random.RandomState
+        The random number generator for making the noise image
+
+    Returns
+    -------
+    noise exposure
+    """
+
+    noise_exp = afw_image.ExposureF(exp, deep=True)
+
+    signal = exp.image.array
+    variance = exp.variance.array
+
+    use = np.where(np.isfinite(variance) & np.isfinite(signal))
+
+    var = np.median(variance[use])
+
+    noise_image = rng.normal(scale=np.sqrt(var), size=signal.shape)
+
+    noise_exp.image.array[:, :] = noise_image
+    noise_exp.variance.array[:, :] = var
+
+    return noise_exp, var
 
 
 def add_noshear_pos(config, res, shear_str, obs):

@@ -25,7 +25,7 @@ from . import procflags
 from .defaults import (
     DEFAULT_LOGLEVEL,
     DEFAULT_THRESH,
-    DEFAULT_USE_DEBLENDED_STAMPS,
+    DEFAULT_DEBLEND,
 )
 
 
@@ -34,7 +34,8 @@ def detect_deblend_and_measure(
     fitter,
     stamp_size,
     thresh=DEFAULT_THRESH,
-    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+    deblend=DEFAULT_DEBLEND,
+    noise_image=None,
     loglevel=DEFAULT_LOGLEVEL,
 ):
     """
@@ -54,9 +55,11 @@ def detect_deblend_and_measure(
         The detection threshold in units of the sky noise
     stamp_size: int
         Size for postage stamps.
-    use_deblended_stamps: bool
-        If True, use deblended postage stamps for the measurements.
-        Note deblending is run in either case
+    deblend: bool
+        If True, run the deblender.
+    noise_image: array
+        A noise image for use by the NoiseReplacer.  If you are running
+        metacal you should send the same image for all metacal images.
     loglevel: str, optional
         Log level for logger in string form
     """
@@ -73,7 +76,8 @@ def detect_deblend_and_measure(
         fitter=fitter,
         meas_task=meas_task,
         stamp_size=stamp_size,
-        use_deblended_stamps=use_deblended_stamps,
+        deblend=deblend,
+        noise_image=noise_image,
     )
 
 
@@ -83,7 +87,8 @@ def measure(
     fitter,
     stamp_size,
     meas_task=None,
-    use_deblended_stamps=DEFAULT_USE_DEBLENDED_STAMPS,
+    deblend=DEFAULT_DEBLEND,
+    noise_image=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -108,13 +113,15 @@ def measure(
         An optional measurement task; if you already have centeroids etc. for
         sources, no need to send it.  Otherwise this should do basic things
         like finding the centroid
-    use_deblended_stamps: bool
-        If True, use deblended postage stamps for the measurements.
-        Note deblending is run in either case
+    deblend: bool
+        If True, deblend neighbors.
+    noise_image: array
+        A noise image for use by the NoiseReplacer.  If you are running
+        metacal you should send the same image for all metacal images.
     """
 
     if len(sources) > 0:
-        if use_deblended_stamps:
+        if deblend:
             # this makes a copy of everything, including pixels
             exp_send = afw_image.ExposureF(exposure, deep=True)
         else:
@@ -126,7 +133,8 @@ def measure(
             fitter=fitter,
             stamp_size=stamp_size,
             meas_task=meas_task,
-            use_deblended_stamps=use_deblended_stamps,
+            deblend=deblend,
+            noise_image=noise_image,
         )
     else:
         results = None
@@ -140,16 +148,18 @@ def _do_measure(
     fitter,
     stamp_size,
     meas_task,
-    use_deblended_stamps,
+    deblend,
+    noise_image=None,
+    seed=None,
 ):
     """
     See docs for measure()
     """
 
-    if use_deblended_stamps:
+    if deblend:
         # remove all objects and replace with noise
         noise_replacer = _get_noise_replacer(
-            exposure=exposure, sources=sources,
+            exposure=exposure, sources=sources, noise_image=noise_image,
         )
     else:
         noise_replacer = None
@@ -168,7 +178,7 @@ def _do_measure(
 
         ormask = ormasks[i]
 
-        if use_deblended_stamps:
+        if deblend:
             # This will insert a single source into the image
             noise_replacer.insertSource(source.getId())
 
@@ -183,6 +193,8 @@ def _do_measure(
             stamp_size=stamp_size,
         )
         subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
+        if False:
+            show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
 
@@ -194,13 +206,13 @@ def _do_measure(
             box_size=obs.image.shape[0], exp_bbox=exp_bbox,
         )
 
-        if use_deblended_stamps:
+        if deblend:
             # Remove object
             noise_replacer.removeSource(source.getId())
 
         results.append(res)
 
-    if use_deblended_stamps:
+    if deblend:
         # put exposure back as it was input
         noise_replacer.end()
 
@@ -210,6 +222,23 @@ def _do_measure(
         results = None
 
     return results
+
+
+def show_exp(exp):
+    """
+    show the image in ds9
+
+    Parameters
+    ----------
+    exp: Exposure
+        The image to show
+    """
+    import lsst.afw.display as afw_display
+    display = afw_display.getDisplay(backend='ds9')
+    display.mtv(exp)
+    display.scale('log', 'minmax')
+
+    input('hit a key')
 
 
 def _measure_one(obs, fitter):
@@ -260,7 +289,11 @@ def detect_and_deblend(
     loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection with deblending
+    run detection and deblending of peaks
+
+    we must combine detection and deblending in the same function because the
+    schema gets modified in place, which means we must construct the deblend
+    task at the same time as the detect task
 
     Parameters
     ----------
@@ -270,6 +303,11 @@ def detect_and_deblend(
         The detection threshold in units of the sky noise
     loglevel: str, optional
         Log level for logger in string form
+
+    Returns
+    -------
+    sources, meas_task
+        The sources and the measurement task
     """
 
     schema = afw_table.SourceTable.makeMinimalSchema()
@@ -301,27 +339,28 @@ def detect_and_deblend(
         schema=schema,
     )
 
-    # setup detection config
-    # these use regular python loggers
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
     detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(config=detection_config)
+    detection_task = SourceDetectionTask(
+        # TODO should we send schema?
+        config=detection_config,
+    )
     detection_task.log.setLevel(getattr(logging, loglevel.upper()))
 
+    # this must occur directly before any tasks are run because schema is
+    # modified in place by tasks, and the constructor does a check that
+    # fails if we construct it separately
     deblend_config = SourceDeblendConfig()
+
     deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
     deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
 
-    # Detect objects
     table = afw_table.SourceTable.make(schema)
-
     result = detection_task.run(table, exposure)
 
     if result is not None:
         sources = result.sources
-
-        # run the deblender
         deblend_task.run(exposure, sources)
     else:
         sources = []
@@ -414,10 +453,21 @@ def subtract_sky_mbobs(mbobs, thresh):
             obs.image = exp.image.array
 
 
-def _get_noise_replacer(exposure, sources):
+def _get_noise_replacer(exposure, sources, noise_image=None):
     """
     get a noise replacer for the input exposure and source list
     """
+
+    # Notes for metacal.
+    #
+    # For metacal we should generate a noise image so that the exact noise
+    # field is used for all versions of the metacal images.  The assumption is
+    # that, because these noise data should contain no signal, metacal is not
+    # calibrating it.  Thus it doesn't matter whether or not the noise field is
+    # representative of the full covariance of the true image noise.  Rather by
+    # making the field the same for all metacal images we reduce variance in
+    # the calculation of the response
+
     noise_replacer_config = NoiseReplacerConfig()
     footprints = {
         source.getId(): (source.getParent(), source.getFootprint())
@@ -430,6 +480,7 @@ def _get_noise_replacer(exposure, sources):
         noise_replacer_config,
         exposure=exposure,
         footprints=footprints,
+        noiseImage=noise_image,
     )
 
 

@@ -49,8 +49,8 @@ def make_lsst_sim(seed):
 
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
-@pytest.mark.parametrize('use_deblended_stamps', [None, False, True])
-def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
+@pytest.mark.parametrize('deblend', [None, False, True])
+def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     rng = np.random.RandomState(seed=116)
 
     sim_data = make_lsst_sim(116)
@@ -82,8 +82,8 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, use_deblended_stamps):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
-    if use_deblended_stamps is not None:
-        config['use_deblended_stamps'] = use_deblended_stamps
+    if deblend is not None:
+        config['deblend'] = deblend
 
     res = lsst_metadetect.run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
