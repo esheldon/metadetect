@@ -197,6 +197,9 @@ def _do_measure(
             show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
+        if obs is None:
+            # we hit an edge or some blank area, this is always junk
+            continue
 
         pres = _measure_one(obs=obs.psf, fitter=fitter)
         ores = _measure_one(obs=obs, fitter=fitter)
@@ -539,14 +542,18 @@ def _extract_obs(subim, source):
         weight=psf_wt,
         jacobian=psf_jacob,
     )
-    obs = ngmix.Observation(
-        im,
-        weight=wt,
-        bmask=bmask,
-        jacobian=jacob,
-        psf=psf_obs,
-        meta=meta,
-    )
+    try:
+        obs = ngmix.Observation(
+            im,
+            weight=wt,
+            bmask=bmask,
+            jacobian=jacob,
+            psf=psf_obs,
+            meta=meta,
+        )
+    except ngmix.GMixFatalError:
+        print('skipping junk object with all zero weight')
+        obs = None
 
     return obs
 
