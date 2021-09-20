@@ -173,7 +173,6 @@ def _do_measure(
     for i, source in enumerate(sources):
 
         # Skip parent objects where all children are inserted
-        # print([s for s in sources.getChildren(source)])
         if source.get('deblend_nChild') != 0:
             continue
 
