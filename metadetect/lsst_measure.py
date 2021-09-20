@@ -198,7 +198,9 @@ def _do_measure(
 
         obs = _extract_obs(subim=subim, source=source)
         if obs is None:
-            # we hit an edge or some blank area, this is always junk
+            # all zero weights for the image this occurs when we have zeros in
+            # the weight plane near the edge but the image is non-zero. These
+            # are always junk
             continue
 
         pres = _measure_one(obs=obs.psf, fitter=fitter)
@@ -552,7 +554,6 @@ def _extract_obs(subim, source):
             meta=meta,
         )
     except ngmix.GMixFatalError:
-        print('skipping junk object with all zero weight')
         obs = None
 
     return obs
