@@ -504,13 +504,17 @@ def _extract_obs(subim, source):
     returns
     --------
     obs: ngmix.Observation
-        The Observation, including
+        The Observation unless all the weight are zero, in which
+        case None is returned
     """
 
     im = subim.image.array
     # im = im - _get_bg_from_edges(image=im, border=2)
 
     wt = _extract_weight(subim)
+    if np.all(wt <= 0):
+        return None
+
     maskobj = subim.mask
     bmask = maskobj.array
     jacob = _extract_jacobian(
@@ -544,17 +548,14 @@ def _extract_obs(subim, source):
         weight=psf_wt,
         jacobian=psf_jacob,
     )
-    try:
-        obs = ngmix.Observation(
-            im,
-            weight=wt,
-            bmask=bmask,
-            jacobian=jacob,
-            psf=psf_obs,
-            meta=meta,
-        )
-    except ngmix.GMixFatalError:
-        obs = None
+    obs = ngmix.Observation(
+        im,
+        weight=wt,
+        bmask=bmask,
+        jacobian=jacob,
+        psf=psf_obs,
+        meta=meta,
+    )
 
     return obs
 
