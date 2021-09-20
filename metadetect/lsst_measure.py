@@ -197,6 +197,11 @@ def _do_measure(
             show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
+        if obs is None:
+            # all zero weights for the image this occurs when we have zeros in
+            # the weight plane near the edge but the image is non-zero. These
+            # are always junk
+            continue
 
         pres = _measure_one(obs=obs.psf, fitter=fitter)
         ores = _measure_one(obs=obs, fitter=fitter)
@@ -499,13 +504,17 @@ def _extract_obs(subim, source):
     returns
     --------
     obs: ngmix.Observation
-        The Observation, including
+        The Observation unless all the weight are zero, in which
+        case None is returned
     """
 
     im = subim.image.array
     # im = im - _get_bg_from_edges(image=im, border=2)
 
     wt = _extract_weight(subim)
+    if np.all(wt <= 0):
+        return None
+
     maskobj = subim.mask
     bmask = maskobj.array
     jacob = _extract_jacobian(
