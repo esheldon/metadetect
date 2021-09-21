@@ -6,6 +6,7 @@ import time
 import pytest
 
 import ngmix
+import metadetect
 
 lsst_metadetect = pytest.importorskip(
     'metadetect.lsst_metadetect',
@@ -21,7 +22,7 @@ coadd = pytest.importorskip(
 )
 
 
-def make_lsst_sim(seed):
+def make_lsst_sim(seed, mag=14, hlr=0.5):
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
 
@@ -30,8 +31,8 @@ def make_lsst_sim(seed):
         coadd_dim=coadd_dim,
         buff=20,
         layout='grid',
-        mag=14,
-        hlr=0.5,
+        mag=mag,
+        hlr=hlr,
     )
 
     psf = sim.psfs.make_fixed_psf(psf_type='gauss')
@@ -100,6 +101,68 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
+
+
+# add prepsf gauss mom when it is available
+@pytest.mark.parametrize('meas_type', ['ksigma'])
+def test_lsst_metadetect_prepsf_stars(meas_type):
+    seed = 55
+    rng = np.random.RandomState(seed=seed)
+
+    sim_data = make_lsst_sim(seed, hlr=1.0e-4, mag=23)
+
+    print()
+
+    coadd_obs = coadd.make_coadd_obs(
+        exps=sim_data['band_data']['i'],
+        coadd_wcs=sim_data['coadd_wcs'],
+        coadd_bbox=sim_data['coadd_bbox'],
+        psf_dims=sim_data['psf_dims'],
+        remove_poisson=False,
+        rng=rng,
+    )
+
+    # to avoid flagged edges
+    coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+    coadd_mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    obslist.append(coadd_obs)
+    coadd_mbobs.append(obslist)
+
+    config = {}
+
+    if meas_type is not None:
+        config['meas_type'] = meas_type
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
+    )
+
+    if meas_type is None:
+        front = 'wmom'
+    else:
+        front = meas_type
+
+    n = metadetect.util.Namer(front=front)
+
+    data = res['noshear']
+
+    wlowT, = np.where(data['flags'] != 0)
+    wgood, = np.where(data['flags'] == 0)
+
+    # some will have T < 0 due to noise. Expect some with flags set
+    assert wlowT.size > 0
+
+    # TODO need to name these flags in ngmix
+    assert np.all(data[n('flags')][wlowT] == 0x8)
+
+    for field in ['s2n', 'g', 'T_ratio']:
+        assert np.all(np.isnan(data[n(field)][wlowT]))
+
+    for field in data.dtype.names:
+        assert np.all(np.isfinite(data[field][wgood]))
 
 
 def test_lsst_metadetect_mfrac_ormask():
