@@ -840,12 +840,24 @@ def _get_dtype(meas_type):
 
 
 def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
+    """
+    get the output structure, copying in results
 
+    When data are unavailable, a default value of nan is used
+    """
     meas_type = _get_meas_type(fitter)
     n = util.Namer(front=meas_type)
 
     dt = _get_dtype(meas_type)
     output = np.zeros(1, dtype=dt)
+
+    # these cannot be calculated from the results if flags are set, so we put
+    # in defaults.  fitsio has good support for nan
+    output[n('s2n')] = np.nan
+    output[n('g')] = np.nan
+    output[n('T_ratio')] = np.nan
+    output['psf_g'] = np.nan
+    output['psf_T'] = np.nan
 
     output['psfrec_flags'] = procflags.NO_ATTEMPT
 
@@ -876,14 +888,15 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
         output['psf_g'] = pres['g']
         output['psf_T'] = pres['T']
 
+    output[n('T')] = res['T']
+    output[n('T_err')] = res['T_err']
+    output[n('flux')] = res['flux']
+    output[n('flux_err')] = res['flux_err']
+
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
         output[n('g')] = res['g']
         output[n('g_cov')] = res['g_cov']
-        output[n('T')] = res['T']
-        output[n('T_err')] = res['T_err']
-        output[n('flux')] = res['flux']
-        output[n('flux_err')] = res['flux_err']
 
         if pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
