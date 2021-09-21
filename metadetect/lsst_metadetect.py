@@ -67,7 +67,10 @@ def run_metadetect(
 
     if config['deblend']:
         # these will be propagated in the metadata through the metacal process
-        set_extra_noise_exps(mbobs=mbobs, rng=rng)
+        set_extra_noise_exps(
+            mbobs=mbobs, rng=rng,
+            fixnoise=config['metacal'].get('fixnoise', True),
+        )
 
     # TODO we get psf stats for the entire coadd, not location dependent
     # for each object on original image
@@ -121,7 +124,7 @@ def run_metadetect(
     return result
 
 
-def set_extra_noise_exps(mbobs, rng):
+def set_extra_noise_exps(mbobs, rng, fixnoise):
     """
     set .meta['extra_noise_exp'] on each observation
 
@@ -134,12 +137,14 @@ def set_extra_noise_exps(mbobs, rng):
     for obslist in mbobs:
         assert len(obslist) == 1
         for obs in obslist:
-            noise_exp, _ = get_noise_exp(exp=obs.coadd_exp, rng=rng)
+            noise_exp, _ = get_noise_exp(
+                exp=obs.coadd_exp, rng=rng, fixnoise=fixnoise,
+            )
 
             obs.meta['extra_noise_exp'] = noise_exp
 
 
-def get_noise_exp(exp, rng):
+def get_noise_exp(exp, rng, fixnoise):
     """
     get a noise image based on the input exposure
 
@@ -163,6 +168,8 @@ def get_noise_exp(exp, rng):
     use = np.where(np.isfinite(variance) & np.isfinite(signal))
 
     var = np.median(variance[use])
+    if fixnoise:
+        var = var * 2
 
     noise_image = rng.normal(scale=np.sqrt(var), size=signal.shape)
 
