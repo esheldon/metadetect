@@ -86,7 +86,7 @@ def apply_foreground_masking_corrections(
         )
 
     if mask_expand_rad > 0:
-        expanded_bmask = _make_foreground_bmask(
+        expanded_bmask = make_foreground_bmask(
             xm=xm,
             ym=ym,
             rm=rm + mask_expand_rad,
@@ -116,7 +116,7 @@ def _apply_mask_interp(
 ):
 
     # masking is same for all, just take the first
-    fg_bmask = _make_foreground_bmask(
+    fg_bmask = make_foreground_bmask(
         xm=xm,
         ym=ym,
         rm=rm,
@@ -191,7 +191,7 @@ def _apply_mask_apodize(
     mask_bit_val,
 ):
     obs0 = mbobs[0][0]
-    ap_mask = _make_foreground_apodization_mask(
+    ap_mask = make_foreground_apodization_mask(
         xm=xm,
         ym=ym,
         rm=rm,
@@ -216,7 +216,7 @@ def _apply_mask_apodize(
                     obs.weight[msk] = 0.0
 
 
-def _make_foreground_bmask(
+def make_foreground_bmask(
     *,
     xm,
     ym,
@@ -225,6 +225,31 @@ def _make_foreground_bmask(
     symmetrize,
     mask_bit_val,
 ):
+    """
+    Make a bit mask marking the locations of holes at (xm,ym) with radii rm
+    with bit mask_bit_val.
+
+    Parameters
+    ----------
+    xm: np.ndarray
+        The x/column location of the mask holes in zero-indexed pixels.
+    ym: np.ndarray
+        The y/row location of the mask holes in zero-indexed pixels.
+    rm: np.ndarray
+        The radii of the mask holes in pixels.
+    dims: tuple of ints
+        The dimensions of the mask.
+    symmetrize: bool
+        If True, the mask holes will be symmetrized via a 90 degree rotation.
+    mask_bit_val: int
+        The bit to set in the bit mask for areas inside the mask holes.
+
+    Returns
+    -------
+    bmask: np.ndarray
+        The bit mask.
+    """
+
     # must be native byte order for numba
     bmask = np.zeros(dims, dtype='i4')
     _do_mask_foreground(
@@ -241,7 +266,7 @@ def _make_foreground_bmask(
     return bmask
 
 
-def _make_foreground_apodization_mask(
+def make_foreground_apodization_mask(
     *,
     xm,
     ym,
@@ -250,6 +275,31 @@ def _make_foreground_apodization_mask(
     symmetrize,
     ap_rad,
 ):
+    """
+    Make foreground apodization mask for mask holes at (xm,ym) with radius rm.
+
+    Parameters
+    ----------
+    xm: np.ndarray
+        The x/column location of the mask holes in zero-indexed pixels.
+    ym: np.ndarray
+        The y/row location of the mask holes in zero-indexed pixels.
+    rm: np.ndarray
+        The radii of the mask holes in pixels.
+    dims: tuple of ints
+        The dimensions of the mask.
+    symmetrize: bool
+        If True, the mask holes will be symmetrized via a 90 degree rotation.
+    ap_rad: float
+        When apodizing, the scale of the kernel. The total kernel goes from 0 to 1
+        over 6*ap_rad.
+
+    Returns
+    -------
+    ap_mask: np.ndarray
+        The apodization mask.
+    """
+
     # must be native byte order for numba
     ap_mask = np.ones(dims, dtype='f8')
     _do_apodization_mask(
