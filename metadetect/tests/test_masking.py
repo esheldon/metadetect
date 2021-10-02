@@ -7,9 +7,9 @@ from ..masking import (
     _intersects,
     _ap_kern_kern,
     _do_apodization_mask,
-    _make_foreground_apodization_mask,
+    make_foreground_apodization_mask,
     _do_mask_foreground,
-    _make_foreground_bmask,
+    make_foreground_bmask,
     apply_foreground_masking_corrections,
 )
 
@@ -93,7 +93,7 @@ def test_do_apodization_mask_half_masked():
 
 
 def test_make_foreground_apodization_mask():
-    ap_mask = _make_foreground_apodization_mask(
+    ap_mask = make_foreground_apodization_mask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
@@ -108,7 +108,7 @@ def test_make_foreground_apodization_mask():
 
 
 def test_make_foreground_apodization_mask_symmetrize():
-    ap_mask = _make_foreground_apodization_mask(
+    ap_mask = make_foreground_apodization_mask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
@@ -117,7 +117,7 @@ def test_make_foreground_apodization_mask_symmetrize():
         ap_rad=0.1
     )
 
-    ap_mask_sym = _make_foreground_apodization_mask(
+    ap_mask_sym = make_foreground_apodization_mask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
@@ -192,7 +192,7 @@ def test_do_mask_foreground_half_masked():
 def test_make_foreground_bmask():
     flag = 2**7
 
-    bmask = _make_foreground_bmask(
+    bmask = make_foreground_bmask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
@@ -208,7 +208,7 @@ def test_make_foreground_bmask():
 def test_make_foreground_bmask_symmetrize():
     flag = 2**9
 
-    bmask = _make_foreground_bmask(
+    bmask = make_foreground_bmask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
@@ -217,7 +217,7 @@ def test_make_foreground_bmask_symmetrize():
         symmetrize=False,
     )
 
-    bmask_sym = _make_foreground_bmask(
+    bmask_sym = make_foreground_bmask(
         xm=np.array([6], dtype='f8'),
         ym=np.array([0], dtype='f8'),
         rm=np.array([5], dtype='f8'),
