@@ -1,0 +1,1001 @@
+"""
+bugs found:
+    - the multi band exp removes wcs, filter labels
+    - clone() does not move over the psfs
+feature requests for DM
+    - have MultibandExposure keep track of wcs, filter labels, etc.
+    - footprint addTo and subtractFrom methods
+    - clone() should copy psfs
+"""
+from contextlib import contextmanager
+import time
+import ngmix
+import numpy as np
+import galsim
+import lsst.afw.detection as afw_det
+import lsst.afw.table as afw_table
+import lsst.afw.image as afw_image
+from lsst.afw.image import MultibandExposure
+from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
+from lsst.meas.extensions.scarlet import (
+    ScarletDeblendTask, ScarletDeblendConfig,
+)
+from lsst.meas.base import (
+    SingleFrameMeasurementConfig,
+    SingleFrameMeasurementTask,
+)
+import lsst.geom as geom
+
+from descwl_shear_sims.galaxies import make_galaxy_catalog
+from descwl_shear_sims.psfs import make_fixed_psf
+from descwl_shear_sims.sim import make_sim
+from lsst.pex.exceptions import InvalidParameterError, LengthError
+from .vis import show_mbexp, compare_mbexp, show_three_mbexp
+from .util import get_mbexp, copy_mbexp, coadd_exposures
+
+import logging
+
+LOG = logging.getLogger('lsst_measure')
+
+
+def detect_and_deblend(
+    mbexp,
+    source_model,
+    thresh=5,
+    loglevel='info',
+):
+
+    schema = afw_table.SourceTable.makeMinimalSchema()
+
+    # Setup algorithms to run
+    meas_config = SingleFrameMeasurementConfig()
+    meas_config.plugins.names = [
+        "base_SdssCentroid",
+        "base_PsfFlux",
+        "base_SkyCoord",
+    ]
+
+    # set these slots to none because we aren't running these algorithms
+    meas_config.slots.apFlux = None
+    meas_config.slots.gaussianFlux = None
+    meas_config.slots.calibFlux = None
+    meas_config.slots.modelFlux = None
+
+    # goes with SdssShape above
+    meas_config.slots.shape = None
+
+    # fix odd issue where it thinks things are near the edge
+    meas_config.plugins['base_SdssCentroid'].binmax = 1
+
+    meas_task = SingleFrameMeasurementTask(
+        config=meas_config,
+        schema=schema,
+    )
+
+    detection_config = SourceDetectionConfig()
+    detection_config.reEstimateBackground = False
+    detection_config.thresholdValue = thresh
+    detection_task = SourceDetectionTask(config=detection_config)
+
+    # configure the deblender
+    #
+    # this must occur directly before any tasks are run because schema is
+    # modified in place by tasks, and the constructor does a check that
+    # fails if we construct it separately
+
+    # leave minSNR at 50; that just controls how many components can be
+    # modeled, and in any case it drops back to 1 extended component
+    # which is OK
+    # default is sourceModel is 'double'
+
+    deblend_config = ScarletDeblendConfig()
+    deblend_config.sourceModel = source_model
+    deblend_task = ScarletDeblendTask(
+        config=deblend_config,
+        schema=schema,
+    )
+
+    table = afw_table.SourceTable.make(schema)
+
+    if len(mbexp.singles) > 1:
+        detexp = coadd_exposures(mbexp.singles)
+    else:
+        detexp = mbexp.singles[0]
+
+    result = detection_task.run(table, detexp)
+
+    if result is not None:
+        sources = deblend_task.run(mbexp, result.sources)
+    else:
+        # sources = []
+        sources = None
+
+    return sources, meas_task, detexp
+
+
+def measure_scarlet(
+    mbexp,
+    detexp,
+    original_exposures,
+    sources,
+    fitter,
+    stamp_size,
+    # meas_task,
+    seed=None,
+    show=False,
+):
+
+    """
+    We send both mbexp and mbexp does not keep track of the wcs
+
+    TODO keep results for objects that hit edge etc.
+    """
+
+    # Must get wcs from an original exposure
+    wcs = original_exposures[0].getWcs()
+
+    subtractor = ModelSubtractor(
+        mbexp=mbexp,
+        sources=sources,
+    )
+
+    if show:
+        model = subtractor.get_full_model()
+        compare_mbexp(mbexp=mbexp, model=model)
+
+    results = []
+
+    # ormasks will be different within the loop below due to the replacer
+    # ormasks = _get_ormasks(sources=sources, exposure=exposure)
+
+    # assumption: sources same for all bands
+    band_sources = sources[subtractor.filters[0]]
+
+    # this gets everything that is a parent
+    parents = band_sources.getChildren(0)
+
+    for meas_parent_record in parents:
+        LOG.debug('-'*70)
+        LOG.debug('parent id: %d', meas_parent_record.getId())
+
+        children = band_sources.getChildren(meas_parent_record.getId())
+        nchild = len(children)
+        LOG.debug(
+            'processing %d %s',
+            nchild, 'children' if nchild > 1 else 'child'
+        )
+        results += _process_sources(
+            subtractor=subtractor, sources=children, stamp_size=stamp_size,
+            wcs=wcs, fitter=fitter, show=show,
+        )
+
+    return results
+
+
+def _process_sources(
+    subtractor, sources, stamp_size, wcs, fitter, show=False,
+):
+    results = []
+    for source in sources:
+        res = _process_source(
+            subtractor=subtractor, source=source, stamp_size=stamp_size,
+            wcs=wcs, fitter=fitter, show=show,
+        )
+        results.append(res)
+
+    return results
+
+
+def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
+    source_id = source.getId()
+
+    res = None
+    with subtractor.add_source(source_id):
+
+        if show:
+            show_mbexp(
+                subtractor.mbexp, mess=f'source {source_id} added'
+            )
+
+        try:
+            stamp_mbexp = subtractor.get_stamp(
+                source_id, stamp_size=stamp_size,
+            )
+        except LengthError as e:
+            # bounding box did not fit. TODO keep output with flag set
+            LOG.info(e)
+
+            # note the context manager properly handles a return
+            # TODO add proper flag here
+            return {'flags': 1}
+
+        if show:
+            ostamp_mbexp = subtractor.get_stamp(
+                source_id, stamp_size=stamp_size, type='original',
+            )
+            model_mbexp = subtractor.get_stamp(
+                source_id, stamp_size=stamp_size, type='model',
+            )
+            show_three_mbexp(
+                [ostamp_mbexp, stamp_mbexp, model_mbexp],
+                labels=['original', 'deblended', 'model']
+            )
+
+        LOG.debug('orig_cen: %s', source.getCentroid())
+
+        # TODO make codes work with MultibandExposure
+        coadded_stamp_exp = coadd_exposures(stamp_mbexp.singles)
+        obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
+        if obs is None:
+            LOG.info('skipping object with all zero weights')
+            # TODO add proper flag here
+            return {'flags': 2}
+
+        res = fitter.go(obs)
+
+    return res
+
+
+class ModelSubtractor(object):
+    """
+    Create an image with all models subtracted, which is stored in the .mbexp
+    attribute
+
+    Provides a method to add back a source.  This works in a context manager to
+    maintain data consistency.
+
+    Provides methods to get a postage stamp for a deblended source.  One can
+    also get a stamp for the model or the original image.
+
+    You an also generate the full model of the image.
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        A representation of the multi-band data set.
+        Create one of these with
+            descwl_model_subtractor.get_mbexp(exposure_list)
+    sources: dict of lsst.afw.table.SourceCatalog
+        This is the output of the ScarletDeblendTask, a dict of
+        lsst.afw.table.SourceCatalog keyed by band
+
+    TODO
+    ----
+        - move this to its own repo
+        - This code would use half the memory if heavy footprints supported
+        operations like .addTo(image) or .subtractFrom(image) which should be
+        essentially the same as the code in .insert
+
+    Examples
+    ---------
+
+    subtractor = ModelSubtractor(exposure, sources)
+
+    # add back one model; since the image had data-model this restores the
+    # pixels for the object of interest, but with models of other objects
+    # subtracted
+
+    with subtractor.add_source(source_id):
+        # full MultibandExposure is in subtractor.mbexp
+
+        stamp = subtractor.get_stamp(source_id, stamp_size=48)
+
+    # model of the entire data set as a MultibandExposure
+    full_model = subtractor.get_full_model()
+
+    # model of one source
+    model = subtractor.get_model(source_id, stamp_size=48)
+    """
+    def __init__(self, mbexp, sources):
+        assert isinstance(mbexp, MultibandExposure)
+        assert isinstance(sources, dict)
+
+        self.orig = mbexp
+        self.filters = mbexp.filters
+
+        self.sources = sources
+        self.source_ids = set()
+        for source in sources[list(sources.keys())[0]]:
+            self.source_ids.add(source.getId())
+
+        self.mbexp = copy_mbexp(mbexp)
+        for band in self.filters:
+            self.mbexp[band].setPsf(self.orig[band].getPsf())
+
+        # we need a scratch array because heavy footprings don't
+        # have addTo or subtractFrom methods
+        self.scratch = copy_mbexp(mbexp, clear=True)
+
+        self._set_footprints()
+        self._build_heavies()
+        self._build_subtracted_image()
+
+    @contextmanager
+    def add_source(self, source_id):
+        """
+        Open a with context that yields the image with all objects
+        subtracted except the specified one.
+
+        since the image had data-model this restores the pixels for the object
+        of interest, minus models of other objects
+
+        with subtractor.add_source(source_id):
+            # do something with subtractor.exp
+
+        Parameters
+        ----------
+        source_id: int
+            The id of the source, e.g. from source.getId()
+
+        Yields
+        -------
+        ExposureF, although more typically one uses the .exp attribute
+        """
+        if source_id not in self.source_ids:
+            raise ValueError(f'source {source_id} is not in the source list')
+
+        mbexp = self.mbexp
+        scratch = self.scratch
+
+        bbox = self.get_bbox(source_id)
+
+        for band, sources in self.sources.items():
+            # Because footprints can only be used to *replace* pixels, we do so
+            # on a scratch image and then subtract that from the model image
+
+            heavy_fp = self.heavies[band][source_id]
+            heavy_fp.insert(scratch[band].image)
+
+            mbexp[band].image[bbox] += scratch[band].image[bbox]
+
+        try:
+            # usually won't use this yielded value
+            yield self.mbexp
+        finally:
+            for band in self.filters:
+                mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                scratch[band].image[bbox] = 0
+
+    def get_stamp(
+        self, source_id, stamp_size=None, clip=False, type='deblended',
+    ):
+        """
+        Get a postage stamp exposure at the location of the specified source.
+        The pixel data are copied.
+
+        If you want the object to be in the image, use this method within
+        an add_source context
+
+        with subtractor.add_source(source_id):
+            stamp = subtractor.get_stamp(source_id)
+
+        Parameters
+        ----------
+        source_id: int
+            The id of the source, e.g. from source.getId()
+        stamp_size: int
+            If sent, a bounding box is created with about this size rather than
+            using the footprint bounding box. Typically the returned size is
+            stamp_size + 1
+        clip: bool, optional
+            If set to True, clip the bbox to fit into the exposure.
+
+            If clip is False and the bbox does not fit, a
+            lsst.pex.exceptions.LengthError is raised
+
+            Only relevant if stamp_size is sent.  Default False
+        type: str, optional
+            'deblended', 'original', 'model'.  Default is 'deblended'.
+
+            'deblended' means whatever is in the current subtracted images.
+                If the user is in the add_source() context it will contain
+                the source data because the model will have been added back in
+
+            'original' means a stamp from the original data
+
+            'model' means the model for object
+                You can also use get_model() to get the model
+
+        Returns
+        -------
+        ExposureF
+        """
+
+        assert type in ['deblended', 'original', 'model'], (
+            'type must be one of deblended, original or model'
+        )
+
+        if type == 'model':
+            return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
+
+        if source_id not in self.source_ids:
+            raise ValueError(f'source {source_id} is not in the source list')
+
+        bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
+
+        if type == 'original':
+            mbexp = self.orig
+        else:
+            mbexp = self.mbexp
+
+        exposures = [mbexp[band][bbox] for band in self.filters]
+        return MultibandExposure.fromExposures(self.filters, exposures)
+
+    def get_model(self, source_id, stamp_size=None, clip=False):
+        """
+        Get a postage stamp exposure at the location of the specified source,
+        containing the model rather than data.
+
+        Parameters
+        ----------
+        source_id: int
+            The id of the source, e.g. from source.getId()
+        stamp_size: int
+            If sent, a bounding box is created with about this size rather than
+            using the footprint bounding box. Typically the returned size is
+            stamp_size + 1
+        clip: bool, optional
+            If set to True, clip the bbox to fit into the exposure.
+
+            If clip is False and the bbox does not fit, a
+            lsst.pex.exceptions.LengthError is raised
+
+            Only relevant if stamp_size is sent.  Default False
+
+        Returns
+        -------
+        ExposureF
+        """
+
+        if source_id not in self.source_ids:
+            raise ValueError(f'source {source_id} is not in the source list')
+
+        scratch = self.scratch
+        heavies = self.heavies
+
+        bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
+
+        exposures = []
+        for band in self.filters:
+
+            heavy_fp = heavies[band][source_id]
+            heavy_fp.insert(scratch[band].image)
+
+            model_exp = afw_image.ExposureF(scratch[band][bbox], deep=True)
+
+            scratch[band].image[bbox] = 0
+
+            exposures.append(model_exp)
+
+        return MultibandExposure.fromExposures(self.filters, exposures)
+
+    def get_full_model(self):
+        """
+        Get a full model image of all sources.
+
+        Returns
+        -------
+        ExposureF
+        """
+        heavies = self.heavies
+        scratch = self.scratch
+
+        model = copy_mbexp(self.mbexp, clear=True)
+
+        for band, sources in self.sources.items():
+            LOG.debug('-'*70)
+            LOG.debug(f'band: {band}')
+
+            parents = sources.getChildren(0)
+            for parent_record in parents:
+                LOG.debug('parent id: %d', parent_record.getId())
+
+                children = sources.getChildren(parent_record.getId())
+                nchild = len(children)
+                LOG.debug(
+                    'processing %d %s',
+                    nchild, 'children' if nchild > 1 else 'child',
+                )
+
+                for child in children:
+                    child_id = child.getId()
+                    heavy_fp = heavies[band][child_id]
+                    heavy_fp.insert(scratch[band].image)
+
+                    bbox = self.get_bbox(child_id)
+                    model[band].image[bbox] += scratch[band].image[bbox]
+                    scratch[band].image[bbox] = 0
+
+        return model
+
+    def get_bbox(self, source_id, stamp_size=None, clip=False):
+        """
+        Get a bounding box at the location of the specified source.
+
+        Parameters
+        ----------
+        source_id: int
+            The id of the source, e.g. from source.getId()
+        stamp_size: int
+            If sent, a bounding box is created with about this size rather than
+            using the footprint bounding box. Typically the returned size is
+            stamp_size + 1
+        clip: bool, optional
+            If set to True, clip the bbox to fit into the exposure.
+
+            If clip is False and the bbox does not fit, a
+            lsst.pex.exceptions.LengthError is raised
+
+            Only relevant if stamp_size is sent.  Default False
+
+        Returns
+        -------
+        lsst.geom.Box2I
+        """
+
+        if source_id not in self.source_ids:
+            raise ValueError(f'source {source_id} is not in the source list')
+
+        # assumption: bounding boxes same in all bands
+        band = self.filters[0]
+
+        if stamp_size is not None:
+            parent_id, fp = self.footprints[band][source_id]
+            peak = fp.getPeaks()[0]
+            x_peak, y_peak = peak.getIx() - 0.5, peak.getIy() - 0.5
+
+            bbox = geom.Box2I(
+                geom.Point2I(x_peak, y_peak),
+                geom.Extent2I(1, 1),
+            )
+            bbox.grow(stamp_size // 2)
+
+            exp_bbox = self.mbexp.getBBox()
+            if clip:
+                bbox.clip(exp_bbox)
+            else:
+                if not exp_bbox.contains(bbox):
+                    raise LengthError(
+                        f'requested stamp size {stamp_size} for source '
+                        f'{source_id} does not fit into the exposoure.  '
+                        f'Use clip=True to clip the bbox to fit'
+                    )
+
+        else:
+            parent_id, fp = self.footprints[band][source_id]
+            bbox = fp.getBBox()
+
+        return bbox
+
+    def _set_footprints(self):
+        self.footprints = {}
+        for band, sources in self.sources.items():
+            self.footprints[band] = {
+                source.getId(): (source.getParent(), source.getFootprint())
+                for source in sources
+            }
+
+    def _build_heavies(self):
+        self.heavies = {}
+        for band, footprints in self.footprints.items():
+
+            self.heavies[band] = {}
+
+            for id, fp in footprints.items():
+                if fp[1].isHeavy():
+                    self.heavies[band][id] = fp[1]
+                elif fp[0] == 0:
+                    self.heavies[band][id] = afw_det.makeHeavyFootprint(
+                        fp[1], self.mbexp[band].maskedImage,
+                    )
+
+    def _build_subtracted_image(self):
+        heavies = self.heavies
+        mbexp = self.mbexp
+        scratch = self.scratch
+
+        for band, sources in self.sources.items():
+            LOG.debug('-'*70)
+            LOG.debug(f'band: {band}')
+
+            parents = sources.getChildren(0)
+            for parent_record in parents:
+                LOG.debug('parent id: %d', parent_record.getId())
+
+                children = sources.getChildren(parent_record.getId())
+                nchild = len(children)
+                LOG.debug(
+                    'processing %d %s',
+                    nchild, 'children' if nchild > 1 else 'child',
+                )
+
+                for child in children:
+                    child_id = child.getId()
+                    heavy_fp = heavies[band][child_id]
+                    heavy_fp.insert(scratch[band].image)
+
+                    bbox = self.get_bbox(source_id=child_id)
+                    # mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                    mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                    scratch[band].image[bbox] = 0
+
+
+def _extract_obs(wcs, subim, source):
+    """
+    convert an exposure object into an ngmix.Observation, including
+    a psf observation.
+
+    the center for the jacobian will be at the peak location, an integer
+    location.
+
+    Parameters
+    ----------
+    wcs: stack wcs
+        The wcs for the full image not this sub image
+    imobj: lsst.afw.image.Exposure
+        An Exposure object, e.g. ExposureF
+    source: lsst.afw.table.SourceRecord
+        A source record from detection/deblending
+
+    returns
+    --------
+    obs: ngmix.Observation
+        The Observation unless all the weight are zero, in which
+        case None is returned
+    """
+
+    im = subim.image.array
+
+    wt = _extract_weight(subim)
+    if np.all(wt <= 0):
+        return None
+
+    maskobj = subim.mask
+    bmask = maskobj.array
+
+    fp = source.getFootprint()
+    peak = fp.getPeaks()[0]
+
+    # this is a Point2D but at an integer location
+    peak_location = peak.getCentroid()
+
+    jacob = _extract_jacobian(
+        wcs=wcs,
+        subim=subim,
+        source=source,
+        orig_cen=peak_location,
+    )
+
+    psf_im = _extract_psf_image(exposure=subim, orig_cen=peak_location)
+
+    # fake the psf pixel noise
+    psf_err = psf_im.max()*0.0001
+    psf_wt = psf_im*0 + 1.0/psf_err**2
+
+    # use canonical center for the psf
+    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+    psf_jacob = jacob.copy()
+    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    # we will have need of the bit names which we can only
+    # get from the mask object
+    # this is sort of monkey patching, but I'm not sure of
+    # a better solution
+    meta = {'maskobj': maskobj}
+
+    psf_obs = ngmix.Observation(
+        psf_im,
+        weight=psf_wt,
+        jacobian=psf_jacob,
+    )
+    obs = ngmix.Observation(
+        im,
+        weight=wt,
+        bmask=bmask,
+        jacobian=jacob,
+        psf=psf_obs,
+        meta=meta,
+    )
+
+    return obs
+
+
+def _extract_jacobian(wcs, subim, source, orig_cen):
+    """
+    extract an ngmix.Jacobian from the image object
+    and object record
+
+    Parameters
+    ----------
+    wcs: stack wcs
+        The wcs for the full image not this sub image
+    imobj: lsst.afw.image.Exposure
+        An Exposure object, e.g. ExposureF
+    source: lsst.afw.table.SourceRecord
+        A source record from detection/deblending
+    orig_cen: Point2D
+        Location of object in original image
+
+    returns
+    --------
+    Jacobian: ngmix.Jacobian
+        The local jacobian
+    """
+
+    xy0 = subim.getXY0()
+    stamp_cen = orig_cen - geom.Extent2D(xy0)
+
+    LOG.debug('cen in subim: %s', stamp_cen)
+    row = stamp_cen.getY()
+    col = stamp_cen.getX()
+
+    # we get this at the original center
+    linear_wcs = wcs.linearizePixelToSky(
+        orig_cen,  # loc in original image
+        geom.arcseconds,
+    )
+    jmatrix = linear_wcs.getLinear().getMatrix()
+
+    jacob = ngmix.Jacobian(
+        row=row,
+        col=col,
+        dudcol=jmatrix[0, 0],
+        dudrow=jmatrix[0, 1],
+        dvdcol=jmatrix[1, 0],
+        dvdrow=jmatrix[1, 1],
+    )
+
+    return jacob
+
+
+def _extract_weight(subim):
+    """
+    TODO get the estimated sky variance rather than this hack
+    TODO should we zero out other bits?
+
+    extract a weight map
+
+    Areas with NO_DATA will get zero weight.
+
+    Because the variance map includes the full poisson variance, which
+    depends on the signal, we instead extract the median of the parts of
+    the image without NO_DATA set
+
+    parameters
+    ----------
+    subim: sub exposure object
+    """
+
+    # TODO implement bit checking
+    var_image = subim.variance.array
+
+    weight = var_image.copy()
+
+    weight[:, :] = 0
+
+    wuse = np.where(var_image > 0)
+
+    if wuse[0].size > 0:
+        medvar = np.median(var_image[wuse])
+        weight[:, :] = 1.0/medvar
+    else:
+        print('    weight is all zero, found '
+              'none that passed cuts')
+
+    return weight
+
+
+def _extract_psf_image(exposure, orig_cen):
+    """
+    get the psf associated with this image
+
+    coadded psfs are generally not square, so we will
+    trim it to be square and preserve the center to
+    be at the new canonical center
+
+    TODO: should we really trim the psf to be even?  will this
+    cause a shift due being off-center?
+    """
+    try:
+        psfobj = exposure.getPsf()
+        psfim = psfobj.computeKernelImage(orig_cen).array
+    except InvalidParameterError:
+        raise MissingDataError("could not reconstruct PSF")
+
+    psfim = np.array(psfim, dtype='f4', copy=False)
+
+    psfim = trim_odd_image(psfim)
+    return psfim
+
+
+def trim_odd_image(im):
+    """
+    trim an odd dimension image to be square and with equal distance from
+    canonical center to all edges
+    """
+
+    dims = im.shape
+    if dims[0] != dims[1]:
+        # logger.debug('original dims: %s' % str(dims))
+        assert dims[0] % 2 != 0, 'image must have odd dims'
+        assert dims[1] % 2 != 0, 'image must have odd dims'
+
+        dims = np.array(dims)
+        cen = (dims-1)//2
+        cen = cen.astype('i4')
+
+        distances = (
+            cen[0]-0,
+            dims[0]-cen[0]-1,
+            cen[1]-0,
+            dims[1]-cen[1]-1,
+        )
+        # logger.debug('distances: %s' % str(distances))
+        min_dist = min(distances)
+
+        start_row = cen[0] - min_dist
+        end_row = cen[0] + min_dist
+        start_col = cen[1] - min_dist
+        end_col = cen[1] + min_dist
+
+        # adding +1 for slices
+        new_im = im[
+            start_row:end_row+1,
+            start_col:end_col+1,
+        ].copy()
+
+        # logger.debug('new dims: %s' % str(new_im.shape))
+
+    else:
+        new_im = im
+
+    return new_im
+
+
+class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+# Simulation test code
+def get_obj(rng):
+    psf = galsim.Gaussian(fwhm=0.9)
+    objects = []
+    for i in range(3):
+        obj0 = galsim.Gaussian(fwhm=1.0e-4).shift(
+            dx=rng.uniform(low=-3, high=3),
+            dy=rng.uniform(low=-3, high=3),
+        )
+        obj = galsim.Convolve(obj0, psf)
+        objects.append(obj)
+
+    return galsim.Add(objects), psf
+
+
+def get_sim_data(rng, gal_type, layout):
+    if gal_type == 'exp':
+        coadd_dim = 151
+        gal_config = {
+            'mag': 23,
+            'hlr': 0.5,
+        }
+    elif gal_type == 'wldeblend':
+        # coadd_dim = 301
+        coadd_dim = 151
+        gal_config = None
+    else:
+        raise ValueError(f'bad gal type {gal_type}')
+
+    if layout == 'pair':
+        sep = 2
+    else:
+        sep = None
+
+    se_dim = coadd_dim
+    # bands = ['i']
+    # bands = ['r', 'i', 'z']
+    bands = ['g', 'r', 'i']
+
+    galaxy_catalog = make_galaxy_catalog(
+        rng=rng,
+        gal_type=gal_type,
+        layout=layout,
+        coadd_dim=coadd_dim,
+        buff=50,
+        gal_config=gal_config,
+        sep=sep,
+    )
+    psf = make_fixed_psf(psf_type='gauss')
+
+    return make_sim(
+        rng=rng,
+        galaxy_catalog=galaxy_catalog,
+        coadd_dim=coadd_dim,
+        se_dim=se_dim,
+        bands=bands,
+        g1=0.00,
+        g2=0.00,
+        psf=psf,
+    )
+
+
+def main(
+    seed, gal_type, layout, source_model, ntrial=1,
+    show=False,
+    loglevel='info',
+):
+
+    logging.basicConfig(level=getattr(logging, loglevel.upper()))
+
+    print('seed:', seed)
+    rng = np.random.RandomState(seed)
+
+    tm0 = time.time()
+    results = []
+    for i in range(ntrial):
+        LOG.info('%d/%d %g%%', i+1, ntrial, 100*(i+1)/ntrial)
+
+        sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
+        band_data = sim_data['band_data']
+
+        exposures = [exps[0] for band, exps in band_data.items()]
+        mbexp = get_mbexp(exposures)
+
+        if show:
+            show_mbexp(mbexp, mess='original image')
+
+        sources, meas_task, detexp = detect_and_deblend(
+            mbexp=mbexp, source_model=source_model,
+        )
+
+        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+        res = measure_scarlet(
+            mbexp=mbexp,
+            detexp=detexp,
+            original_exposures=exposures,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=48,
+            # meas_task=meas_task,
+            show=show,
+        )
+        results += res
+
+    tm = time.time() - tm0
+
+    LOG.info('time: %s', tm)
+    LOG.info('time per image: %s', tm/ntrial)
+    LOG.info('time per object: %s', tm/len(results))
+
+
+def get_args():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--gal-type', default='exp')
+    parser.add_argument('--layout', default='random')
+    parser.add_argument('--source-model', default='double')
+    parser.add_argument('--ntrial', type=int, default=1)
+
+    parser.add_argument('--loglevel', default='info')
+
+    parser.add_argument('--show', action='store_true')
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = get_args()
+    main(
+        seed=args.seed, ntrial=args.ntrial, gal_type=args.gal_type,
+        source_model=args.source_model,
+        layout=args.layout, show=args.show,
+        loglevel=args.loglevel,
+    )
