@@ -113,6 +113,7 @@ def test_lsst_scarlet_smoke(
         fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
         res = measure(
             mbexp=mbexp,
+            detexp=detexp,
             original_exposures=exposures,
             sources=sources,
             fitter=fitter,
