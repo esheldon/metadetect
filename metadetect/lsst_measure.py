@@ -21,6 +21,7 @@ from .lsst_skysub import determine_and_subtract_sky
 import logging
 
 from . import util
+from . import vis
 from . import procflags
 from .defaults import (
     DEFAULT_LOGLEVEL,
@@ -49,7 +50,7 @@ def detect_deblend_and_measure(
     Parameters
     ----------
     exposure: Exposure
-        The exposure on which to detect and measure
+        Exposure on which to detect and measure
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
     thresh: float
@@ -57,9 +58,9 @@ def detect_deblend_and_measure(
     stamp_size: int
         Size for postage stamps.
     deblend: bool
-        If True, run the deblender.
-    deblender_type: str
-        sdss or scarlet
+        If True, deblend with the scarlet deblender.  If not True, the
+        SDSS deblender code is used but only to find the sub-peaks
+        in the footprint, and the code is inherently single band
     noise_image: array
         A noise image for use by the NoiseReplacer.  If you are running
         metacal you should send the same image for all metacal images.
@@ -199,7 +200,7 @@ def _do_measure(
         )
         subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
         if False:
-            show_exp(subim)
+            vis.show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
         if obs is None:
@@ -232,85 +233,6 @@ def _do_measure(
         results = None
 
     return results
-
-
-def _do_measure_scarlet(
-    exposure,
-    sources,
-    fitter,
-    stamp_size,
-    meas_task,
-    deblend,
-    noise_image=None,
-    seed=None,
-):
-    noise_replacer = _get_noise_replacer(
-        exposure=exposure, sources=sources, noise_image=noise_image,
-    )
-
-    exp_bbox = exposure.getBBox()
-    results = []
-
-    # ormasks will be different within the loop below due to the replacer
-    ormasks = _get_ormasks(sources=sources, exposure=exposure)
-
-    meas_parent_cat = sources.getChildren(0)
-    for parent_idx, meas_parent_record in enumerate(meas_parent_cat):
-        meas_child_cat = sources.getChildren(measParentRecord.getId())
-
-        for source in meas_child_cat:
-
-            peak = child.getFootprint().getPeaks()[0]
-            x_peak, y_peak = peak.getIx() - 0.5, peak.getIy() - 0.5
-
-            # build fixed box around each object for BFD
-            bbox = geom.Box2I(geom.Point2I(x_peak, y_peak), geom.Extent2I(1, 1))
-            bbox.grow(args['stamp_size'] // 2)
-            bbox.clip(exp.getBBox())
-
-            # we can reduce the footprint size since we don't care about the whole
-            # thing
-            footprint_bbox = child.getFootprint().getBBox()
-            footprint_bbox.clip(bbox)
-
-            # copy image from full exposure
-            image = afwImage.ExposureF(full_exp[bbox], True)
-
-            # subtract neighbors by inserting all objects except the current object
-            # into the image
-            for neigh in measChildCat:
-                if neigh == child:
-                    continue
-                replacer.insertSource(neigh.getId())
-
-            image.image[footprint_bbox].array[:] -= exp.image[footprint_bbox].array
-
-            # remove all neighors from the image
-            for neigh in measChildCat:
-                if neigh == child:
-                    continue
-                replacer.removeSource(neigh.getId())
-
-            sky = exp.getWcs().pixelToSky(geom.Point2D(x_peak, y_peak))
-            uv_pos = (sky.getRa().asArcseconds(), sky.getDec().asArcseconds())
-            xy_pos = (x_peak, y_peak)
-
-
-def show_exp(exp):
-    """
-    show the image in ds9
-
-    Parameters
-    ----------
-    exp: Exposure
-        The image to show
-    """
-    import lsst.afw.display as afw_display
-    display = afw_display.getDisplay(backend='ds9')
-    display.mtv(exp)
-    display.scale('log', 'minmax')
-
-    input('hit a key')
 
 
 def _measure_one(obs, fitter):
@@ -357,7 +279,6 @@ def _get_ormask(*, source, exposure):
 
 def detect_and_deblend(
     exposure,
-    deblender_type='scarlet',
     thresh=DEFAULT_THRESH,
     loglevel=DEFAULT_LOGLEVEL,
 ):
@@ -424,9 +345,12 @@ def detect_and_deblend(
     # this must occur directly before any tasks are run because schema is
     # modified in place by tasks, and the constructor does a check that
     # fails if we construct it separately
-    deblend_task = _get_deblend_task(
-        deblender_type=deblender_type, schema=schema,
+
+    deblend_task = SourceDeblendTask(
+        config=SourceDeblendConfig(),
+        schema=schema,
     )
+    deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
 
     table = afw_table.SourceTable.make(schema)
     result = detection_task.run(table, exposure)
@@ -438,25 +362,6 @@ def detect_and_deblend(
         sources = []
 
     return sources, meas_task
-
-
-def _get_deblend_task(deblender_type, schema):
-    if deblender_type = 'scarlet':
-        deblend_config = ScarletDeblendConfig()
-        deblend_task = ScarletDeblendTask(
-            config=ScarletDeblendConfig(),
-            schema=schema,
-        )
-    elif deblender_type = 'sdss':
-        deblend_task = SourceDeblendTask(
-            config=SourceDeblendConfig(),
-            schema=schema,
-        )
-    else:
-        raise ValueError(f'bad deblender type {deblender_type}')
-
-    deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
-    return deblend_task
 
 
 def iterate_detection_and_skysub(
