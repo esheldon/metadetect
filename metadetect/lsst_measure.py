@@ -171,7 +171,7 @@ def _do_measure(
     results = []
 
     # ormasks will be different within the loop below due to the replacer
-    ormasks = _get_ormasks(sources=sources, exposure=exposure)
+    ormasks = get_ormasks(sources=sources, exposure=exposure)
 
     for i, source in enumerate(sources):
 
@@ -212,7 +212,7 @@ def _do_measure(
             ores = _measure_one(obs=obs, fitter=fitter)
             box_size = obs.image.shape[0]
 
-        res = _get_output(
+        res = get_output(
             fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
             box_size=box_size, exp_bbox=exp_bbox,
         )
@@ -256,18 +256,18 @@ def _measure_one(obs, fitter):
     return res
 
 
-def _get_ormasks(*, sources, exposure):
+def get_ormasks(*, sources, exposure):
     """
     get a list of all the ormasks for the sources
     """
     ormasks = []
     for source in sources:
-        ormask = _get_ormask(source=source, exposure=exposure)
+        ormask = get_ormask(source=source, exposure=exposure)
         ormasks.append(ormask)
     return ormasks
 
 
-def _get_ormask(*, source, exposure):
+def get_ormask(*, source, exposure):
     """
     get ormask based on original peak position
     """
@@ -854,7 +854,7 @@ def _get_struct(meas_type):
     return output
 
 
-def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
+def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     """
     get the output structure, copying in results
 

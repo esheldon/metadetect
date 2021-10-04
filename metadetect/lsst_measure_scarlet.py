@@ -31,6 +31,7 @@ from .defaults import (
     DEFAULT_THRESH, DEFAULT_LOGLEVEL
 )
 from . import procflags
+from .lsst_measure import get_output, get_ormask
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -130,6 +131,7 @@ def detect_and_deblend(
 def measure(
     mbexp,
     original_exposures,
+    detexp,
     sources,
     fitter,
     stamp_size,
@@ -157,9 +159,6 @@ def measure(
 
     results = []
 
-    # ormasks will be different within the loop below due to the replacer
-    # ormasks = _get_ormasks(sources=sources, exposure=exposure)
-
     # assumption: sources same for all bands
     band_sources = sources[subtractor.filters[0]]
 
@@ -178,6 +177,7 @@ def measure(
         )
         results += _process_sources(
             subtractor=subtractor, sources=children, stamp_size=stamp_size,
+            detexp=detexp,
             wcs=wcs, fitter=fitter, show=show,
         )
 
@@ -185,12 +185,13 @@ def measure(
 
 
 def _process_sources(
-    subtractor, sources, stamp_size, wcs, fitter, show=False,
+    subtractor, sources, stamp_size, wcs, fitter, detexp, show=False,
 ):
     results = []
     for source in sources:
         res = _process_source(
             subtractor=subtractor, source=source, stamp_size=stamp_size,
+            detexp=detexp,
             wcs=wcs, fitter=fitter, show=show,
         )
         results.append(res)
@@ -198,8 +199,13 @@ def _process_sources(
     return results
 
 
-def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
+def _process_source(
+    subtractor, source, stamp_size, wcs, fitter, detexp, show=False,
+):
     source_id = source.getId()
+
+    ormask = get_ormask(source=source, exposure=detexp)
+    exp_bbox = detexp.getBBox()
 
     res = None
     with subtractor.add_source(source_id):
@@ -213,36 +219,68 @@ def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
             stamp_mbexp = subtractor.get_stamp(
                 source_id, stamp_size=stamp_size,
             )
+
+            if show:
+                ostamp_mbexp = subtractor.get_stamp(
+                    source_id, stamp_size=stamp_size, type='original',
+                )
+                model_mbexp = subtractor.get_stamp(
+                    source_id, stamp_size=stamp_size, type='model',
+                )
+                vis.show_three_mbexp(
+                    [ostamp_mbexp, stamp_mbexp, model_mbexp],
+                    labels=['original', 'deblended', 'model']
+                )
+
+            # TODO make codes work with MultibandExposure rather than on a
+            # coadd of the bands
+
+            coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
+            obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
+            if obs is None:
+                LOG.info('skipping object with all zero weights')
+                pres = {'flags': procflags.NO_ATTEMPT}
+                ores = {'flags': procflags.ZERO_WEIGHTS}
+                box_size = -1
+            else:
+                pres = _measure_one(obs=obs.psf, fitter=fitter)
+                ores = _measure_one(obs=obs, fitter=fitter)
+                box_size = obs.image.shape[0]
+
         except LengthError as e:
             # bounding box did not fit. TODO keep output with flag set
             LOG.info(e)
 
             # note the context manager properly handles a return
-            # TODO add proper flag here
-            return {'flags': procflags.EDGE}
+            ores = {'flags': procflags.EDGE}
+            pres = {'flags': procflags.NO_ATTEMPT}
+            box_size = -1
 
-        if show:
-            ostamp_mbexp = subtractor.get_stamp(
-                source_id, stamp_size=stamp_size, type='original',
-            )
-            model_mbexp = subtractor.get_stamp(
-                source_id, stamp_size=stamp_size, type='model',
-            )
-            vis.show_three_mbexp(
-                [ostamp_mbexp, stamp_mbexp, model_mbexp],
-                labels=['original', 'deblended', 'model']
-            )
+        res = get_output(
+            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
+            box_size=box_size, exp_bbox=exp_bbox,
+        )
 
-        # TODO make codes work with MultibandExposure rather than
-        # on a coadd of the bands
-        coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
-        obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
-        if obs is None:
-            LOG.info('skipping object with all zero weights')
-            # TODO add proper flag here
-            return {'flags': procflags.ZERO_WEIGHTS}
+    return res
 
+
+def _measure_one(obs, fitter):
+    """
+    run a measurement on an input observation
+    """
+    from ngmix.ksigmamom import KSigmaMom
+
+    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+        res = fitter.go(obs, no_psf=True)
+    else:
         res = fitter.go(obs)
+
+    if res['flags'] != 0:
+        return res
+
+    res['numiter'] = 1
+    res['g'] = res['e']
+    res['g_cov'] = res['e_cov']
 
     return res
 
