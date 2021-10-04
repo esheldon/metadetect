@@ -290,8 +290,8 @@ def _process_source(
             obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
             if obs is None:
                 LOG.info('skipping object with all zero weights')
-                pres = {'flags': procflags.NO_ATTEMPT}
                 ores = {'flags': procflags.ZERO_WEIGHTS}
+                pres = {'flags': procflags.NO_ATTEMPT}
                 box_size = -1
             else:
                 pres = _measure_one(obs=obs.psf, fitter=fitter)

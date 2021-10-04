@@ -95,8 +95,9 @@ def test_lsst_scarlet_zero_weights(
     seed=220,
 ):
     """
-    Scarlet will spew errors but we should get the same number
-    of objects
+    Scarlet rejects sources that have zero weight, unlike SDSS deblender
+
+    It prints linear algebra errors but continues
     """
 
     fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
@@ -114,7 +115,7 @@ def test_lsst_scarlet_zero_weights(
             for band, exps in band_data.items():
                 exp = exps[0]
                 if do_zero:
-                    exp.variance.array[100:150, 100:150] = np.inf
+                    exp.variance.array[100:200, 100:200] = np.inf
                 exposures.append(exp)
 
             results = lsst_measure_scarlet.detect_deblend_and_measure(
@@ -125,4 +126,4 @@ def test_lsst_scarlet_zero_weights(
 
             nobj.append(results.size)
 
-    assert nobj[0] == nobj[1]
+    assert nobj[0] != nobj[1]
