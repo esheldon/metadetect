@@ -1,22 +1,18 @@
-import time
 import galsim
 import pytest
-import logging
 import numpy as np
 import ngmix
+from .. import procflags
 
-from ..lsst_measure_scarlet import (
-    detect_and_deblend, measure,
+lsst_measure_scarlet = pytest.importorskip(
+    'metadetect.lsst_measure_scarlet',
+    reason='LSST codes need the Rubin Obs. science pipelines',
 )
-from .. import util
-from .. import vis
 
 sim = pytest.importorskip(
     'descwl_shear_sims',
     reason='LSST codes need the descwl_shear_sims module for testing',
 )
-
-LOG = logging.getLogger('lsst_measure_scarlet')
 
 
 def get_obj(rng):
@@ -34,23 +30,16 @@ def get_obj(rng):
 
 
 def get_sim_data(rng, gal_type, layout):
+    coadd_dim = 301
     if gal_type == 'exp':
-        coadd_dim = 151
         gal_config = {
             'mag': 23,
             'hlr': 0.5,
         }
     elif gal_type == 'wldeblend':
-        # coadd_dim = 301
-        coadd_dim = 151
         gal_config = None
     else:
         raise ValueError(f'bad gal type {gal_type}')
-
-    if layout == 'pair':
-        sep = 2
-    else:
-        sep = None
 
     se_dim = coadd_dim
     # bands = ['i']
@@ -64,7 +53,6 @@ def get_sim_data(rng, gal_type, layout):
         coadd_dim=coadd_dim,
         buff=50,
         gal_config=gal_config,
-        sep=sep,
     )
     psf = sim.psfs.make_fixed_psf(psf_type='gauss')
 
@@ -81,49 +69,60 @@ def get_sim_data(rng, gal_type, layout):
 
 
 def test_lsst_scarlet_smoke(
-    gal_type='wldeblend',
-    layout='random',
+    gal_type='exp',
+    layout='grid',
     seed=220,
-    ntrial=10,
-    show=False,
-    loglevel='info',
 ):
 
-    logging.basicConfig(level=getattr(logging, loglevel.upper()))
-
-    print('seed:', seed)
     rng = np.random.RandomState(seed)
+    fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
 
-    tm0 = time.time()
-    results = []
-    for i in range(ntrial):
-        LOG.info('%d/%d %g%%', i+1, ntrial, 100*(i+1)/ntrial)
+    sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
+    band_data = sim_data['band_data']
 
-        sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
-        band_data = sim_data['band_data']
+    exposures = [exps[0] for band, exps in band_data.items()]
 
-        exposures = [exps[0] for band, exps in band_data.items()]
-        mbexp = util.get_mbexp(exposures)
+    lsst_measure_scarlet.detect_deblend_and_measure(
+        exposures=exposures,
+        fitter=fitter,
+        stamp_size=48,
+    )
 
-        if show:
-            vis.show_mbexp(mbexp, mess='original image')
 
-        sources, detexp = detect_and_deblend(mbexp=mbexp)
+def test_lsst_scarlet_zero_weights(
+    gal_type='exp',
+    layout='grid',
+    seed=220,
+):
+    """
+    Scarlet will spew errors but we should get the same number
+    of objects
+    """
 
-        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
-        res = measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            original_exposures=exposures,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=48,
-            show=show,
-        )
-        results += res
+    fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
 
-    tm = time.time() - tm0
+    nobj = []
+    for do_zero in [False, True]:
+        rng = np.random.RandomState(seed)
 
-    LOG.info('time: %s', tm)
-    LOG.info('time per image: %s', tm/ntrial)
-    LOG.info('time per object: %s', tm/len(results))
+        for do_zero in [False, True]:
+
+            sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
+            band_data = sim_data['band_data']
+
+            exposures = []
+            for band, exps in band_data.items():
+                exp = exps[0]
+                if do_zero:
+                    exp.variance.array[100:150, 100:150] = np.inf
+                exposures.append(exp)
+
+            results = lsst_measure_scarlet.detect_deblend_and_measure(
+                exposures=exposures,
+                fitter=fitter,
+                stamp_size=48,
+            )
+
+            nobj.append(results.size)
+
+    assert nobj[0] == nobj[1]

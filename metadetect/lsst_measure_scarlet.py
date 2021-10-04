@@ -37,6 +37,53 @@ import logging
 LOG = logging.getLogger('lsst_measure_scarlet')
 
 
+def detect_deblend_and_measure(
+    exposures,
+    fitter,
+    stamp_size,
+    thresh=DEFAULT_THRESH,
+    loglevel=DEFAULT_LOGLEVEL,
+    show=False,
+):
+    """
+    run detection, deblending and measurements using scarlet as the deblender
+
+    Note deblending is always run in a hierarchical detection process, but the
+    user has a choice whether to use deblended postage stamps for the
+    measurement.
+
+    Parameters
+    ----------
+    exposures: list of lsst.afw.image.ExposureF
+        The exposures to process
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    thresh: float
+        The detection threshold in units of the sky noise
+    stamp_size: int
+        Size for postage stamps.
+    loglevel: str, optional
+        Log level for logger in string form
+    """
+
+    mbexp = util.get_mbexp(exposures)
+    sources, detexp = detect_and_deblend(
+        mbexp=mbexp,
+        thresh=thresh,
+        loglevel=loglevel,
+    )
+
+    return measure(
+        mbexp=mbexp,
+        original_exposures=exposures,
+        detexp=detexp,
+        sources=sources,
+        fitter=fitter,
+        stamp_size=stamp_size,
+        show=show,
+    )
+
+
 def detect_and_deblend(
     mbexp,
     thresh=DEFAULT_THRESH,
@@ -135,7 +182,6 @@ def measure(
     sources,
     fitter,
     stamp_size,
-    seed=None,
     show=False,
 ):
 
@@ -180,6 +226,11 @@ def measure(
             detexp=detexp,
             wcs=wcs, fitter=fitter, show=show,
         )
+
+    if len(results) > 0:
+        results = np.hstack(results)
+    else:
+        results = None
 
     return results
 
