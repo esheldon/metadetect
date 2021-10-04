@@ -8,54 +8,69 @@ feature requests for DM
     - clone() should copy psfs
 """
 from contextlib import contextmanager
-import time
 import ngmix
 import numpy as np
-import galsim
 import lsst.afw.detection as afw_det
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
 from lsst.afw.image import MultibandExposure
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
-from lsst.meas.extensions.scarlet import (
-    ScarletDeblendTask, ScarletDeblendConfig,
-)
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
     SingleFrameMeasurementTask,
 )
+from lsst.meas.extensions.scarlet import (
+    ScarletDeblendTask, ScarletDeblendConfig,
+)
 import lsst.geom as geom
 
-from descwl_shear_sims.galaxies import make_galaxy_catalog
-from descwl_shear_sims.psfs import make_fixed_psf
-from descwl_shear_sims.sim import make_sim
 from lsst.pex.exceptions import InvalidParameterError, LengthError
-from .vis import show_mbexp, compare_mbexp, show_three_mbexp
-from .util import get_mbexp, copy_mbexp, coadd_exposures
-
+from . import vis
+from . import util
+from .defaults import (
+    DEFAULT_THRESH, DEFAULT_LOGLEVEL
+)
+from . import procflags
 import logging
 
-LOG = logging.getLogger('lsst_measure')
+LOG = logging.getLogger('lsst_measure_scarlet')
 
 
 def detect_and_deblend(
     mbexp,
-    source_model,
-    thresh=5,
-    loglevel='info',
+    thresh=DEFAULT_THRESH,
+    loglevel=DEFAULT_LOGLEVEL,
 ):
+    """
+    run detection and the scarlet deblender
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
+    thresh: float
+        The detection threshold in units of the sky noise
+    loglevel: str, optional
+        Log level for logger in string form
+    """
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
-    # Setup algorithms to run
+    # note we won't run any of this, but it is needed so that
+    # getCentroid will return the peak position, as it modifies
+    # the schema
+
+    # set these slots to none because we aren't running these algorithms
+
     meas_config = SingleFrameMeasurementConfig()
     meas_config.plugins.names = [
         "base_SdssCentroid",
         "base_PsfFlux",
         "base_SkyCoord",
+        # "base_SdssShape",
+        # "base_LocalBackground",
     ]
 
-    # set these slots to none because we aren't running these algorithms
     meas_config.slots.apFlux = None
     meas_config.slots.gaussianFlux = None
     meas_config.slots.calibFlux = None
@@ -64,10 +79,10 @@ def detect_and_deblend(
     # goes with SdssShape above
     meas_config.slots.shape = None
 
-    # fix odd issue where it thinks things are near the edge
+    # fix odd issue where it things things are near the edge
     meas_config.plugins['base_SdssCentroid'].binmax = 1
 
-    meas_task = SingleFrameMeasurementTask(
+    _ = SingleFrameMeasurementTask(
         config=meas_config,
         schema=schema,
     )
@@ -77,7 +92,7 @@ def detect_and_deblend(
     detection_config.thresholdValue = thresh
     detection_task = SourceDetectionTask(config=detection_config)
 
-    # configure the deblender
+    # configure the scarlet deblender
     #
     # this must occur directly before any tasks are run because schema is
     # modified in place by tasks, and the constructor does a check that
@@ -89,7 +104,6 @@ def detect_and_deblend(
     # default is sourceModel is 'double'
 
     deblend_config = ScarletDeblendConfig()
-    deblend_config.sourceModel = source_model
     deblend_task = ScarletDeblendTask(
         config=deblend_config,
         schema=schema,
@@ -98,7 +112,7 @@ def detect_and_deblend(
     table = afw_table.SourceTable.make(schema)
 
     if len(mbexp.singles) > 1:
-        detexp = coadd_exposures(mbexp.singles)
+        detexp = util.coadd_exposures(mbexp.singles)
     else:
         detexp = mbexp.singles[0]
 
@@ -110,17 +124,15 @@ def detect_and_deblend(
         # sources = []
         sources = None
 
-    return sources, meas_task, detexp
+    return sources, detexp
 
 
-def measure_scarlet(
+def measure(
     mbexp,
-    detexp,
     original_exposures,
     sources,
     fitter,
     stamp_size,
-    # meas_task,
     seed=None,
     show=False,
 ):
@@ -141,7 +153,7 @@ def measure_scarlet(
 
     if show:
         model = subtractor.get_full_model()
-        compare_mbexp(mbexp=mbexp, model=model)
+        vis.compare_mbexp(mbexp=mbexp, model=model)
 
     results = []
 
@@ -193,7 +205,7 @@ def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
     with subtractor.add_source(source_id):
 
         if show:
-            show_mbexp(
+            vis.show_mbexp(
                 subtractor.mbexp, mess=f'source {source_id} added'
             )
 
@@ -207,7 +219,7 @@ def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
 
             # note the context manager properly handles a return
             # TODO add proper flag here
-            return {'flags': 1}
+            return {'flags': procflags.EDGE}
 
         if show:
             ostamp_mbexp = subtractor.get_stamp(
@@ -216,20 +228,19 @@ def _process_source(subtractor, source, stamp_size, wcs, fitter, show=False):
             model_mbexp = subtractor.get_stamp(
                 source_id, stamp_size=stamp_size, type='model',
             )
-            show_three_mbexp(
+            vis.show_three_mbexp(
                 [ostamp_mbexp, stamp_mbexp, model_mbexp],
                 labels=['original', 'deblended', 'model']
             )
 
-        LOG.debug('orig_cen: %s', source.getCentroid())
-
-        # TODO make codes work with MultibandExposure
-        coadded_stamp_exp = coadd_exposures(stamp_mbexp.singles)
+        # TODO make codes work with MultibandExposure rather than
+        # on a coadd of the bands
+        coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
         obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
         if obs is None:
             LOG.info('skipping object with all zero weights')
             # TODO add proper flag here
-            return {'flags': 2}
+            return {'flags': procflags.ZERO_WEIGHTS}
 
         res = fitter.go(obs)
 
@@ -298,13 +309,13 @@ class ModelSubtractor(object):
         for source in sources[list(sources.keys())[0]]:
             self.source_ids.add(source.getId())
 
-        self.mbexp = copy_mbexp(mbexp)
+        self.mbexp = util.copy_mbexp(mbexp)
         for band in self.filters:
             self.mbexp[band].setPsf(self.orig[band].getPsf())
 
         # we need a scratch array because heavy footprings don't
         # have addTo or subtractFrom methods
-        self.scratch = copy_mbexp(mbexp, clear=True)
+        self.scratch = util.copy_mbexp(mbexp, clear=True)
 
         self._set_footprints()
         self._build_heavies()
@@ -480,7 +491,7 @@ class ModelSubtractor(object):
         heavies = self.heavies
         scratch = self.scratch
 
-        model = copy_mbexp(self.mbexp, clear=True)
+        model = util.copy_mbexp(self.mbexp, clear=True)
 
         for band, sources in self.sources.items():
             LOG.debug('-'*70)
@@ -863,139 +874,3 @@ class MissingDataError(Exception):
 
     def __str__(self):
         return repr(self.value)
-
-
-# Simulation test code
-def get_obj(rng):
-    psf = galsim.Gaussian(fwhm=0.9)
-    objects = []
-    for i in range(3):
-        obj0 = galsim.Gaussian(fwhm=1.0e-4).shift(
-            dx=rng.uniform(low=-3, high=3),
-            dy=rng.uniform(low=-3, high=3),
-        )
-        obj = galsim.Convolve(obj0, psf)
-        objects.append(obj)
-
-    return galsim.Add(objects), psf
-
-
-def get_sim_data(rng, gal_type, layout):
-    if gal_type == 'exp':
-        coadd_dim = 151
-        gal_config = {
-            'mag': 23,
-            'hlr': 0.5,
-        }
-    elif gal_type == 'wldeblend':
-        # coadd_dim = 301
-        coadd_dim = 151
-        gal_config = None
-    else:
-        raise ValueError(f'bad gal type {gal_type}')
-
-    if layout == 'pair':
-        sep = 2
-    else:
-        sep = None
-
-    se_dim = coadd_dim
-    # bands = ['i']
-    # bands = ['r', 'i', 'z']
-    bands = ['g', 'r', 'i']
-
-    galaxy_catalog = make_galaxy_catalog(
-        rng=rng,
-        gal_type=gal_type,
-        layout=layout,
-        coadd_dim=coadd_dim,
-        buff=50,
-        gal_config=gal_config,
-        sep=sep,
-    )
-    psf = make_fixed_psf(psf_type='gauss')
-
-    return make_sim(
-        rng=rng,
-        galaxy_catalog=galaxy_catalog,
-        coadd_dim=coadd_dim,
-        se_dim=se_dim,
-        bands=bands,
-        g1=0.00,
-        g2=0.00,
-        psf=psf,
-    )
-
-
-def main(
-    seed, gal_type, layout, source_model, ntrial=1,
-    show=False,
-    loglevel='info',
-):
-
-    logging.basicConfig(level=getattr(logging, loglevel.upper()))
-
-    print('seed:', seed)
-    rng = np.random.RandomState(seed)
-
-    tm0 = time.time()
-    results = []
-    for i in range(ntrial):
-        LOG.info('%d/%d %g%%', i+1, ntrial, 100*(i+1)/ntrial)
-
-        sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
-        band_data = sim_data['band_data']
-
-        exposures = [exps[0] for band, exps in band_data.items()]
-        mbexp = get_mbexp(exposures)
-
-        if show:
-            show_mbexp(mbexp, mess='original image')
-
-        sources, meas_task, detexp = detect_and_deblend(
-            mbexp=mbexp, source_model=source_model,
-        )
-
-        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
-        res = measure_scarlet(
-            mbexp=mbexp,
-            detexp=detexp,
-            original_exposures=exposures,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=48,
-            # meas_task=meas_task,
-            show=show,
-        )
-        results += res
-
-    tm = time.time() - tm0
-
-    LOG.info('time: %s', tm)
-    LOG.info('time per image: %s', tm/ntrial)
-    LOG.info('time per object: %s', tm/len(results))
-
-
-def get_args():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=1)
-    parser.add_argument('--gal-type', default='exp')
-    parser.add_argument('--layout', default='random')
-    parser.add_argument('--source-model', default='double')
-    parser.add_argument('--ntrial', type=int, default=1)
-
-    parser.add_argument('--loglevel', default='info')
-
-    parser.add_argument('--show', action='store_true')
-    return parser.parse_args()
-
-
-if __name__ == '__main__':
-    args = get_args()
-    main(
-        seed=args.seed, ntrial=args.ntrial, gal_type=args.gal_type,
-        source_model=args.source_model,
-        layout=args.layout, show=args.show,
-        loglevel=args.loglevel,
-    )
