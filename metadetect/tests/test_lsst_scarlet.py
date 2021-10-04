@@ -2,7 +2,6 @@ import galsim
 import pytest
 import numpy as np
 import ngmix
-from .. import procflags
 
 lsst_measure_scarlet = pytest.importorskip(
     'metadetect.lsst_measure_scarlet',
