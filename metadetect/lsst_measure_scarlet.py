@@ -1,11 +1,13 @@
 """
 bugs found:
-    - the multi band exp removes wcs, filter labels
-    - clone() does not move over the psfs
+    - the multi band exp does not propagate wcs, filter labels
+    - clone() does not copy over the psfs
+
 feature requests for DM
     - have MultibandExposure keep track of wcs, filter labels, etc.
-    - footprint addTo and subtractFrom methods
-    - clone() should copy psfs
+    - footprint addTo and subtractFrom methods so we don't need
+      twice the memory
+    - clone() copy psfs
 """
 from contextlib import contextmanager
 import ngmix
@@ -52,10 +54,15 @@ def detect_deblend_and_measure(
     user has a choice whether to use deblended postage stamps for the
     measurement.
 
+    We could just take in the MultibandExposure but it drops the wcs
+    and filter labels, so instead we take the exposures and build
+    it ourselves, so we can pass on the wcs
+
     Parameters
     ----------
-    exposures: list of lsst.afw.image.ExposureF
-        The exposures to process
+    exposures: lsst.afw.image.ExposureF or list thereof
+        The exposures to process, can be an exposure or list
+        of exposures
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
     thresh: float
@@ -65,6 +72,9 @@ def detect_deblend_and_measure(
     loglevel: str, optional
         Log level for logger in string form
     """
+
+    if not isinstance(exposures, list):
+        exposures = [exposures]
 
     mbexp = util.get_mbexp(exposures)
     sources, detexp = detect_and_deblend(
@@ -104,19 +114,15 @@ def detect_and_deblend(
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
-    # note we won't run any of this, but it is needed so that
-    # getCentroid will return the peak position, as it modifies
-    # the schema
-
-    # set these slots to none because we aren't running these algorithms
+    # note we won't run any of these measurements, but it is needed so that
+    # getCentroid will return the peak position rather than NaN.
+    # I think it modifies the schema and sets defaults
 
     meas_config = SingleFrameMeasurementConfig()
     meas_config.plugins.names = [
         "base_SdssCentroid",
         "base_PsfFlux",
         "base_SkyCoord",
-        # "base_SdssShape",
-        # "base_LocalBackground",
     ]
 
     meas_config.slots.apFlux = None
@@ -186,9 +192,30 @@ def measure(
 ):
 
     """
-    We send both mbexp and mbexp does not keep track of the wcs
+    run measurements on the input exposures
 
-    TODO keep results for objects that hit edge etc.
+    We send both mbexp and the original exposures because the MultibandExposure
+    does not keep track of the wcs
+
+    Create mbexp with util.get_mbexp
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
+    original_exposures: list of Exposure s
+        The exposures from which the mbexp was created. We need this
+        to get the wcs
+    detexp: Exposure
+        The detection exposure, used for getting ormasks
+    sources: list of sources
+        From a detection task
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    stamp_size: int
+        Size for postage stamps
+    show: bool, optional
+        If set to True, show images
     """
 
     # Must get wcs from an original exposure
