@@ -49,7 +49,6 @@ def make_lsst_sim(seed, mag=14, hlr=0.5):
     return sim_data
 
 
-'''
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('deblend', [None, False, True])
@@ -103,7 +102,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
-'''
+
 
 def test_lsst_zero_weights():
     nobj = []
@@ -133,7 +132,6 @@ def test_lsst_zero_weights():
     assert nobj[0] == nobj[1]
 
 
-'''
 # add prepsf gauss mom when it is available
 @pytest.mark.parametrize('meas_type', ['ksigma'])
 def test_lsst_metadetect_prepsf_stars(meas_type):
@@ -239,4 +237,3 @@ def test_lsst_metadetect_mfrac_ormask():
 
         total_time = time.time()-tm0
         print("time per:", total_time)
-'''
