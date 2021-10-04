@@ -36,7 +36,6 @@ def detect_deblend_and_measure(
     stamp_size,
     thresh=DEFAULT_THRESH,
     deblend=DEFAULT_DEBLEND,
-    deblender_type='sdss',
     noise_image=None,
     loglevel=DEFAULT_LOGLEVEL,
 ):
@@ -70,7 +69,6 @@ def detect_deblend_and_measure(
 
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
-        deblender_type=deblender_type,
         thresh=thresh,
         loglevel=loglevel,
     )
@@ -82,7 +80,6 @@ def detect_deblend_and_measure(
         meas_task=meas_task,
         stamp_size=stamp_size,
         deblend=deblend,
-        deblender_type=deblender_type,
         noise_image=noise_image,
     )
 
@@ -207,14 +204,17 @@ def _do_measure(
             # all zero weights for the image this occurs when we have zeros in
             # the weight plane near the edge but the image is non-zero. These
             # are always junk
-            continue
-
-        pres = _measure_one(obs=obs.psf, fitter=fitter)
-        ores = _measure_one(obs=obs, fitter=fitter)
+            pres = {'flags': procflags.NO_ATTEMPT}
+            ores = {'flags': procflags.ZERO_WEIGHTS}
+            box_size = -1
+        else:
+            pres = _measure_one(obs=obs.psf, fitter=fitter)
+            ores = _measure_one(obs=obs, fitter=fitter)
+            box_size = obs.image.shape[0]
 
         res = _get_output(
             fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=obs.image.shape[0], exp_bbox=exp_bbox,
+            box_size=box_size, exp_bbox=exp_bbox,
         )
 
         if deblend:
@@ -830,6 +830,30 @@ def _get_dtype(meas_type):
     return dt
 
 
+def _get_struct(meas_type):
+    n = util.Namer(front=meas_type)
+    dt = _get_dtype(meas_type)
+
+    output = np.zeros(1, dtype=dt)
+
+    output['flags'] = procflags.NO_ATTEMPT
+    output['psf_flags'] = procflags.NO_ATTEMPT
+
+    output[n('s2n')] = np.nan
+    output[n('g')] = np.nan
+    output[n('T')] = np.nan
+    output[n('T_err')] = np.nan
+    output[n('g_cov')] = np.nan
+    output[n('T_ratio')] = np.nan
+    output[n('flux')] = np.nan
+    output[n('flux_err')] = np.nan
+
+    output['psf_g'] = np.nan
+    output['psf_T'] = np.nan
+
+    return output
+
+
 def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     """
     get the output structure, copying in results
@@ -837,20 +861,9 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     When data are unavailable, a default value of nan is used
     """
     meas_type = _get_meas_type(fitter)
+    output = _get_struct(meas_type)
+
     n = util.Namer(front=meas_type)
-
-    dt = _get_dtype(meas_type)
-    output = np.zeros(1, dtype=dt)
-
-    # these cannot be calculated from the results if flags are set, so we put
-    # in defaults.  fitsio has good support for nan
-    output[n('s2n')] = np.nan
-    output[n('g')] = np.nan
-    output[n('T_ratio')] = np.nan
-    output['psf_g'] = np.nan
-    output['psf_T'] = np.nan
-
-    output['psfrec_flags'] = procflags.NO_ATTEMPT
 
     output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
@@ -869,20 +882,21 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
-    if pres['flags'] != 0:
+    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
         flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
-        flags |= procflags.OBJ_FAILURE
+        flags |= res['flags'] | procflags.OBJ_FAILURE
 
     if pres['flags'] == 0:
         output['psf_g'] = pres['g']
         output['psf_T'] = pres['T']
 
-    output[n('T')] = res['T']
-    output[n('T_err')] = res['T_err']
-    output[n('flux')] = res['flux']
-    output[n('flux_err')] = res['flux_err']
+    if 'T' in res:
+        output[n('T')] = res['T']
+        output[n('T_err')] = res['T_err']
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']

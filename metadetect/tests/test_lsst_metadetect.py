@@ -7,6 +7,7 @@ import pytest
 
 import ngmix
 import metadetect
+from .. import procflags
 
 lsst_metadetect = pytest.importorskip(
     'metadetect.lsst_metadetect',
@@ -48,6 +49,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5):
     return sim_data
 
 
+'''
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('deblend', [None, False, True])
@@ -101,8 +103,37 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
+'''
+
+def test_lsst_zero_weights():
+    nobj = []
+    for do_zero in [False, True]:
+        sim_data = make_lsst_sim(116)
+        exp = sim_data['band_data']['i'][0]
+
+        if do_zero:
+            exp.variance.array[:, :] = np.inf
+
+        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+        stamp_size = 48
+        results = lsst_metadetect.detect_deblend_and_measure(
+            exposure=exp,
+            fitter=fitter,
+            stamp_size=stamp_size,
+        )
+
+        if do_zero:
+            for res in results:
+                assert res['flags'] == (
+                    procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
+                )
+                assert res['psf_flags'] == procflags.NO_ATTEMPT
+        nobj.append(results.size)
+
+    assert nobj[0] == nobj[1]
 
 
+'''
 # add prepsf gauss mom when it is available
 @pytest.mark.parametrize('meas_type', ['ksigma'])
 def test_lsst_metadetect_prepsf_stars(meas_type):
@@ -208,3 +239,4 @@ def test_lsst_metadetect_mfrac_ormask():
 
         total_time = time.time()-tm0
         print("time per:", total_time)
+'''
