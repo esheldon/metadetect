@@ -29,9 +29,7 @@ import lsst.geom as geom
 from lsst.pex.exceptions import InvalidParameterError, LengthError
 from . import vis
 from . import util
-from .defaults import (
-    DEFAULT_THRESH, DEFAULT_LOGLEVEL
-)
+from .defaults import DEFAULT_THRESH
 from . import procflags
 from .lsst_measure import get_output, get_ormask
 import logging
@@ -39,65 +37,9 @@ import logging
 LOG = logging.getLogger('lsst_measure_scarlet')
 
 
-def detect_deblend_and_measure(
-    exposures,
-    fitter,
-    stamp_size,
-    thresh=DEFAULT_THRESH,
-    loglevel=DEFAULT_LOGLEVEL,
-    show=False,
-):
-    """
-    run detection, deblending and measurements using scarlet as the deblender
-
-    Note deblending is always run in a hierarchical detection process, but the
-    user has a choice whether to use deblended postage stamps for the
-    measurement.
-
-    We could just take in the MultibandExposure but it drops the wcs
-    and filter labels, so instead we take the exposures and build
-    it ourselves, so we can pass on the wcs
-
-    Parameters
-    ----------
-    exposures: lsst.afw.image.ExposureF or list thereof
-        The exposures to process, can be an exposure or list
-        of exposures
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
-        For calculating moments
-    thresh: float
-        The detection threshold in units of the sky noise
-    stamp_size: int
-        Size for postage stamps.
-    loglevel: str, optional
-        Log level for logger in string form
-    """
-
-    if not isinstance(exposures, list):
-        exposures = [exposures]
-
-    mbexp = util.get_mbexp(exposures)
-    sources, detexp = detect_and_deblend(
-        mbexp=mbexp,
-        thresh=thresh,
-        loglevel=loglevel,
-    )
-
-    return measure(
-        mbexp=mbexp,
-        original_exposures=exposures,
-        detexp=detexp,
-        sources=sources,
-        fitter=fitter,
-        stamp_size=stamp_size,
-        show=show,
-    )
-
-
 def detect_and_deblend(
     mbexp,
     thresh=DEFAULT_THRESH,
-    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
     run detection and the scarlet deblender
@@ -108,8 +50,6 @@ def detect_and_deblend(
         The exposures to process
     thresh: float
         The detection threshold in units of the sky noise
-    loglevel: str, optional
-        Log level for logger in string form
     """
 
     schema = afw_table.SourceTable.makeMinimalSchema()
@@ -347,6 +287,13 @@ def _measure_one(obs, fitter):
     run a measurement on an input observation
     """
     from ngmix.ksigmamom import KSigmaMom
+
+    assert isinstance(fitter, ngmix.runners.PSFRunner), (
+        'only admom for now until we get a robust multi-band centroider'
+    )
+    assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
+        'only admom for now until we get a robust multi-band centroider'
+    )
 
     if isinstance(fitter, KSigmaMom) and not obs.has_psf():
         res = fitter.go(obs, no_psf=True)
