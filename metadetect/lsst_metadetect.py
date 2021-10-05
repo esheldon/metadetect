@@ -81,7 +81,7 @@ def run_metadetect(
     mfrac = get_mfrac(mbobs)
 
     odict = get_all_metacal(
-        metacal_config=config['metacal'], mbobs=mbobs, rng=rng, show=show,
+        metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
     )
     if odict is None:
         result = None
@@ -95,6 +95,7 @@ def run_metadetect(
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
                 deblend=config['deblend'],
+                show=show,
             )
 
             if res is not None:
