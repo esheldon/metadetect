@@ -288,7 +288,7 @@ def _measure_one(obs, fitter):
     """
     from ngmix.ksigmamom import KSigmaMom
 
-    assert isinstance(fitter, ngmix.runners.PSFRunner), (
+    assert isinstance(fitter, ngmix.runners.Runner), (
         'only admom for now until we get a robust multi-band centroider'
     )
     assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (

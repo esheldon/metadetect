@@ -707,7 +707,7 @@ def _get_meas_type(fitter):
         meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
         meas_type = 'ksigma'
-    elif isinstance(fitter, ngmix.runners.PSFRunner):
+    elif isinstance(fitter, ngmix.runners.Runner):
         assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
             'only admom of this type'
         )

@@ -255,7 +255,7 @@ def get_fitter(config, rng=None):
         guesser = ngmix.guessers.GMixPSFGuesser(
             rng=rng, ngauss=1, guess_from_moms=True,
         )
-        fitter = ngmix.runners.PSFRunner(
+        fitter = ngmix.runners.Runner(
             fitter=fitter_obj, guesser=guesser,
             ntry=2,
         )
