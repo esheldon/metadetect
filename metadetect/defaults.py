@@ -1,6 +1,5 @@
 from copy import deepcopy
 
-DEFAULT_LOGLEVEL = 'INFO'
 BMASK_EDGE = 2**30
 DEFAULT_IMAGE_VALUES = {
     'image': 0.0,
@@ -27,6 +26,7 @@ DEFAULT_STAMP_SIZES = {
     # TODO determine a good value for this. We used 48 in DES
     # which would be 64 for lsst
     'ksigma': 64,
+    'admom': 64,
 }
 
 DEFAULT_THRESH = 5.0
