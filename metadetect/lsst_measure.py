@@ -16,72 +16,94 @@ from lsst.pex.exceptions import (
     InvalidParameterError,
     LogicError,
 )
-from .lsst_skysub import determine_and_subtract_sky
-
-import logging
 
 from . import util
 from . import vis
 from . import procflags
-from .defaults import (
-    DEFAULT_LOGLEVEL,
-    DEFAULT_THRESH,
-    DEFAULT_DEBLEND,
-)
+from .defaults import DEFAULT_THRESH
 
 
-def detect_deblend_and_measure(
+def detect_and_deblend(
     exposure,
-    fitter,
-    stamp_size,
     thresh=DEFAULT_THRESH,
-    deblend=DEFAULT_DEBLEND,
-    noise_image=None,
-    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection, deblending and measurements.
+    run detection and deblending of peaks.  The SDSS deblender is run in order
+    to split peaks, but need not be used to create deblended stamps.
 
-    Note deblending is always run in a hierarchical detection process, but the
-    user has a choice whether to use deblended postage stamps for the
-    measurement.
+    we must combine detection and deblending in the same function because the
+    schema gets modified in place, which means we must construct the deblend
+    task at the same time as the detect task
 
     Parameters
     ----------
     exposure: Exposure
-        Exposure on which to detect and measure
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
-        For calculating moments
-    thresh: float
+        The exposure to process
+    thresh: float, optional
         The detection threshold in units of the sky noise
-    stamp_size: int
-        Size for postage stamps.
-    deblend: bool
-        If True, deblend with the scarlet deblender.  If not True, the
-        SDSS deblender code is used but only to find the sub-peaks
-        in the footprint, and the code is inherently single band
-    noise_image: array
-        A noise image for use by the NoiseReplacer.  If you are running
-        metacal you should send the same image for all metacal images.
-    loglevel: str, optional
-        Log level for logger in string form
+
+    Returns
+    -------
+    sources, meas_task
+        The sources and the measurement task
     """
 
-    sources, meas_task = detect_and_deblend(
-        exposure=exposure,
-        thresh=thresh,
-        loglevel=loglevel,
+    schema = afw_table.SourceTable.makeMinimalSchema()
+
+    # Setup algorithms to run
+    meas_config = SingleFrameMeasurementConfig()
+    meas_config.plugins.names = [
+        "base_SdssCentroid",
+        "base_PsfFlux",
+        "base_SkyCoord",
+        # "base_SdssShape",
+        # "base_LocalBackground",
+    ]
+
+    # set these slots to none because we aren't running these algorithms
+    meas_config.slots.apFlux = None
+    meas_config.slots.gaussianFlux = None
+    meas_config.slots.calibFlux = None
+    meas_config.slots.modelFlux = None
+
+    # goes with SdssShape above
+    meas_config.slots.shape = None
+
+    # fix odd issue where it things things are near the edge
+    meas_config.plugins['base_SdssCentroid'].binmax = 1
+
+    meas_task = SingleFrameMeasurementTask(
+        config=meas_config,
+        schema=schema,
     )
 
-    return measure(
-        exposure=exposure,
-        sources=sources,
-        fitter=fitter,
-        meas_task=meas_task,
-        stamp_size=stamp_size,
-        deblend=deblend,
-        noise_image=noise_image,
+    detection_config = SourceDetectionConfig()
+    detection_config.reEstimateBackground = False
+    detection_config.thresholdValue = thresh
+    detection_task = SourceDetectionTask(
+        # TODO should we send schema?
+        config=detection_config,
     )
+
+    # this must occur directly before any tasks are run because schema is
+    # modified in place by tasks, and the constructor does a check that
+    # fails if we construct it separately
+
+    deblend_task = SourceDeblendTask(
+        config=SourceDeblendConfig(),
+        schema=schema,
+    )
+
+    table = afw_table.SourceTable.make(schema)
+    result = detection_task.run(table, exposure)
+
+    if result is not None:
+        sources = result.sources
+        deblend_task.run(exposure, sources)
+    else:
+        sources = []
+
+    return sources, meas_task
 
 
 def measure(
@@ -90,8 +112,6 @@ def measure(
     fitter,
     stamp_size,
     meas_task=None,
-    deblend=DEFAULT_DEBLEND,
-    noise_image=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -116,56 +136,10 @@ def measure(
         An optional measurement task; if you already have centeroids etc. for
         sources, no need to send it.  Otherwise this should do basic things
         like finding the centroid
-    deblend: bool
-        If True, deblend neighbors.
-    noise_image: array
-        A noise image for use by the NoiseReplacer.  If you are running
-        metacal you should send the same image for all metacal images.
     """
 
     if len(sources) > 0:
-        if deblend:
-            # this makes a copy of everything, including pixels
-            exp_send = afw_image.ExposureF(exposure, deep=True)
-        else:
-            exp_send = exposure
-
-        results = _do_measure(
-            exposure=exp_send,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=stamp_size,
-            meas_task=meas_task,
-            deblend=deblend,
-            noise_image=noise_image,
-        )
-    else:
-        results = None
-
-    return results
-
-
-def _do_measure(
-    exposure,
-    sources,
-    fitter,
-    stamp_size,
-    meas_task,
-    deblend,
-    noise_image=None,
-    seed=None,
-):
-    """
-    See docs for measure()
-    """
-
-    if deblend:
-        # remove all objects and replace with noise
-        noise_replacer = _get_noise_replacer(
-            exposure=exposure, sources=sources, noise_image=noise_image,
-        )
-    else:
-        noise_replacer = None
+        return None
 
     exp_bbox = exposure.getBBox()
     results = []
@@ -180,10 +154,6 @@ def _do_measure(
             continue
 
         ormask = ormasks[i]
-
-        if deblend:
-            # This will insert a single source into the image
-            noise_replacer.insertSource(source.getId())
 
         if meas_task is not None:
             # results are stored in the source
@@ -217,15 +187,7 @@ def _do_measure(
             box_size=box_size, exp_bbox=exp_bbox,
         )
 
-        if deblend:
-            # Remove object
-            noise_replacer.removeSource(source.getId())
-
         results.append(res)
-
-    if deblend:
-        # put exposure back as it was input
-        noise_replacer.end()
 
     if len(results) > 0:
         results = np.hstack(results)
@@ -275,178 +237,6 @@ def get_ormask(*, source, exposure):
     orig_cen = peak.getI()
     maskval = exposure.mask[orig_cen]
     return maskval
-
-
-def detect_and_deblend(
-    exposure,
-    thresh=DEFAULT_THRESH,
-    loglevel=DEFAULT_LOGLEVEL,
-):
-    """
-    run detection and deblending of peaks
-
-    we must combine detection and deblending in the same function because the
-    schema gets modified in place, which means we must construct the deblend
-    task at the same time as the detect task
-
-    Parameters
-    ----------
-    exposure: Exposure
-        The exposure to process
-    thresh: float, optional
-        The detection threshold in units of the sky noise
-    loglevel: str, optional
-        Log level for logger in string form
-
-    Returns
-    -------
-    sources, meas_task
-        The sources and the measurement task
-    """
-
-    schema = afw_table.SourceTable.makeMinimalSchema()
-
-    # Setup algorithms to run
-    meas_config = SingleFrameMeasurementConfig()
-    meas_config.plugins.names = [
-        "base_SdssCentroid",
-        "base_PsfFlux",
-        "base_SkyCoord",
-        # "base_SdssShape",
-        # "base_LocalBackground",
-    ]
-
-    # set these slots to none because we aren't running these algorithms
-    meas_config.slots.apFlux = None
-    meas_config.slots.gaussianFlux = None
-    meas_config.slots.calibFlux = None
-    meas_config.slots.modelFlux = None
-
-    # goes with SdssShape above
-    meas_config.slots.shape = None
-
-    # fix odd issue where it things things are near the edge
-    meas_config.plugins['base_SdssCentroid'].binmax = 1
-
-    meas_task = SingleFrameMeasurementTask(
-        config=meas_config,
-        schema=schema,
-    )
-
-    detection_config = SourceDetectionConfig()
-    detection_config.reEstimateBackground = False
-    detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(
-        # TODO should we send schema?
-        config=detection_config,
-    )
-    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
-
-    # this must occur directly before any tasks are run because schema is
-    # modified in place by tasks, and the constructor does a check that
-    # fails if we construct it separately
-
-    deblend_task = SourceDeblendTask(
-        config=SourceDeblendConfig(),
-        schema=schema,
-    )
-    deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
-
-    table = afw_table.SourceTable.make(schema)
-    result = detection_task.run(table, exposure)
-
-    if result is not None:
-        sources = result.sources
-        deblend_task.run(exposure, sources)
-    else:
-        sources = []
-
-    return sources, meas_task
-
-
-def iterate_detection_and_skysub(
-    exposure, thresh, niter=2, loglevel=DEFAULT_LOGLEVEL,
-):
-    """
-    Iterate detection and sky subtraction
-
-    Parameters
-    ----------
-    exposure: Exposure
-        The exposure to process
-    thresh: float
-        threshold for detection
-    niter: int, optional
-        Number of iterations for detection and sky subtraction.
-        Must be >= 1. Default is 2 which is recommended.
-
-    Returns
-    -------
-    Result from running the detection task
-    """
-    from lsst.pex.exceptions import RuntimeError as LSSTRuntimeError
-    from lsst.pipe.base.task import TaskError
-    if niter < 1:
-        raise ValueError(f'niter {niter} is less than 1')
-
-    schema = afw_table.SourceTable.makeMinimalSchema()
-    detection_config = SourceDetectionConfig()
-    detection_config.reEstimateBackground = False
-    detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(config=detection_config)
-    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
-
-    table = afw_table.SourceTable.make(schema)
-
-    # keep a running sum of each sky that was subtracted
-    try:
-        sky_meas = 0.0
-        for i in range(niter):
-            determine_and_subtract_sky(exposure)
-            result = detection_task.run(table, exposure)
-
-            sky_meas += exposure.getMetadata()['BGMEAN']
-
-        meta = exposure.getMetadata()
-
-        # this is the overall sky we subtracted in all iterations
-        meta['BGMEAN'] = sky_meas
-    except LSSTRuntimeError as err:
-        err = str(err).replace('lsst::pex::exceptions::RuntimeError:', '')
-        detection_task.log.warn(err)
-        result = None
-    except TaskError as err:
-        err = str(err).replace('lsst.pipe.base.task.TaskError:', '')
-        detection_task.log.warn(err)
-        result = None
-
-    return result
-
-
-def subtract_sky_mbobs(mbobs, thresh):
-    """
-    subtract sky
-
-    We combine these because both involve resetting the image
-    and noise image
-
-    Parameters
-    ----------
-    mbobs: ngmix.MultiBandObsList
-        The observations to sky subtract
-    thresh: float
-        Threshold for detection
-    """
-    for obslist in mbobs:
-        for obs in obslist:
-            exp = obs.coadd_exp
-
-            _ = iterate_detection_and_skysub(
-                exposure=exp,
-                thresh=thresh,
-            )
-
-            obs.image = exp.image.array
 
 
 def _get_noise_replacer(exposure, sources, noise_image=None):
@@ -895,6 +685,8 @@ def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     if 'T' in res:
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
+
+    if 'flux' in res:
         output[n('flux')] = res['flux']
         output[n('flux_err')] = res['flux_err']
 
@@ -915,6 +707,11 @@ def _get_meas_type(fitter):
         meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
         meas_type = 'ksigma'
+    elif isinstance(fitter, ngmix.runners.PSFRunner):
+        assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
+            'only admom of this type'
+        )
+        meas_type = 'am'
     else:
         raise ValueError(
             "don't know how to get name for fitter %s" % repr(fitter)
