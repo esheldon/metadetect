@@ -1,13 +1,16 @@
 import galsim
 import pytest
 import numpy as np
-import ngmix
+from .. import util
 
 lsst_measure_scarlet = pytest.importorskip(
     'metadetect.lsst_measure_scarlet',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
-
+lsst_metadetect = pytest.importorskip(
+    'metadetect.lsst_metadetect',
+    reason='LSST codes need the Rubin Obs. science pipelines',
+)
 sim = pytest.importorskip(
     'descwl_shear_sims',
     reason='LSST codes need the descwl_shear_sims module for testing',
@@ -74,24 +77,34 @@ def test_lsst_scarlet_smoke(
 ):
 
     rng = np.random.RandomState(seed)
-    fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+
+    stamp_size = 48
 
     sim_data = get_sim_data(rng=rng, gal_type=gal_type, layout=layout)
     band_data = sim_data['band_data']
 
     exposures = [exps[0] for band, exps in band_data.items()]
 
-    lsst_measure_scarlet.detect_deblend_and_measure(
-        exposures=exposures,
+    fitter = lsst_metadetect.get_fitter({'meas_type': 'admom'}, rng=rng)
+
+    mbexp = util.get_mbexp(exposures)
+
+    sources, detexp = lsst_measure_scarlet.detect_and_deblend(mbexp)
+
+    lsst_measure_scarlet.measure(
+        mbexp=mbexp,
+        original_exposures=exposures,
+        detexp=detexp,
+        sources=sources,
         fitter=fitter,
-        stamp_size=48,
+        stamp_size=stamp_size,
     )
 
 
 def test_lsst_scarlet_zero_weights(
     gal_type='exp',
     layout='grid',
-    seed=220,
+    seed=819,
 ):
     """
     Scarlet rejects sources that have zero weight, unlike SDSS deblender
@@ -99,11 +112,12 @@ def test_lsst_scarlet_zero_weights(
     It prints linear algebra errors but continues
     """
 
-    fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+    stamp_size = 48
 
     nobj = []
     for do_zero in [False, True]:
         rng = np.random.RandomState(seed)
+        fitter = lsst_metadetect.get_fitter({'meas_type': 'admom'}, rng=rng)
 
         for do_zero in [False, True]:
 
@@ -117,10 +131,17 @@ def test_lsst_scarlet_zero_weights(
                     exp.variance.array[100:200, 100:200] = np.inf
                 exposures.append(exp)
 
-            results = lsst_measure_scarlet.detect_deblend_and_measure(
-                exposures=exposures,
+            mbexp = util.get_mbexp(exposures)
+
+            sources, detexp = lsst_measure_scarlet.detect_and_deblend(mbexp)
+
+            results = lsst_measure_scarlet.measure(
+                mbexp=mbexp,
+                original_exposures=exposures,
+                detexp=detexp,
+                sources=sources,
                 fitter=fitter,
-                stamp_size=48,
+                stamp_size=stamp_size,
             )
 
             nobj.append(results.size)
