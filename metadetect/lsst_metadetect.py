@@ -19,24 +19,30 @@ TODO
     - more TODO are in the code, here and in lsst_measure.py
 """
 import copy
+import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
-# import lsst.log
 from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
-from .lsst_measure import detect_deblend_and_measure, subtract_sky_mbobs
+from .lsst_skysub import subtract_sky_mbobs
 from . import shearpos
 from .mfrac import measure_mfrac
 from . import procflags
+from . import util
 from . import fitting
-from .defaults import DEFAULT_LOGLEVEL
+
+from .defaults import DEFAULT_THRESH, DEFAULT_DEBLEND
 from .lsst_configs import get_config
+from . import lsst_measure
+from . import lsst_measure_scarlet
+
+LOG = logging.getLogger('lsst_measure_scarlet')
 
 
 def run_metadetect(
-    mbobs, rng, config=None, show=False, loglevel=DEFAULT_LOGLEVEL,
+    mbobs, rng, config=None, show=False,
 ):
     """
         subtract_sky, etc.
@@ -49,8 +55,6 @@ def run_metadetect(
         in this dict override defaults; see lsst_configs.py
     show: bool, optional
         if True images will be shown
-    loglevel: str, optional
-        Default 'INFO'
 
     Returns
     -------
@@ -65,20 +69,13 @@ def run_metadetect(
     if config['subtract_sky']:
         subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect']['thresh'])
 
-    if config['deblend']:
-        # these will be propagated in the metadata through the metacal process
-        set_extra_noise_exps(
-            mbobs=mbobs, rng=rng,
-            fixnoise=config['metacal'].get('fixnoise', True),
-        )
-
     # TODO we get psf stats for the entire coadd, not location dependent
     # for each object on original image
     psf_stats = fit_original_psfs(
         psf_config=config['psf'], mbobs=mbobs, rng=rng,
     )
 
-    fitter = get_fitter(config)
+    fitter = get_fitter(config, rng=rng)
 
     ormask, bmask = get_ormask_and_bmask(mbobs)
     mfrac = get_mfrac(mbobs)
@@ -91,32 +88,19 @@ def run_metadetect(
     else:
         result = {}
         for shear_str, mbobs in odict.items():
-            assert len(mbobs) == 1, 'no multiband for now'
-            assert len(mbobs[0]) == 1, 'no multiepoch'
-            obs = mbobs[0][0]
-
-            exposure = obs.exposure
-
-            if config['deblend']:
-                noise_image = obs.meta['extra_noise_exp'].image
-            else:
-                noise_image = None
 
             res = detect_deblend_and_measure(
-                exposure=exposure,
+                mbobs=mbobs,
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
                 deblend=config['deblend'],
-                noise_image=noise_image,
-                loglevel=loglevel,
             )
 
             if res is not None:
                 obs = mbobs[0][0]
                 add_noshear_pos(config, res, shear_str, obs)
                 add_mfrac(config, mfrac, res, obs)
-                add_ormask(ormask, res)
                 add_original_psf(psf_stats, res)
 
             result[shear_str] = res
@@ -124,59 +108,85 @@ def run_metadetect(
     return result
 
 
-def set_extra_noise_exps(mbobs, rng, fixnoise):
+def detect_deblend_and_measure(
+    mbobs,
+    fitter,
+    stamp_size,
+    thresh=DEFAULT_THRESH,
+    deblend=DEFAULT_DEBLEND,
+    show=False,
+):
     """
-    set .meta['extra_noise_exp'] on each observation
+    run detection, deblending and measurements.
 
-    Not removing poission noise, because it should not matter.
-    This noise replacement is not "correct" in any case as deblending is
-    imperfect, and this field is not passing through metacal, so some slight
-    differences from real noise should not matter
-    """
-
-    for obslist in mbobs:
-        assert len(obslist) == 1
-        for obs in obslist:
-            noise_exp, _ = get_noise_exp(
-                exp=obs.coadd_exp, rng=rng, fixnoise=fixnoise,
-            )
-
-            obs.meta['extra_noise_exp'] = noise_exp
-
-
-def get_noise_exp(exp, rng, fixnoise):
-    """
-    get a noise image based on the input exposure
+    Note deblending is always run in a hierarchical detection process, but the
+    user has a choice whether to use deblended postage stamps for the
+    measurement.
 
     Parameters
     ----------
-    exp: afw.image.ExposureF
-        The exposure upon which to base the noise
-    rng: np.random.RandomState
-        The random number generator for making the noise image
-
-    Returns
-    -------
-    noise exposure
+    exposure: Exposure
+        Exposure on which to detect and measure
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    thresh: float
+        The detection threshold in units of the sky noise
+    stamp_size: int
+        Size for postage stamps.
+    deblend: bool
+        If True, use deblended the postage stamps for each measurement using
+        the scarlet deblender.  If not True, the SDSS deblender code is used
+        but only to find the sub-peaks in the footprint, and bands are coadded
+    show: bool, optional
+        If set to True, show images during processing
     """
 
-    noise_exp = afw_image.ExposureF(exp, deep=True)
+    exposures = [obslist[0].exposure for obslist in mbobs]
 
-    signal = exp.image.array
-    variance = exp.variance.array
+    if deblend:
+        LOG.info('measuring with scarlet deblended stamps')
+        mbexp = util.get_mbexp(exposures)
 
-    use = np.where(np.isfinite(variance) & np.isfinite(signal))
+        sources, detexp = lsst_measure_scarlet.detect_and_deblend(
+            mbexp=mbexp,
+            thresh=thresh,
+        )
+        results = lsst_measure_scarlet.measure(
+            mbexp=mbexp,
+            original_exposures=exposures,
+            detexp=detexp,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=stamp_size,
+            show=show,
+        )
+    else:
 
-    var = np.median(variance[use])
-    if fixnoise:
-        var = var * 2
+        LOG.info('measuring with blended stamps')
 
-    noise_image = rng.normal(scale=np.sqrt(var), size=signal.shape)
+        for obslist in mbobs:
+            assert len(obslist) == 1, 'no multiepoch'
 
-    noise_exp.image.array[:, :] = noise_image
-    noise_exp.variance.array[:, :] = var
+        if len(exposures) > 1:
+            LOG.info('coadding %s bands' % len(mbobs))
+            exposure = util.coadd_exposures(exposures)
+        else:
+            exposure = exposures[0]
 
-    return noise_exp, var
+        sources, meas_task = lsst_measure.detect_and_deblend(
+            exposure=exposure,
+            thresh=thresh,
+        )
+
+        results = lsst_measure.measure(
+            exposure=exposure,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=stamp_size,
+            meas_task=meas_task,
+        )
+
+    return results
 
 
 def add_noshear_pos(config, res, shear_str, obs):
@@ -212,16 +222,6 @@ def add_mfrac(config, mfrac, res, obs):
         res['mfrac'] = 0
 
 
-def add_ormask(ormask, res):
-    """
-    copy in ormask values using the row, col positions
-    """
-    for i in range(res.size):
-        res['ormask'][i] = ormask[
-            int(res['row'][i]), int(res['col'][i]),
-        ]
-
-
 def add_original_psf(psf_stats, res):
     """
     copy in psf results
@@ -232,20 +232,31 @@ def add_original_psf(psf_stats, res):
     res['psfrec_T'][:] = psf_stats['T']
 
 
-def get_fitter(config):
+def get_fitter(config, rng=None):
     """
     get the fitter based on the 'fitter' input
     """
 
     meas_type = config['meas_type']
-    fwhm = config['weight']['fwhm']
 
-    if meas_type == 'wmom':
-        fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
-    elif meas_type == 'ksigma':
-        fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
+    if meas_type == 'admom':
+        fitter_obj = ngmix.admom.AdmomFitter(rng=rng)
+        guesser = ngmix.guessers.GMixPSFGuesser(
+            rng=rng, ngauss=1, guess_from_moms=True,
+        )
+        fitter = ngmix.runners.PSFRunner(
+            fitter=fitter_obj, guesser=guesser,
+            ntry=2,
+        )
+
     else:
-        raise ValueError("bad meas_type: '%s'" % meas_type)
+        fwhm = config['weight']['fwhm']
+        if meas_type == 'wmom':
+            fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
+        elif meas_type == 'ksigma':
+            fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
+        else:
+            raise ValueError("bad meas_type: '%s'" % meas_type)
 
     return fitter
 
