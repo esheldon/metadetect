@@ -1,13 +1,20 @@
 """
 test using lsst simple sim
 """
+import sys
 import numpy as np
 import time
 import pytest
 
+import logging
 import ngmix
 import metadetect
 from .. import procflags
+
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+)
 
 lsst_metadetect = pytest.importorskip(
     'metadetect.lsst_metadetect',
@@ -51,8 +58,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5):
 
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
-@pytest.mark.parametrize('deblend', [None, False, True])
-def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
+def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     rng = np.random.RandomState(seed=116)
 
     sim_data = make_lsst_sim(116)
@@ -84,9 +90,6 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
-    if deblend is not None:
-        config['deblend'] = deblend
-
     res = lsst_metadetect.run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
@@ -104,30 +107,91 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
         assert np.all(res[shear]["mfrac"] == 0)
 
 
+def test_lsst_metadetect_deblend_smoke():
+    rng = np.random.RandomState(seed=99)
+
+    sim_data = make_lsst_sim(99, mag=23)
+
+    print()
+
+    coadd_obs = coadd.make_coadd_obs(
+        exps=sim_data['band_data']['i'],
+        coadd_wcs=sim_data['coadd_wcs'],
+        coadd_bbox=sim_data['coadd_bbox'],
+        psf_dims=sim_data['psf_dims'],
+        remove_poisson=False,
+        rng=rng,
+    )
+
+    # to avoid flagged edges
+    coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+    coadd_mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    obslist.append(coadd_obs)
+    coadd_mbobs.append(obslist)
+
+    config = {
+        'meas_type': 'admom',
+        'deblend': True,
+    }
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
+    )
+
+    gname = 'am_g'
+
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+
 def test_lsst_zero_weights():
     nobj = []
     for do_zero in [False, True]:
-        sim_data = make_lsst_sim(116)
-        exp = sim_data['band_data']['i'][0]
+        rng = np.random.RandomState(55)
+        sim_data = make_lsst_sim(55)
 
-        if do_zero:
-            exp.variance.array[:, :] = np.inf
-
-        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
-        stamp_size = 48
-        results = lsst_metadetect.detect_deblend_and_measure(
-            exposure=exp,
-            fitter=fitter,
-            stamp_size=stamp_size,
+        coadd_obs = coadd.make_coadd_obs(
+            exps=sim_data['band_data']['i'],
+            coadd_wcs=sim_data['coadd_wcs'],
+            coadd_bbox=sim_data['coadd_bbox'],
+            psf_dims=sim_data['psf_dims'],
+            remove_poisson=False,
+            rng=rng,
         )
 
         if do_zero:
-            for res in results:
-                assert res['flags'] == (
-                    procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
+            with coadd_obs.writeable():
+                coadd_obs.weight[50:100, 50:100] = 0.0
+            coadd_obs.coadd_exp.variance.array[50:100, 50:100] = np.inf
+
+        coadd_mbobs = ngmix.MultiBandObsList()
+        obslist = ngmix.ObsList()
+        obslist.append(coadd_obs)
+        coadd_mbobs.append(obslist)
+
+        config = None
+        resdict = lsst_metadetect.run_metadetect(
+            mbobs=coadd_mbobs, rng=rng,
+            config=config,
+        )
+
+        if do_zero:
+
+            for shear_type, tres in resdict.items():
+                assert np.any(
+                    tres['flags'] == (
+                        procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
+                    )
                 )
-                assert res['psf_flags'] == procflags.NO_ATTEMPT
-        nobj.append(results.size)
+                assert np.any(tres['psf_flags'] == procflags.NO_ATTEMPT)
+
+        nobj.append(resdict['noshear'].size)
 
     assert nobj[0] == nobj[1]
 
