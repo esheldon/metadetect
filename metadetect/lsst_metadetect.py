@@ -18,7 +18,6 @@ TODO
       weight function parhaps
     - more TODO are in the code, here and in lsst_measure.py
 """
-import copy
 import logging
 import numpy as np
 import ngmix
@@ -102,6 +101,7 @@ def run_metadetect(
                 obs = mbobs[0][0]
                 add_noshear_pos(config, res, shear_str, obs)
                 add_mfrac(config, mfrac, res, obs)
+                add_ormask(ormask, res)
                 add_original_psf(psf_stats, res)
 
             result[shear_str] = res
@@ -223,6 +223,16 @@ def add_mfrac(config, mfrac, res, obs):
         res['mfrac'] = 0
 
 
+def add_ormask(ormask, res):
+    """
+    copy in ormask values using the row, col positions
+    """
+    for i in range(res.size):
+        res['ormask'][i] = ormask[
+            int(res['row'][i]), int(res['col'][i]),
+        ]
+
+
 def add_original_psf(psf_stats, res):
     """
     copy in psf results
@@ -293,7 +303,8 @@ def get_all_metacal(metacal_config, mbobs, rng, show=False):
                 obs = obslist[iobs]
                 orig_obs = orig_obslist[iobs]
 
-                exp = copy.deepcopy(orig_obs.coadd_exp)
+                # exp = copy.deepcopy(orig_obs.coadd_exp)
+                exp = afw_image.ExposureF(orig_obs.coadd_exp, deep=True)
                 exp.image.array[:, :] = obs.image
 
                 # we ran fixnoise, need to update variance plane
