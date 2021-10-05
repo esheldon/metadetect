@@ -138,7 +138,7 @@ def measure(
         like finding the centroid
     """
 
-    if len(sources) = 0:
+    if len(sources) == 0:
         return None
 
     exp_bbox = exposure.getBBox()
