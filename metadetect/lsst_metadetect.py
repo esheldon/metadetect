@@ -38,7 +38,7 @@ from .lsst_configs import get_config
 from . import lsst_measure
 from . import lsst_measure_scarlet
 
-LOG = logging.getLogger('lsst_measure_scarlet')
+LOG = logging.getLogger('lsst_metadetect')
 
 
 def run_metadetect(
