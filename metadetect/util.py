@@ -171,7 +171,8 @@ def copy_mbexp(mbexp, clear=False):
     new_mbexp = mbexp.clone()
 
     for band in mbexp.filters:
-        new_mbexp[band].setPsf(mbexp[band].getPsf())
+        # clone does not copy the psfs
+        new_mbexp[band].setPsf(mbexp[band].getPsf().clone())
 
     if clear:
         new_mbexp.image.array[:, :, :] = 0
@@ -243,6 +244,9 @@ def coadd_exposures(exposures):
 
     coadd_psf = KernelPsf(FixedKernel(afw_image.ImageD(psf_im)))
     coadd_exp.setPsf(coadd_psf)
-    coadd_exp.setWcs(exposures[0].getWcs())
+
+    wcs = exposures[0].getWcs()
+    if wcs is not None:
+        coadd_exp.setWcs(wcs.clone())
 
     return coadd_exp
