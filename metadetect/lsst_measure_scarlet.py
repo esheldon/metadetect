@@ -626,7 +626,9 @@ class ModelSubtractor(object):
         if stamp_size is not None:
             parent_id, fp = self.footprints[band][source_id]
             peak = fp.getPeaks()[0]
-            x_peak, y_peak = peak.getIx() - 0.5, peak.getIy() - 0.5
+
+            # note we previously had -0.5 on each of these based on Bob's code
+            x_peak, y_peak = peak.getIx(), peak.getIy()
 
             bbox = geom.Box2I(
                 geom.Point2I(x_peak, y_peak),
