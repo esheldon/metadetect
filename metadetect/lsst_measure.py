@@ -200,6 +200,17 @@ def measure(
 def measure_one(obs, fitter):
     """
     run a measurement on an input observation
+
+    Parameters
+    ----------
+    obs: ngmix.Observation
+        The observation to measure
+    fitter: e.g. ngmix.prepsfmom.PrePsfGaussMom
+        The measurement object
+
+    Returns
+    -------
+    res dict
     """
     from ngmix.ksigmamom import KSigmaMom
     from ngmix.prepsfmom import PrePSFGaussMom
@@ -222,9 +233,20 @@ def measure_one(obs, fitter):
     return res
 
 
-def get_ormasks(*, sources, exposure):
+def get_ormasks(sources, exposure):
     """
     get a list of all the ormasks for the sources
+
+    Parameters
+    ----------
+    sources: lsst.afw.table.SourceCatalog
+        The sources
+    exposure: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    list of ormask values
     """
     ormasks = []
     for source in sources:
@@ -233,9 +255,20 @@ def get_ormasks(*, sources, exposure):
     return ormasks
 
 
-def get_ormask(*, source, exposure):
+def get_ormask(source, exposure):
     """
     get ormask based on original peak position
+
+    Parameters
+    ----------
+    sources: lsst.afw.table.SourceRecord
+        The sources
+    exposure: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    ormask value
     """
     peak = source.getFootprint().getPeaks()[0]
     orig_cen = peak.getI()
@@ -719,6 +752,18 @@ def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
 
 
 def get_meas_type(fitter):
+    """
+    Get the measurement type as a string for the input fitter
+
+    Parameters
+    ----------
+    fitter: e.g. ngmix.prepsfmom.PrePSFGaussMom
+        The fitter
+
+    Returns
+    -------
+    name for measurement type
+    """
     if isinstance(fitter, ngmix.gaussmom.GaussMom):
         meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
