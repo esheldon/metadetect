@@ -21,6 +21,7 @@ from .lsst_skysub import determine_and_subtract_sky
 import logging
 
 from . import util
+from . import vis
 from . import procflags
 from .defaults import (
     DEFAULT_LOGLEVEL,
@@ -48,7 +49,7 @@ def detect_deblend_and_measure(
     Parameters
     ----------
     exposure: Exposure
-        The exposure on which to detect and measure
+        Exposure on which to detect and measure
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
     thresh: float
@@ -56,7 +57,9 @@ def detect_deblend_and_measure(
     stamp_size: int
         Size for postage stamps.
     deblend: bool
-        If True, run the deblender.
+        If True, deblend with the scarlet deblender.  If not True, the
+        SDSS deblender code is used but only to find the sub-peaks
+        in the footprint, and the code is inherently single band
     noise_image: array
         A noise image for use by the NoiseReplacer.  If you are running
         metacal you should send the same image for all metacal images.
@@ -168,7 +171,7 @@ def _do_measure(
     results = []
 
     # ormasks will be different within the loop below due to the replacer
-    ormasks = _get_ormasks(sources=sources, exposure=exposure)
+    ormasks = get_ormasks(sources=sources, exposure=exposure)
 
     for i, source in enumerate(sources):
 
@@ -194,21 +197,24 @@ def _do_measure(
         )
         subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
         if False:
-            show_exp(subim)
+            vis.show_exp(subim)
 
         obs = _extract_obs(subim=subim, source=source)
         if obs is None:
             # all zero weights for the image this occurs when we have zeros in
             # the weight plane near the edge but the image is non-zero. These
             # are always junk
-            continue
+            pres = {'flags': procflags.NO_ATTEMPT}
+            ores = {'flags': procflags.ZERO_WEIGHTS}
+            box_size = -1
+        else:
+            pres = _measure_one(obs=obs.psf, fitter=fitter)
+            ores = _measure_one(obs=obs, fitter=fitter)
+            box_size = obs.image.shape[0]
 
-        pres = _measure_one(obs=obs.psf, fitter=fitter)
-        ores = _measure_one(obs=obs, fitter=fitter)
-
-        res = _get_output(
+        res = get_output(
             fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=obs.image.shape[0], exp_bbox=exp_bbox,
+            box_size=box_size, exp_bbox=exp_bbox,
         )
 
         if deblend:
@@ -227,23 +233,6 @@ def _do_measure(
         results = None
 
     return results
-
-
-def show_exp(exp):
-    """
-    show the image in ds9
-
-    Parameters
-    ----------
-    exp: Exposure
-        The image to show
-    """
-    import lsst.afw.display as afw_display
-    display = afw_display.getDisplay(backend='ds9')
-    display.mtv(exp)
-    display.scale('log', 'minmax')
-
-    input('hit a key')
 
 
 def _measure_one(obs, fitter):
@@ -267,18 +256,18 @@ def _measure_one(obs, fitter):
     return res
 
 
-def _get_ormasks(*, sources, exposure):
+def get_ormasks(*, sources, exposure):
     """
     get a list of all the ormasks for the sources
     """
     ormasks = []
     for source in sources:
-        ormask = _get_ormask(source=source, exposure=exposure)
+        ormask = get_ormask(source=source, exposure=exposure)
         ormasks.append(ormask)
     return ormasks
 
 
-def _get_ormask(*, source, exposure):
+def get_ormask(*, source, exposure):
     """
     get ormask based on original peak position
     """
@@ -356,9 +345,11 @@ def detect_and_deblend(
     # this must occur directly before any tasks are run because schema is
     # modified in place by tasks, and the constructor does a check that
     # fails if we construct it separately
-    deblend_config = SourceDeblendConfig()
 
-    deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
+    deblend_task = SourceDeblendTask(
+        config=SourceDeblendConfig(),
+        schema=schema,
+    )
     deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
 
     table = afw_table.SourceTable.make(schema)
@@ -839,27 +830,40 @@ def _get_dtype(meas_type):
     return dt
 
 
-def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
+def _get_struct(meas_type):
+    n = util.Namer(front=meas_type)
+    dt = _get_dtype(meas_type)
+
+    output = np.zeros(1, dtype=dt)
+
+    output['flags'] = procflags.NO_ATTEMPT
+    output['psf_flags'] = procflags.NO_ATTEMPT
+
+    output[n('s2n')] = np.nan
+    output[n('g')] = np.nan
+    output[n('T')] = np.nan
+    output[n('T_err')] = np.nan
+    output[n('g_cov')] = np.nan
+    output[n('T_ratio')] = np.nan
+    output[n('flux')] = np.nan
+    output[n('flux_err')] = np.nan
+
+    output['psf_g'] = np.nan
+    output['psf_T'] = np.nan
+
+    return output
+
+
+def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     """
     get the output structure, copying in results
 
     When data are unavailable, a default value of nan is used
     """
     meas_type = _get_meas_type(fitter)
+    output = _get_struct(meas_type)
+
     n = util.Namer(front=meas_type)
-
-    dt = _get_dtype(meas_type)
-    output = np.zeros(1, dtype=dt)
-
-    # these cannot be calculated from the results if flags are set, so we put
-    # in defaults.  fitsio has good support for nan
-    output[n('s2n')] = np.nan
-    output[n('g')] = np.nan
-    output[n('T_ratio')] = np.nan
-    output['psf_g'] = np.nan
-    output['psf_T'] = np.nan
-
-    output['psfrec_flags'] = procflags.NO_ATTEMPT
 
     output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
@@ -878,20 +882,21 @@ def _get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
-    if pres['flags'] != 0:
+    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
         flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
-        flags |= procflags.OBJ_FAILURE
+        flags |= res['flags'] | procflags.OBJ_FAILURE
 
     if pres['flags'] == 0:
         output['psf_g'] = pres['g']
         output['psf_T'] = pres['T']
 
-    output[n('T')] = res['T']
-    output[n('T_err')] = res['T_err']
-    output[n('flux')] = res['flux']
-    output[n('flux_err')] = res['flux_err']
+    if 'T' in res:
+        output[n('T')] = res['T']
+        output[n('T_err')] = res['T_err']
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']

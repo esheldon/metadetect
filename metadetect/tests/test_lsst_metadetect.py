@@ -7,6 +7,7 @@ import pytest
 
 import ngmix
 import metadetect
+from .. import procflags
 
 lsst_metadetect = pytest.importorskip(
     'metadetect.lsst_metadetect',
@@ -101,6 +102,34 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
+
+
+def test_lsst_zero_weights():
+    nobj = []
+    for do_zero in [False, True]:
+        sim_data = make_lsst_sim(116)
+        exp = sim_data['band_data']['i'][0]
+
+        if do_zero:
+            exp.variance.array[:, :] = np.inf
+
+        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+        stamp_size = 48
+        results = lsst_metadetect.detect_deblend_and_measure(
+            exposure=exp,
+            fitter=fitter,
+            stamp_size=stamp_size,
+        )
+
+        if do_zero:
+            for res in results:
+                assert res['flags'] == (
+                    procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
+                )
+                assert res['psf_flags'] == procflags.NO_ATTEMPT
+        nobj.append(results.size)
+
+    assert nobj[0] == nobj[1]
 
 
 # add prepsf gauss mom when it is available
