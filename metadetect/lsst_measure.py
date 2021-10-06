@@ -183,8 +183,8 @@ def measure(
             box_size = obs.image.shape[0]
 
         res = get_output(
-            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=box_size, exp_bbox=exp_bbox,
+            wcs=exposure.getWcs(), fitter=fitter, source=source, res=ores,
+            pres=pres, ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -442,8 +442,12 @@ def _get_padded_sub_image(exposure, bbox):
     bbox2.clip(region)
 
     if isinstance(exposure, afw_image.Exposure):
-        result.setPsf(exposure.getPsf())
-        result.setWcs(exposure.getWcs())
+        result.setPsf(exposure.getPsf().clone())
+
+        wcs = exposure.getWcs()
+        if wcs is not None:
+            result.setWcs(wcs)
+
         result.setPhotoCalib(exposure.getPhotoCalib())
         # result.image.array[:, :] = float("nan")
         result.image.array[:, :] = 0.0
@@ -592,8 +596,12 @@ def _get_dtype(meas_type):
         ('col0', 'i4'),  # bbox col start
         ('row', 'f4'),  # row in image. Use row0 to get to global pixel coords
         ('col', 'f4'),  # col in image. Use col0 to get to global pixel coords
+        ('row_diff', 'f4'),  # difference from peak location
+        ('col_diff', 'f4'),  # difference from peak location
         ('row_noshear', 'f4'),  # noshear row in local image, not global wcs
         ('col_noshear', 'f4'),  # noshear col in local image, not global wcs
+        ('ra', 'f8'),
+        ('dec', 'f8'),
 
         ('psfrec_flags', 'i4'),  # psfrec is the original psf
         ('psfrec_g', 'f8', 2),
@@ -620,7 +628,7 @@ def _get_dtype(meas_type):
     return dt
 
 
-def _get_struct(meas_type):
+def get_output_struct(meas_type):
     n = util.Namer(front=meas_type)
     dt = _get_dtype(meas_type)
 
@@ -644,14 +652,14 @@ def _get_struct(meas_type):
     return output
 
 
-def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
+def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
     """
     get the output structure, copying in results
 
     When data are unavailable, a default value of nan is used
     """
-    meas_type = _get_meas_type(fitter)
-    output = _get_struct(meas_type)
+    meas_type = get_meas_type(fitter)
+    output = get_output_struct(meas_type)
 
     n = util.Namer(front=meas_type)
 
@@ -660,6 +668,8 @@ def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     orig_cen = source.getCentroid()
 
+    skypos = wcs.pixelToSky(orig_cen)
+
     if np.isnan(orig_cen.getY()):
         peak = source.getFootprint().getPeaks()[0]
         orig_cen = peak.getI()
@@ -667,8 +677,12 @@ def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     output['box_size'] = box_size
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
-    output['row'] = orig_cen.getY() - output['row0']
-    output['col'] = orig_cen.getX() - output['col0']
+    output['row'] = orig_cen.getY()
+    output['col'] = orig_cen.getX()
+
+    output['ra'] = skypos.getRa().asDegrees()
+    output['dec'] = skypos.getDec().asDegrees()
+
     output['ormask'] = ormask
 
     flags = 0
@@ -702,7 +716,7 @@ def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
     return output
 
 
-def _get_meas_type(fitter):
+def get_meas_type(fitter):
     if isinstance(fitter, ngmix.gaussmom.GaussMom):
         meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
