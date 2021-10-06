@@ -60,29 +60,41 @@ def show_mbexp(
     The axis used for plotting
     """
     from astropy.visualization.lupton_rgb import AsinhMapping
+    from astropy.visualization import (
+        AsinhStretch,
+        imshow_norm,
+    )
     import scarlet
 
     image = mbexp.image.array
 
-    # TODO repeat bands as needed
-    assert image.shape[0] >= 3, 'need at least 3 exposure for color'
-
-    asinh = AsinhMapping(
-        # minimum=image.min(),
-        minimum=0,
-        stretch=stretch,
-        Q=q,
-    )
-
-    img_rgb = scarlet.display.img_to_rgb(image, norm=asinh)
-
     if ax is None:
         fig, ax = mplt.subplots()
+
+    if image.shape[0] >= 3:
+        timage = image[:3, :, :]
+
+        asinh = AsinhMapping(
+            minimum=0,
+            stretch=stretch,
+            Q=q,
+        )
+
+        img_rgb = scarlet.display.img_to_rgb(timage, norm=asinh)
+
+        ax.imshow(img_rgb)
+
+    else:
+        if image.shape[0] == 1:
+            timage = image[0]
+        else:
+            timage = image.sum(axis=0)
+
+        imshow_norm(timage, ax=ax, stretch=AsinhStretch())
 
     if mess is not None:
         ax.set_title(mess)
 
-    ax.imshow(img_rgb)
     if show:
         mplt.show()
 
