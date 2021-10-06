@@ -31,7 +31,7 @@ from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
 from . import procflags
-from .lsst_measure import get_output, get_ormask
+from .lsst_measure import get_output_struct, get_meas_type, get_ormask
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -133,6 +133,7 @@ def measure(
     detexp,
     sources,
     fitter,
+    rng,
     stamp_size,
     show=False,
 ):
@@ -158,6 +159,8 @@ def measure(
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    rng: np.random.RandomState
+        Random number generator for the centroid algorithm
     stamp_size: int
         Size for postage stamps
     show: bool, optional
@@ -201,8 +204,7 @@ def measure(
         )
         results += _process_sources(
             subtractor=subtractor, sources=children, stamp_size=stamp_size,
-            detexp=detexp,
-            wcs=wcs, fitter=fitter, show=show,
+            detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
         )
 
     if len(results) > 0:
@@ -214,14 +216,13 @@ def measure(
 
 
 def _process_sources(
-    subtractor, sources, stamp_size, wcs, fitter, detexp, show=False,
+    subtractor, sources, stamp_size, wcs, fitter, detexp, rng, show=False,
 ):
     results = []
     for source in sources:
         res = _process_source(
             subtractor=subtractor, source=source, stamp_size=stamp_size,
-            detexp=detexp,
-            wcs=wcs, fitter=fitter, show=show,
+            detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
         )
         results.append(res)
 
@@ -229,7 +230,7 @@ def _process_sources(
 
 
 def _process_source(
-    subtractor, source, stamp_size, wcs, fitter, detexp, show=False,
+    subtractor, source, stamp_size, wcs, fitter, detexp, rng, show=False,
 ):
     source_id = source.getId()
 
@@ -271,22 +272,34 @@ def _process_source(
                 pres = {'flags': procflags.NO_ATTEMPT}
                 box_size = -1
             else:
-                pres = _measure_one(obs=obs.psf, fitter=fitter)
-                ores = _measure_one(obs=obs, fitter=fitter)
-                box_size = obs.image.shape[0]
+                try:
+
+                    # this updates the jacobian center as well as the
+                    # meta['orig_cen'] pixel location in the original image
+
+                    find_and_set_center(obs=obs, rng=rng)
+
+                    pres = _measure_one(obs=obs.psf, fitter=fitter)
+                    ores = _measure_one(obs=obs, fitter=fitter)
+                    box_size = obs.image.shape[0]
+
+                except CentroidFail as err:
+                    LOG.info(str(err))
+                    ores = {'flags': procflags.CENTROID_FAIL}
+                    pres = {'flags': procflags.NO_ATTEMPT}
 
         except LengthError as e:
             # bounding box did not fit. TODO keep output with flag set
             LOG.info(e)
 
             # note the context manager properly handles a return
-            ores = {'flags': procflags.EDGE}
+            ores = {'flags': procflags.BBOX_HITS_EDGE}
             pres = {'flags': procflags.NO_ATTEMPT}
             box_size = -1
 
         res = get_output(
-            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=box_size, exp_bbox=exp_bbox,
+            obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
+            ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
         )
 
     return res
@@ -384,7 +397,7 @@ class ModelSubtractor(object):
 
         self.mbexp = util.copy_mbexp(mbexp)
         for band in self.filters:
-            self.mbexp[band].setPsf(self.orig[band].getPsf())
+            self.mbexp[band].setPsf(self.orig[band].getPsf().clone())
 
         # we need a scratch array because heavy footprings don't
         # have addTo or subtractFrom methods
@@ -767,7 +780,10 @@ def _extract_obs(wcs, subim, source):
     # get from the mask object
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
-    meta = {'maskobj': maskobj}
+    meta = {
+        'maskobj': maskobj,
+        'orig_cen': peak_location,
+    }
 
     psf_obs = ngmix.Observation(
         psf_im,
@@ -893,7 +909,122 @@ def _extract_psf_image(exposure, orig_cen):
     return psfim
 
 
+def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
+    """
+    Attempt to find the centroid and update the jacobian.  Update
+    'orig_cen' in the metadata with the difference. Add entry
+    "orig_cen_offset" as an Extend2D
+
+    If the centroiding fails, raise CentroidFail
+    """
+
+    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
+    if res['flags'] != 0:
+        raise CentroidFail('failed to find centroid')
+
+    jac = obs.jacobian
+
+    # this is an offset in arcsec
+    voff, uoff = res['cen']
+
+    # current center within stamp, in pixels
+    rowcen, colcen = jac.get_cen()
+
+    # new center within stamp, in pixels
+    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
+
+    # difference, which we will use to update the center in the original image
+    rowdiff = new_row - rowcen
+    coldiff = new_col - colcen
+
+    diff = geom.Extent2D(x=coldiff, y=rowdiff)
+
+    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
+    obs.meta['orig_cen_offset'] = diff
+
+    # update jacobian center within the stamp
+    with obs.writeable():
+        obs.jacobian.set_cen(row=new_row, col=new_col)
+
+
+def get_output(obs, wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
+    """
+    get the output structure, copying in results
+
+    When data are unavailable, a default value of nan is used
+    """
+    meas_type = get_meas_type(fitter)
+    output = get_output_struct(meas_type)
+
+    n = util.Namer(front=meas_type)
+
+    output['psf_flags'] = pres['flags']
+    output[n('flags')] = res['flags']
+
+    orig_cen = obs.meta['orig_cen']
+    cen_offset = obs.meta['orig_cen_offset']
+
+    skypos = wcs.pixelToSky(orig_cen)
+
+    output['box_size'] = box_size
+    output['row0'] = exp_bbox.getBeginY()
+    output['col0'] = exp_bbox.getBeginX()
+    output['row'] = orig_cen.getY()
+    output['col'] = orig_cen.getX()
+
+    output['row_diff'] = cen_offset.getY()
+    output['col_diff'] = cen_offset.getX()
+
+    output['ra'] = skypos.getRa().asDegrees()
+    output['dec'] = skypos.getDec().asDegrees()
+
+    output['ormask'] = ormask
+
+    flags = 0
+    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
+        flags |= procflags.PSF_FAILURE
+
+    if res['flags'] != 0:
+        flags |= res['flags'] | procflags.OBJ_FAILURE
+
+    if pres['flags'] == 0:
+        output['psf_g'] = pres['g']
+        output['psf_T'] = pres['T']
+
+    if 'T' in res:
+        output[n('T')] = res['T']
+        output[n('T_err')] = res['T_err']
+
+    if 'flux' in res:
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
+
+    if res['flags'] == 0:
+        output[n('s2n')] = res['s2n']
+        output[n('g')] = res['g']
+        output[n('g_cov')] = res['g_cov']
+
+        if pres['flags'] == 0:
+            output[n('T_ratio')] = res['T']/pres['T']
+
+    output['flags'] = flags
+    return output
+
+
 class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class CentroidFail(Exception):
     """
     Some number was out of range
     """
