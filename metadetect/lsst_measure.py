@@ -769,7 +769,7 @@ def get_meas_type(fitter):
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
         meas_type = 'ksigma'
     elif isinstance(fitter, ngmix.prepsfmom.PrePSFGaussMom):
-        meas_type = 'pgap'
+        meas_type = 'gap'
     elif isinstance(fitter, ngmix.runners.Runner):
         assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
             'only meas_type "am" for a runner'

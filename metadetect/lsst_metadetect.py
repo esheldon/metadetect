@@ -270,7 +270,7 @@ def get_fitter(config, rng=None):
             fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
         elif meas_type == 'ksigma':
             fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
-        elif meas_type == 'pgap':
+        elif meas_type == 'gap':
             fitter = ngmix.prepsfmom.PrePSFGaussMom(fwhm=fwhm)
         else:
             raise ValueError("bad meas_type: '%s'" % meas_type)

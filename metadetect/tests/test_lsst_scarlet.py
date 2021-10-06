@@ -85,7 +85,12 @@ def test_lsst_scarlet_smoke(
 
     exposures = [exps[0] for band, exps in band_data.items()]
 
-    fitter = lsst_metadetect.get_fitter({'meas_type': 'am'}, rng=rng)
+    config = {
+        'meas_type': 'gap',
+        'weight': {'fwhm': 2.0},
+    }
+
+    fitter = lsst_metadetect.get_fitter(config, rng=rng)
 
     mbexp = util.get_mbexp(exposures)
 
@@ -115,10 +120,15 @@ def test_lsst_scarlet_zero_weights(
 
     stamp_size = 48
 
+    config = {
+        'meas_type': 'gap',
+        'weight': {'fwhm': 2.0},
+    }
+
     nobj = []
     for do_zero in [False, True]:
         rng = np.random.RandomState(seed)
-        fitter = lsst_metadetect.get_fitter({'meas_type': 'am'}, rng=rng)
+        fitter = lsst_metadetect.get_fitter(config, rng=rng)
 
         for do_zero in [False, True]:
 
