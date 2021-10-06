@@ -446,7 +446,7 @@ def _get_padded_sub_image(exposure, bbox):
 
         wcs = exposure.getWcs()
         if wcs is not None:
-            result.setWcs(wcs)
+            result.setWcs(wcs.clone())
 
         result.setPhotoCalib(exposure.getPhotoCalib())
         # result.image.array[:, :] = float("nan")

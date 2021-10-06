@@ -397,7 +397,8 @@ class ModelSubtractor(object):
 
         self.mbexp = util.copy_mbexp(mbexp)
         for band in self.filters:
-            self.mbexp[band].setPsf(self.orig[band].getPsf().clone())
+            psf = util.try_clone_psf(self.orig[band].getPsf())
+            self.mbexp[band].setPsf(psf)
 
         # we need a scratch array because heavy footprings don't
         # have addTo or subtractFrom methods

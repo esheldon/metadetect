@@ -170,13 +170,28 @@ def copy_mbexp(mbexp, clear=False):
 
     new_mbexp = mbexp.clone()
 
+    # clone does not copy the psfs
     for band in mbexp.filters:
-        # clone does not copy the psfs
-        new_mbexp[band].setPsf(mbexp[band].getPsf().clone())
+        psf = try_clone_psf(mbexp[band].getPsf())
+        new_mbexp[band].setPsf(psf)
 
     if clear:
         new_mbexp.image.array[:, :, :] = 0
     return new_mbexp
+
+
+def try_clone_psf(psf):
+    """
+    try to clone it, if not return a reference
+    """
+    try:
+        new_psf = psf.clone()
+    except RuntimeError:
+        # this happens on some psfs, not sure why
+        # proceed without a copy
+        new_psf = psf
+
+    return new_psf
 
 
 def coadd_exposures(exposures):

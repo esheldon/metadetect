@@ -98,6 +98,7 @@ def test_lsst_scarlet_smoke(
         sources=sources,
         fitter=fitter,
         stamp_size=stamp_size,
+        rng=rng,
     )
 
 
@@ -142,6 +143,7 @@ def test_lsst_scarlet_zero_weights(
                 sources=sources,
                 fitter=fitter,
                 stamp_size=stamp_size,
+                rng=rng,
             )
 
             nobj.append(results.size)
