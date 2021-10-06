@@ -50,6 +50,12 @@ def detect_and_deblend(
         The exposures to process
     thresh: float
         The detection threshold in units of the sky noise
+
+    Returns
+    -------
+    sources, detexp
+        Sources is an lsst.afw.table.SourceCatalog
+        detexp is lsst.afw.image.ExposureF
     """
 
     schema = afw_table.SourceTable.makeMinimalSchema()
@@ -73,7 +79,7 @@ def detect_and_deblend(
     # goes with SdssShape above
     meas_config.slots.shape = None
 
-    # fix odd issue where it things things are near the edge
+    # fix odd issue where it thinks things are near the edge
     meas_config.plugins['base_SdssCentroid'].binmax = 1
 
     _ = SingleFrameMeasurementTask(
@@ -156,6 +162,11 @@ def measure(
         Size for postage stamps
     show: bool, optional
         If set to True, show images
+
+    Returns
+    -------
+    array of results, with flags, positions, shapes, etc. or None
+    if there were no objects to measure
     """
 
     # Must get wcs from an original exposure
@@ -225,7 +236,6 @@ def _process_source(
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
 
-    res = None
     with subtractor.add_source(source_id):
 
         if show:
@@ -861,14 +871,10 @@ def _extract_weight(subim):
 
 def _extract_psf_image(exposure, orig_cen):
     """
-    get the psf associated with this image
+    get the psf associated with this image.
 
-    coadded psfs are generally not square, so we will
-    trim it to be square and preserve the center to
-    be at the new canonical center
-
-    TODO: should we really trim the psf to be even?  will this
-    cause a shift due being off-center?
+    coadded psfs from DM are generally not square, but the coadd in cells code
+    makes them so.  We will assert they are square and odd dimensions
     """
     try:
         psfobj = exposure.getPsf()
@@ -878,52 +884,11 @@ def _extract_psf_image(exposure, orig_cen):
 
     psfim = np.array(psfim, dtype='f4', copy=False)
 
-    psfim = trim_odd_image(psfim)
+    shape = psfim.shape
+    assert shape[0] == shape[1], 'require square psf images'
+    assert shape[0] % 2 != 0, 'require odd psf images'
+
     return psfim
-
-
-def trim_odd_image(im):
-    """
-    trim an odd dimension image to be square and with equal distance from
-    canonical center to all edges
-    """
-
-    dims = im.shape
-    if dims[0] != dims[1]:
-        # logger.debug('original dims: %s' % str(dims))
-        assert dims[0] % 2 != 0, 'image must have odd dims'
-        assert dims[1] % 2 != 0, 'image must have odd dims'
-
-        dims = np.array(dims)
-        cen = (dims-1)//2
-        cen = cen.astype('i4')
-
-        distances = (
-            cen[0]-0,
-            dims[0]-cen[0]-1,
-            cen[1]-0,
-            dims[1]-cen[1]-1,
-        )
-        # logger.debug('distances: %s' % str(distances))
-        min_dist = min(distances)
-
-        start_row = cen[0] - min_dist
-        end_row = cen[0] + min_dist
-        start_col = cen[1] - min_dist
-        end_col = cen[1] + min_dist
-
-        # adding +1 for slices
-        new_im = im[
-            start_row:end_row+1,
-            start_col:end_col+1,
-        ].copy()
-
-        # logger.debug('new dims: %s' % str(new_im.shape))
-
-    else:
-        new_im = im
-
-    return new_im
 
 
 class MissingDataError(Exception):
