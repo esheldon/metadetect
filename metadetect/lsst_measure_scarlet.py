@@ -929,14 +929,10 @@ def _extract_weight(subim):
 
 def _extract_psf_image(exposure, orig_cen):
     """
-    get the psf associated with this image
+    get the psf associated with this image.
 
-    coadded psfs are generally not square, so we will
-    trim it to be square and preserve the center to
-    be at the new canonical center
-
-    TODO: should we really trim the psf to be even?  will this
-    cause a shift due being off-center?
+    coadded psfs from DM are generally not square, but the coadd in cells code
+    makes them so.  We will assert they are square and odd dimensions
     """
     try:
         psfobj = exposure.getPsf()
