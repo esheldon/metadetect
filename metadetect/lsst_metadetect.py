@@ -94,6 +94,7 @@ def run_metadetect(
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
                 deblend=config['deblend'],
+                rng=rng,
                 show=show,
             )
 
@@ -113,6 +114,7 @@ def detect_deblend_and_measure(
     mbobs,
     fitter,
     stamp_size,
+    rng,
     thresh=DEFAULT_THRESH,
     deblend=DEFAULT_DEBLEND,
     show=False,
@@ -159,6 +161,7 @@ def detect_deblend_and_measure(
             sources=sources,
             fitter=fitter,
             stamp_size=stamp_size,
+            rng=rng,
             show=show,
         )
     else:
@@ -195,8 +198,8 @@ def add_noshear_pos(config, res, shear_str, obs):
     add unsheared positions to the input result array
     """
     rows_noshear, cols_noshear = shearpos.unshear_positions(
-        res['row'],
-        res['col'],
+        res['row'] - res['row0'],
+        res['col'] - res['col0'],
         shear_str,
         obs,  # an example for jacobian and image shape
     )
@@ -228,9 +231,10 @@ def add_ormask(ormask, res):
     copy in ormask values using the row, col positions
     """
     for i in range(res.size):
-        res['ormask'][i] = ormask[
-            int(res['row'][i]), int(res['col'][i]),
-        ]
+        local_row = int(res['row'][i] - res['row0'][i])
+        local_col = int(res['col'][i] - res['col0'][i])
+
+        res['ormask'][i] = ormask[local_row, local_col]
 
 
 def add_original_psf(psf_stats, res):
