@@ -181,6 +181,15 @@ def copy_mbexp(mbexp, clear=False):
 def coadd_exposures(exposures):
     """
     coadd a set of exposures, assuming they share the same wcs
+
+    Parameters
+    ----------
+    exposures: [lsst.afw.image.Exposure]
+        List of exposures to coadd
+
+    Returns
+    --------
+    lsst.afw.image.ExposureF
     """
     import lsst.geom as geom
     import lsst.afw.image as afw_image
