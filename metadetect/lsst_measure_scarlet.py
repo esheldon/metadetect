@@ -31,7 +31,9 @@ from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
 from . import procflags
-from .lsst_measure import get_output_struct, get_meas_type, get_ormask
+from .lsst_measure import (
+    get_output_struct, get_meas_type, get_ormask, measure_one,
+)
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -279,8 +281,8 @@ def _process_source(
 
                     find_and_set_center(obs=obs, rng=rng)
 
-                    pres = _measure_one(obs=obs.psf, fitter=fitter)
-                    ores = _measure_one(obs=obs, fitter=fitter)
+                    pres = measure_one(obs=obs.psf, fitter=fitter)
+                    ores = measure_one(obs=obs, fitter=fitter)
                     box_size = obs.image.shape[0]
 
                 except CentroidFail as err:
@@ -301,31 +303,6 @@ def _process_source(
             obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
             ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
         )
-
-    return res
-
-
-def _measure_one(obs, fitter):
-    """
-    run a measurement on an input observation
-    """
-    from ngmix.ksigmamom import KSigmaMom
-    from ngmix.prepsfmom import PrePSFGaussMom
-
-    is_prepsf = (
-        isinstance(fitter, KSigmaMom) or isinstance(fitter, PrePSFGaussMom)
-    )
-    if is_prepsf and not obs.has_psf():
-        res = fitter.go(obs, no_psf=True)
-    else:
-        res = fitter.go(obs)
-
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
 
     return res
 

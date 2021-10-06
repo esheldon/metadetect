@@ -178,8 +178,8 @@ def measure(
             ores = {'flags': procflags.ZERO_WEIGHTS}
             box_size = -1
         else:
-            pres = _measure_one(obs=obs.psf, fitter=fitter)
-            ores = _measure_one(obs=obs, fitter=fitter)
+            pres = measure_one(obs=obs.psf, fitter=fitter)
+            ores = measure_one(obs=obs, fitter=fitter)
             box_size = obs.image.shape[0]
 
         res = get_output(
@@ -197,13 +197,17 @@ def measure(
     return results
 
 
-def _measure_one(obs, fitter):
+def measure_one(obs, fitter):
     """
     run a measurement on an input observation
     """
     from ngmix.ksigmamom import KSigmaMom
+    from ngmix.prepsfmom import PrePSFGaussMom
 
-    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+    is_prepsf = (
+        isinstance(fitter, KSigmaMom) or isinstance(fitter, PrePSFGaussMom)
+    )
+    if is_prepsf and not obs.has_psf():
         res = fitter.go(obs, no_psf=True)
     else:
         res = fitter.go(obs)
@@ -719,6 +723,8 @@ def get_meas_type(fitter):
         meas_type = 'wmom'
     elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
         meas_type = 'ksigma'
+    elif isinstance(fitter, ngmix.prepsfmom.PrePSFGaussMom):
+        meas_type = 'pgap'
     elif isinstance(fitter, ngmix.runners.Runner):
         assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
             'only meas_type "am" for a runner'

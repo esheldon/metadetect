@@ -19,6 +19,7 @@ ALLOWED_BOX_SIZES = [
 DEFAULT_WEIGHT_FWHMS = {
     'wmom': 1.2,
     'ksigma': 2.0,
+    'pgap': 2.0,
 }
 
 DEFAULT_STAMP_SIZES = {
@@ -27,6 +28,7 @@ DEFAULT_STAMP_SIZES = {
     # which would be 64 for lsst
     'ksigma': 64,
     'am': 64,
+    'pgap': 64,  # TODO would smaller be OK since does not ring?
 }
 
 DEFAULT_THRESH = 5.0
