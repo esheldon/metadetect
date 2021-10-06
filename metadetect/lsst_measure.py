@@ -444,9 +444,7 @@ def _get_padded_sub_image(exposure, bbox):
     if isinstance(exposure, afw_image.Exposure):
         result.setPsf(exposure.getPsf().clone())
 
-        wcs = exposure.getWcs()
-        if wcs is not None:
-            result.setWcs(wcs.clone())
+        result.setWcs(exposure.getWcs())
 
         result.setPhotoCalib(exposure.getPhotoCalib())
         # result.image.array[:, :] = float("nan")
@@ -723,7 +721,7 @@ def get_meas_type(fitter):
         meas_type = 'ksigma'
     elif isinstance(fitter, ngmix.runners.Runner):
         assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
-            'only admom of this type'
+            'only meas_type "am" for a runner'
         )
         meas_type = 'am'
     else:

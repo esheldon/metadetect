@@ -260,8 +260,6 @@ def coadd_exposures(exposures):
     coadd_psf = KernelPsf(FixedKernel(afw_image.ImageD(psf_im)))
     coadd_exp.setPsf(coadd_psf)
 
-    wcs = exposures[0].getWcs()
-    if wcs is not None:
-        coadd_exp.setWcs(wcs.clone())
+    coadd_exp.setWcs(exposures[0].getWcs())
 
     return coadd_exp

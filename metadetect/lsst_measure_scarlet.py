@@ -310,15 +310,12 @@ def _measure_one(obs, fitter):
     run a measurement on an input observation
     """
     from ngmix.ksigmamom import KSigmaMom
+    from ngmix.prepsfmom import PrePSFGaussMom
 
-    assert isinstance(fitter, ngmix.runners.Runner), (
-        'only admom for now until we get a robust multi-band centroider'
+    is_prepsf = (
+        isinstance(fitter, KSigmaMom) or isinstance(fitter, PrePSFGaussMom)
     )
-    assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
-        'only admom for now until we get a robust multi-band centroider'
-    )
-
-    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+    if is_prepsf and not obs.has_psf():
         res = fitter.go(obs, no_psf=True)
     else:
         res = fitter.go(obs)

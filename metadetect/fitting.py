@@ -709,7 +709,7 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     elif psf_conf['model'] == 'wmom':
         fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
         guesser = None
-    elif psf_conf['model'] == 'admom':
+    elif psf_conf['model'] == 'am':
         fitter = ngmix.admom.AdmomFitter(rng=rng)
         guesser = ngmix.guessers.GMixPSFGuesser(
             rng=rng, ngauss=1, guess_from_moms=True,

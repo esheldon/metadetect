@@ -254,7 +254,7 @@ def get_fitter(config, rng=None):
 
     meas_type = config['meas_type']
 
-    if meas_type == 'admom':
+    if meas_type == 'am':
         fitter_obj = ngmix.admom.AdmomFitter(rng=rng)
         guesser = ngmix.guessers.GMixPSFGuesser(
             rng=rng, ngauss=1, guess_from_moms=True,

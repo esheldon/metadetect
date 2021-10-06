@@ -132,7 +132,7 @@ def test_lsst_metadetect_deblend_smoke():
     coadd_mbobs.append(obslist)
 
     config = {
-        'meas_type': 'admom',
+        'meas_type': 'am',
         'deblend': True,
     }
 

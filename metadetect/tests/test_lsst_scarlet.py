@@ -85,7 +85,7 @@ def test_lsst_scarlet_smoke(
 
     exposures = [exps[0] for band, exps in band_data.items()]
 
-    fitter = lsst_metadetect.get_fitter({'meas_type': 'admom'}, rng=rng)
+    fitter = lsst_metadetect.get_fitter({'meas_type': 'am'}, rng=rng)
 
     mbexp = util.get_mbexp(exposures)
 
@@ -118,7 +118,7 @@ def test_lsst_scarlet_zero_weights(
     nobj = []
     for do_zero in [False, True]:
         rng = np.random.RandomState(seed)
-        fitter = lsst_metadetect.get_fitter({'meas_type': 'admom'}, rng=rng)
+        fitter = lsst_metadetect.get_fitter({'meas_type': 'am'}, rng=rng)
 
         for do_zero in [False, True]:
 

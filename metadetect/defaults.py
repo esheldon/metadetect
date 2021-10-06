@@ -26,14 +26,14 @@ DEFAULT_STAMP_SIZES = {
     # TODO determine a good value for this. We used 48 in DES
     # which would be 64 for lsst
     'ksigma': 64,
-    'admom': 64,
+    'am': 64,
 }
 
 DEFAULT_THRESH = 5.0
 DEFAULT_DEBLEND = False
 DEFAULT_SUBTRACT_SKY = False
 DEFAULT_PSF_CONFIG = {
-    'model': 'admom',
+    'model': 'am',
     'ntry': 4,
 }
 DEFAULT_METACAL_CONFIG = {
