@@ -892,7 +892,7 @@ def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
     If the centroiding fails, raise CentroidFail
     """
 
-    obs.meta['orig_cen_offset'] = np.nan
+    obs.meta['orig_cen_offset'] = geom.Extent2D(x=-9999, y=-9999)
 
     res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
     if res['flags'] != 0:
