@@ -239,6 +239,7 @@ def _process_source(
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
 
+    box_size = -1
     with subtractor.add_source(source_id):
 
         if show:
@@ -272,7 +273,6 @@ def _process_source(
                 LOG.info('skipping object with all zero weights')
                 ores = {'flags': procflags.ZERO_WEIGHTS}
                 pres = {'flags': procflags.NO_ATTEMPT}
-                box_size = -1
             else:
                 try:
 
@@ -297,7 +297,6 @@ def _process_source(
             # note the context manager properly handles a return
             ores = {'flags': procflags.BBOX_HITS_EDGE}
             pres = {'flags': procflags.NO_ATTEMPT}
-            box_size = -1
 
         res = get_output(
             obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
