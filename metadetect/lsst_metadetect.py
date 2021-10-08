@@ -150,19 +150,36 @@ def detect_deblend_and_measure(
         LOG.info('measuring with scarlet deblended stamps')
         mbexp = util.get_mbexp(exposures)
 
-        sources, detexp = lsst_measure_scarlet.detect_and_deblend(
-            mbexp=mbexp,
-            thresh=thresh,
-        )
-        results = lsst_measure_scarlet.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=stamp_size,
-            rng=rng,
-            show=show,
-        )
+        if False:
+            sources, detexp = lsst_measure_scarlet.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=thresh,
+            )
+            results = lsst_measure_scarlet.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=stamp_size,
+                rng=rng,
+                show=show,
+            )
+        else:
+            from . import lsst_measure_shredder
+            sources, detexp = lsst_measure_shredder.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=thresh,
+            )
+            results = lsst_measure_shredder.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=stamp_size,
+                rng=rng,
+                show=show,
+            )
+
     else:
 
         LOG.info('measuring with blended stamps')
