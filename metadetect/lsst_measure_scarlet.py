@@ -391,7 +391,7 @@ class ModelSubtractor(object):
         of interest, minus models of other objects
 
         with subtractor.add_source(source_id):
-            # do something with subtractor.exp
+            # do something with subtractor.mbexp
 
         Parameters
         ----------
@@ -400,7 +400,7 @@ class ModelSubtractor(object):
 
         Yields
         -------
-        ExposureF, although more typically one uses the .exp attribute
+        ExposureF, although more typically one uses the .mbexp attribute
         """
         if source_id not in self.source_ids:
             raise ValueError(f'source {source_id} is not in the source list')
