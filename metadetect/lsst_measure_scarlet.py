@@ -131,7 +131,6 @@ def detect_and_deblend(
 
 def measure(
     mbexp,
-    original_exposures,
     detexp,
     sources,
     fitter,
@@ -152,11 +151,9 @@ def measure(
     ----------
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
-    original_exposures: list of Exposure s
-        The exposures from which the mbexp was created. We need this
-        to get the wcs
     detexp: Exposure
-        The detection exposure, used for getting ormasks
+        The detection exposure, used for getting ormasks. This is returned
+        by lsst_measure_scarlet.detect_and_deblend
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
@@ -174,8 +171,7 @@ def measure(
     if there were no objects to measure
     """
 
-    # Must get wcs from an original exposure
-    wcs = original_exposures[0].getWcs()
+    wcs = mbexp.singles[0].getWcs()
 
     subtractor = ModelSubtractor(
         mbexp=mbexp,
@@ -251,6 +247,8 @@ def _process_source(
             stamp_mbexp = subtractor.get_stamp(
                 source_id, stamp_size=stamp_size,
             )
+            # make sure wcs is getting propagated
+            assert wcs == stamp_mbexp.singles[0].wcs
 
             if show:
                 ostamp_mbexp = subtractor.get_stamp(
@@ -268,7 +266,7 @@ def _process_source(
             # coadd of the bands
 
             coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
-            obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
+            obs = _extract_obs(subim=coadded_stamp_exp, source=source)
             if obs is None:
                 LOG.info('skipping object with all zero weights')
                 ores = {'flags': procflags.ZERO_WEIGHTS}
@@ -490,7 +488,8 @@ class ModelSubtractor(object):
             mbexp = self.mbexp
 
         exposures = [mbexp[band][bbox] for band in self.filters]
-        return MultibandExposure.fromExposures(self.filters, exposures)
+        # return MultibandExposure.fromExposures(self.filters, exposures)
+        return util.get_mbexp(exposures)
 
     def get_model(self, source_id, stamp_size=None, clip=False):
         """
@@ -538,7 +537,8 @@ class ModelSubtractor(object):
 
             exposures.append(model_exp)
 
-        return MultibandExposure.fromExposures(self.filters, exposures)
+        # return MultibandExposure.fromExposures(self.filters, exposures)
+        return util.get_mbexp(exposures)
 
     def get_full_model(self):
         """
@@ -693,7 +693,7 @@ class ModelSubtractor(object):
                     scratch[band].image[bbox] = 0
 
 
-def _extract_obs(wcs, subim, source):
+def _extract_obs(subim, source):
     """
     convert an exposure object into an ngmix.Observation, including
     a psf observation.
@@ -703,8 +703,6 @@ def _extract_obs(wcs, subim, source):
 
     Parameters
     ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
     imobj: lsst.afw.image.Exposure
         An Exposure object, e.g. ExposureF
     source: lsst.afw.table.SourceRecord
@@ -733,7 +731,6 @@ def _extract_obs(wcs, subim, source):
     peak_location = peak.getCentroid()
 
     jacob = _extract_jacobian(
-        wcs=wcs,
         subim=subim,
         source=source,
         orig_cen=peak_location,
@@ -776,15 +773,13 @@ def _extract_obs(wcs, subim, source):
     return obs
 
 
-def _extract_jacobian(wcs, subim, source, orig_cen):
+def _extract_jacobian(subim, source, orig_cen):
     """
     extract an ngmix.Jacobian from the image object
     and object record
 
     Parameters
     ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
     imobj: lsst.afw.image.Exposure
         An Exposure object, e.g. ExposureF
     source: lsst.afw.table.SourceRecord
@@ -797,6 +792,9 @@ def _extract_jacobian(wcs, subim, source, orig_cen):
     Jacobian: ngmix.Jacobian
         The local jacobian
     """
+
+    # this will still be the wcs for the full exposure
+    wcs = subim.getWcs()
 
     xy0 = subim.getXY0()
     stamp_cen = orig_cen - geom.Extent2D(xy0)
