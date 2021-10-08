@@ -8,8 +8,6 @@ from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
     SingleFrameMeasurementTask,
-    NoiseReplacerConfig,
-    NoiseReplacer,
 )
 import lsst.geom as geom
 from lsst.pex.exceptions import (
