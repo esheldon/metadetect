@@ -241,8 +241,8 @@ def measure(
                     assert shredder.result['flags'] == 0
                     # from pprint import pprint
                     # pprint(shredder.result)
-                    # if True:
-                    #     shredder.plot_comparison()
+                    if show:
+                        shredder.plot_comparison()
 
 
     if len(results) > 0:
