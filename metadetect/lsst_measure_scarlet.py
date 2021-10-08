@@ -189,14 +189,11 @@ def measure(
     band_sources = sources[subtractor.filters[0]]
 
     # this gets everything that is a parent
-    # this only works for Scarlet, not the SDSS deblender
     parents = band_sources.getChildren(0)
 
     for meas_parent_record in parents:
         LOG.debug('-'*70)
         LOG.debug('parent id: %d', meas_parent_record.getId())
-
-        assert meas_parent_record.get('deblend_nChild') != 0
 
         children = band_sources.getChildren(meas_parent_record.getId())
         nchild = len(children)
