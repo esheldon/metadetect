@@ -127,6 +127,51 @@ except ImportError:
         return error
 
 
+def get_noise_replacer(exposure, sources, noise_image=None):
+    """
+    get a noise replacer for the input exposure and source list
+
+    Parameters
+    ----------
+    exposure: lsst.afw.image.ExposureF
+        The exposure data
+    sources: lsst.afw.table.SourceCatalog
+        The sources
+    noise_image: array, optional
+        Optional array of noise
+
+    Returns
+    -------
+    lsst.meas.base.NoiseReplacer
+    """
+    from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
+
+    # Notes for metacal.
+    #
+    # For metacal we should generate a noise image so that the exact noise
+    # field is used for all versions of the metacal images.  The assumption is
+    # that, because these noise data should contain no signal, metacal is not
+    # calibrating it.  Thus it doesn't matter whether or not the noise field is
+    # representative of the full covariance of the true image noise.  Rather by
+    # making the field the same for all metacal images we reduce variance in
+    # the calculation of the response
+
+    noise_replacer_config = NoiseReplacerConfig()
+    footprints = {
+        source.getId(): (source.getParent(), source.getFootprint())
+        for source in sources
+    }
+
+    # This constructor will replace all detected pixels with noise in the
+    # image
+    return NoiseReplacer(
+        noise_replacer_config,
+        exposure=exposure,
+        footprints=footprints,
+        noiseImage=noise_image,
+    )
+
+
 def get_mbexp(exposures):
     """
     convert a list of exposures into an MultibandExposure
@@ -147,6 +192,8 @@ def get_mbexp(exposures):
 
     for exp, sexp in zip(exposures, mbexp.singles):
         sexp.setFilterLabel(exp.getFilterLabel())
+        sexp.setWcs(exp.getWcs())
+
     return mbexp
 
 
@@ -175,8 +222,13 @@ def copy_mbexp(mbexp, clear=False):
         psf = try_clone_psf(mbexp[band].getPsf())
         new_mbexp[band].setPsf(psf)
 
+    for new_exp, exp in zip(new_mbexp.singles, mbexp.singles):
+        new_exp.setFilterLabel(exp.getFilterLabel())
+        new_exp.setWcs(exp.getWcs())
+
     if clear:
         new_mbexp.image.array[:, :, :] = 0
+
     return new_mbexp
 
 
