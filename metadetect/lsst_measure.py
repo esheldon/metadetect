@@ -23,10 +23,7 @@ from . import procflags
 from .defaults import DEFAULT_THRESH
 
 
-def detect_and_deblend(
-    exposure,
-    thresh=DEFAULT_THRESH,
-):
+def detect_and_deblend(exposure, thresh=DEFAULT_THRESH):
     """
     run detection and deblending of peaks.  The SDSS deblender is run in order
     to split peaks, but need not be used to create deblended stamps.
@@ -274,37 +271,6 @@ def get_ormask(source, exposure):
     orig_cen = peak.getI()
     maskval = exposure.mask[orig_cen]
     return maskval
-
-
-def _get_noise_replacer(exposure, sources, noise_image=None):
-    """
-    get a noise replacer for the input exposure and source list
-    """
-
-    # Notes for metacal.
-    #
-    # For metacal we should generate a noise image so that the exact noise
-    # field is used for all versions of the metacal images.  The assumption is
-    # that, because these noise data should contain no signal, metacal is not
-    # calibrating it.  Thus it doesn't matter whether or not the noise field is
-    # representative of the full covariance of the true image noise.  Rather by
-    # making the field the same for all metacal images we reduce variance in
-    # the calculation of the response
-
-    noise_replacer_config = NoiseReplacerConfig()
-    footprints = {
-        source.getId(): (source.getParent(), source.getFootprint())
-        for source in sources
-    }
-
-    # This constructor will replace all detected pixels with noise in the
-    # image
-    return NoiseReplacer(
-        noise_replacer_config,
-        exposure=exposure,
-        footprints=footprints,
-        noiseImage=noise_image,
-    )
 
 
 def _extract_obs(subim, source):
