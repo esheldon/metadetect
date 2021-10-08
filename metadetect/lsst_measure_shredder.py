@@ -244,7 +244,6 @@ def measure(
                     if show:
                         shredder.plot_comparison()
 
-
     if len(results) > 0:
         results = np.hstack(results)
     else:
