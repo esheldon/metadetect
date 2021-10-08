@@ -217,42 +217,6 @@ def measure(
                 if show:
                     vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
 
-        # for source in sources:
-        #
-        #     # we want to insert a parent, which inserts the original pixels
-        #     if source.get('deblend_nChild') == 0:
-        #         continue
-        #
-        #     parent_id = source.getId()
-        #
-        #     LOG.info('-'*70)
-        #     LOG.info('parent id: %d', parent_id)
-        #
-        #     with replacer.sourceInserted(parent_id):
-        #         if show:
-        #             vis.show_mbexp(replacer.mbexp, mess=f'{parent_id} inserted')
-        #
-        #         # not sending stamp_size, getting the footprint bounding box
-        #         stamp = get_stamp(replacer.mbexp, source)
-        #         if show:
-        #             vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
-        #
-        #         children = sources.getChildren(parent_id)
-        #         nchild = len(children)
-        #         LOG.info(
-        #             'processing %d %s',
-        #             nchild, 'children' if nchild > 1 else 'child'
-        #         )
-        #         for child in children:
-        #             cen = child.getCentroid()
-        #             LOG.info('child centroid: %s', cen)
-        #         stop
-        #
-        #         results += _process_sources(
-        #             subtractor=subtractor, sources=children, stamp_size=stamp_size,
-        #             detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
-        #         )
-
     if len(results) > 0:
         results = np.hstack(results)
     else:
