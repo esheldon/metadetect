@@ -156,7 +156,6 @@ def detect_deblend_and_measure(
         )
         results = lsst_measure_scarlet.measure(
             mbexp=mbexp,
-            original_exposures=exposures,
             detexp=detexp,
             sources=sources,
             fitter=fitter,
