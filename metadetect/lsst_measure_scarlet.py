@@ -33,6 +33,7 @@ from .defaults import DEFAULT_THRESH
 from . import procflags
 from .lsst_measure import (
     get_output_struct, get_meas_type, get_ormask, measure_one,
+    MissingDataError,
 )
 import logging
 
@@ -983,19 +984,6 @@ def get_output(obs, wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     output['flags'] = flags
     return output
-
-
-class MissingDataError(Exception):
-    """
-    Some number was out of range
-    """
-
-    def __init__(self, value):
-        super().__init__(value)
-        self.value = value
-
-    def __str__(self):
-        return repr(self.value)
 
 
 class CentroidFail(Exception):
