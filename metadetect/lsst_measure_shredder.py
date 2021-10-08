@@ -222,11 +222,13 @@ def measure(
 
                     shredder = make_shredder(
                         mbexp=stamp, orig_cen=orig_cen, rng=rng,
+                        psf_ngauss=2,
                     )
                     guess = get_shredder_guess(
                         shredder=shredder,
                         sources=children,
                         bbox=stamp.singles[0].getBBox(),
+                        init_model='turb',
                         rng=rng,
                     )
                     # obs = shredder.mbobs[0][0]
@@ -627,7 +629,9 @@ def _extract_obs_for_shredding(exp, jacobian, orig_cen):
     return obs
 
 
-def get_shredder_guess(shredder, sources, bbox, rng, minflux=0.01):
+def get_shredder_guess(
+    shredder, sources, bbox, rng, minflux=0.01, init_model='dev',
+):
     """
     get a guess for the shredder.  Currently we have no guesses for size on
     input, but we do have psf fluxes.  For now guess a multiple of the psf
@@ -671,7 +675,7 @@ def get_shredder_guess(shredder, sources, bbox, rng, minflux=0.01):
         g1, g2 = ur(low=-0.01, high=0.01, size=2)
 
         pars = [v, u, g1, g2, Tguess, flux]
-        gm_model = ngmix.GMixModel(pars, 'dev')
+        gm_model = ngmix.GMixModel(pars, init_model)
 
         LOG.debug('gm model guess')
         LOG.debug('\n%s', gm_model)
