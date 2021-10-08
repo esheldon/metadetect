@@ -98,7 +98,6 @@ def test_lsst_scarlet_smoke(
 
     lsst_measure_scarlet.measure(
         mbexp=mbexp,
-        original_exposures=exposures,
         detexp=detexp,
         sources=sources,
         fitter=fitter,
@@ -148,7 +147,6 @@ def test_lsst_scarlet_zero_weights(
 
             results = lsst_measure_scarlet.measure(
                 mbexp=mbexp,
-                original_exposures=exposures,
                 detexp=detexp,
                 sources=sources,
                 fitter=fitter,
