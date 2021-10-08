@@ -26,12 +26,12 @@ from . import vis
 from . import util
 from .util import MultibandNoiseReplacer, ContextNoiseReplacer
 from .defaults import DEFAULT_THRESH
-from . import procflags
-from .lsst_measure import (
-    get_ormask,
-    measure_one,
-)
-from .lsst_measure_scarlet import get_output
+# from . import procflags
+# from .lsst_measure import (
+#     get_ormask,
+#     measure_one,
+# )
+# from .lsst_measure_scarlet import get_output
 import logging
 
 LOG = logging.getLogger('lsst_measure_shredder')
@@ -133,8 +133,8 @@ def measure(
     detexp,
     sources,
     fitter,
-    rng,
     stamp_size,
+    rng,
     show=False,
 ):
 
@@ -169,7 +169,7 @@ def measure(
     if there were no objects to measure
     """
 
-    wcs = mbexp.singles[0].getWcs()
+    # wcs = mbexp.singles[0].getWcs()
 
     with MultibandNoiseReplacer(mbexp=mbexp, sources=sources) as replacer:
 
@@ -213,9 +213,37 @@ def measure(
                         stamp_size=stamp_size,
                     )
                     stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
+                    if show:
+                        vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
 
-                if show:
-                    vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
+                    # Use center of footprint bbox for reconstructing the psf and
+                    # the calculating the jacobian
+                    orig_cen = children[0].getFootprint().getBBox().getCenter()
+
+                    shredder = make_shredder(
+                        mbexp=stamp, orig_cen=orig_cen, rng=rng,
+                    )
+                    guess = get_shredder_guess(
+                        shredder=shredder,
+                        sources=children,
+                        bbox=stamp.singles[0].getBBox(),
+                        rng=rng,
+                    )
+                    # obs = shredder.mbobs[0][0]
+                    # image = guess.convolve(obs.psf.gmix).make_image(
+                    #     obs.image.shape,
+                    #     jacobian=obs.jacobian,
+                    # )
+                    # vis.mplt.imshow(image)
+                    # vis.mplt.show()
+
+                    shredder.shred(guess)
+                    assert shredder.result['flags'] == 0
+                    # from pprint import pprint
+                    # pprint(shredder.result)
+                    # if True:
+                    #     shredder.plot_comparison()
+
 
     if len(results) > 0:
         results = np.hstack(results)
@@ -332,191 +360,14 @@ def get_bbox(exp, source, stamp_size=None, clip=False):
     return bbox
 
 
-def _process_sources(
-    subtractor, sources, stamp_size, wcs, fitter, detexp, rng, show=False,
-):
-    results = []
-    for source in sources:
-        res = _process_source(
-            subtractor=subtractor, source=source, stamp_size=stamp_size,
-            detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
-        )
-        results.append(res)
-
-    return results
-
-
-def _process_source(
-    subtractor, source, stamp_size, wcs, fitter, detexp, rng, show=False,
-):
-    source_id = source.getId()
-
-    ormask = get_ormask(source=source, exposure=detexp)
-    exp_bbox = detexp.getBBox()
-
-    box_size = -1
-    with subtractor.add_source(source_id):
-
-        if show:
-            vis.show_mbexp(
-                subtractor.mbexp, mess=f'source {source_id} added'
-            )
-
-        try:
-            stamp_mbexp = subtractor.get_stamp(
-                source_id, stamp_size=stamp_size,
-            )
-
-            if show:
-                ostamp_mbexp = subtractor.get_stamp(
-                    source_id, stamp_size=stamp_size, type='original',
-                )
-                model_mbexp = subtractor.get_stamp(
-                    source_id, stamp_size=stamp_size, type='model',
-                )
-                vis.show_three_mbexp(
-                    [ostamp_mbexp, stamp_mbexp, model_mbexp],
-                    labels=['original', 'deblended', 'model']
-                )
-
-            # TODO make codes work with MultibandExposure rather than on a
-            # coadd of the bands
-
-            coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
-            obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
-            if obs is None:
-                LOG.info('skipping object with all zero weights')
-                ores = {'flags': procflags.ZERO_WEIGHTS}
-                pres = {'flags': procflags.NO_ATTEMPT}
-            else:
-                try:
-
-                    # this updates the jacobian center as well as the
-                    # meta['orig_cen'] pixel location in the original image
-
-                    find_and_set_center(obs=obs, rng=rng)
-
-                    pres = measure_one(obs=obs.psf, fitter=fitter)
-                    ores = measure_one(obs=obs, fitter=fitter)
-                    box_size = obs.image.shape[0]
-
-                except CentroidFail as err:
-                    LOG.info(str(err))
-                    ores = {'flags': procflags.CENTROID_FAIL}
-                    pres = {'flags': procflags.NO_ATTEMPT}
-
-        except LengthError as e:
-            # bounding box did not fit. TODO keep output with flag set
-            LOG.info(e)
-
-            # note the context manager properly handles a return
-            ores = {'flags': procflags.BBOX_HITS_EDGE}
-            pres = {'flags': procflags.NO_ATTEMPT}
-
-        res = get_output(
-            obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
-            ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
-        )
-
-    return res
-
-
-def _extract_obs(wcs, subim, source):
+def _extract_jacobian_for_shredding(wcs, orig_cen):
     """
-    convert an exposure object into an ngmix.Observation, including
-    a psf observation.
-
-    the center for the jacobian will be at the peak location, an integer
-    location.
+    extract an ngmix.Jacobian with row0, col0 at 0, 0 from the exposure
 
     Parameters
     ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
-    imobj: lsst.afw.image.Exposure
-        An Exposure object, e.g. ExposureF
-    source: lsst.afw.table.SourceRecord
-        A source record from detection/deblending
-
-    returns
-    --------
-    obs: ngmix.Observation
-        The Observation unless all the weight are zero, in which
-        case None is returned
-    """
-
-    im = subim.image.array
-
-    wt = _extract_weight(subim)
-    if np.all(wt <= 0):
-        return None
-
-    maskobj = subim.mask
-    bmask = maskobj.array
-
-    fp = source.getFootprint()
-    peak = fp.getPeaks()[0]
-
-    # this is a Point2D but at an integer location
-    peak_location = peak.getCentroid()
-
-    jacob = _extract_jacobian(
-        wcs=wcs,
-        subim=subim,
-        source=source,
-        orig_cen=peak_location,
-    )
-
-    psf_im = _extract_psf_image(exposure=subim, orig_cen=peak_location)
-
-    # fake the psf pixel noise
-    psf_err = psf_im.max()*0.0001
-    psf_wt = psf_im*0 + 1.0/psf_err**2
-
-    # use canonical center for the psf
-    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
-    psf_jacob = jacob.copy()
-    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
-
-    # we will have need of the bit names which we can only
-    # get from the mask object
-    # this is sort of monkey patching, but I'm not sure of
-    # a better solution
-    meta = {
-        'maskobj': maskobj,
-        'orig_cen': peak_location,
-    }
-
-    psf_obs = ngmix.Observation(
-        psf_im,
-        weight=psf_wt,
-        jacobian=psf_jacob,
-    )
-    obs = ngmix.Observation(
-        im,
-        weight=wt,
-        bmask=bmask,
-        jacobian=jacob,
-        psf=psf_obs,
-        meta=meta,
-    )
-
-    return obs
-
-
-def _extract_jacobian(wcs, subim, source, orig_cen):
-    """
-    extract an ngmix.Jacobian from the image object
-    and object record
-
-    Parameters
-    ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
-    imobj: lsst.afw.image.Exposure
-        An Exposure object, e.g. ExposureF
-    source: lsst.afw.table.SourceRecord
-        A source record from detection/deblending
+    wcs: WCS object
+        The wcs object for calculating the jacobian
     orig_cen: Point2D
         Location of object in original image
 
@@ -526,13 +377,6 @@ def _extract_jacobian(wcs, subim, source, orig_cen):
         The local jacobian
     """
 
-    xy0 = subim.getXY0()
-    stamp_cen = orig_cen - geom.Extent2D(xy0)
-
-    LOG.debug('cen in subim: %s', stamp_cen)
-    row = stamp_cen.getY()
-    col = stamp_cen.getX()
-
     # we get this at the original center
     linear_wcs = wcs.linearizePixelToSky(
         orig_cen,  # loc in original image
@@ -541,8 +385,8 @@ def _extract_jacobian(wcs, subim, source, orig_cen):
     jmatrix = linear_wcs.getLinear().getMatrix()
 
     jacob = ngmix.Jacobian(
-        row=row,
-        col=col,
+        row=0,
+        col=0,
         dudcol=jmatrix[0, 0],
         dudrow=jmatrix[0, 1],
         dvdcol=jmatrix[1, 0],
@@ -675,3 +519,178 @@ class CentroidFail(Exception):
 
     def __str__(self):
         return repr(self.value)
+
+
+def make_shredder(mbexp, orig_cen, rng, psf_ngauss=5):
+    """
+    Create a Shredder instance from the input MultibandExposure and sources
+
+    Requires converting the mbexp to an ngmix.MultiBandObsList, which results
+    in some data copying
+
+    for the observations we set the origin of the jacobian to 0, 0 to simplify
+    translation from the coord system of the exp
+
+    TODO make psf_ngauss configurable
+    TODO make optional args to the Shredder configurable
+    """
+    from shredder import Shredder
+
+    mbobs = _extract_mbobs_for_shredding(mbexp=mbexp, orig_cen=orig_cen)
+    return Shredder(
+        obs=mbobs,
+        psf_ngauss=psf_ngauss,
+        rng=rng,
+    )
+
+
+def _extract_mbobs_for_shredding(mbexp, orig_cen):
+    mbobs = ngmix.MultiBandObsList()
+
+    jacobian = _extract_jacobian_for_shredding(
+        wcs=mbexp.singles[0].getWcs(), orig_cen=orig_cen,
+    )
+
+    for exp in mbexp.singles:
+        obs = _extract_obs_for_shredding(
+            exp=exp, jacobian=jacobian, orig_cen=orig_cen,
+        )
+
+        obslist = ngmix.ObsList()
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    return mbobs
+
+
+def _extract_obs_for_shredding(exp, jacobian, orig_cen):
+    """
+    convert an exposure object into an ngmix.Observation, including
+    a psf observation.
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.Exposure
+        An Exposure object, e.g. ExposureF
+    jacobian: ngmix.Jacobian
+        The jacobian.  Should have origin at 0, 0
+
+    returns
+    --------
+    obs: ngmix.Observation
+        The Observation unless all the weight are zero, in which
+        case None is returned
+    """
+
+    im = exp.image.array
+
+    wt = _extract_weight(exp)
+    if np.all(wt <= 0):
+        return None
+
+    maskobj = exp.mask
+    bmask = maskobj.array
+
+    psf_im = _extract_psf_image(exposure=exp, orig_cen=orig_cen)
+
+    # fake the psf pixel noise
+    psf_err = psf_im.max()*0.0001
+    psf_wt = psf_im*0 + 1.0/psf_err**2
+
+    # use canonical center for the psf
+    psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+    psf_jacob = jacobian.copy()
+    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    # we will have need of the bit names which we can only
+    # get from the mask object
+    # this is sort of monkey patching, but I'm not sure of
+    # a better solution
+    meta = {
+        'maskobj': maskobj,
+        'orig_cen': orig_cen,
+    }
+
+    psf_obs = ngmix.Observation(
+        psf_im,
+        weight=psf_wt,
+        jacobian=psf_jacob,
+    )
+    obs = ngmix.Observation(
+        im,
+        weight=wt,
+        bmask=bmask,
+        jacobian=jacobian,
+        psf=psf_obs,
+        meta=meta,
+    )
+
+    return obs
+
+
+def get_shredder_guess(shredder, sources, bbox, rng, minflux=0.01):
+    """
+    get a guess for the shredder.  Currently we have no guesses for size on
+    input, but we do have psf fluxes.  For now guess a multiple of the psf
+    size;  in the future we will get T guesses from measurements on the SDSS
+    deblended stamps
+
+    TODO make minflux configurable
+    """
+
+    ur = rng.uniform
+
+    obs = shredder.mbobs[0][0]
+    Tpsf = obs.psf.gmix.get_T()
+    jacobian = obs.jacobian
+
+    corner = bbox.getMin()
+
+    scale = jacobian.scale
+
+    guess_pars = []
+
+    for i, source in enumerate(sources):
+
+        Tguess = Tpsf*ur(low=1.0, high=1.4)
+
+        # location in big bounding box for exposure
+        cen = source.getCentroid()
+        flux = source.getPsfInstFlux()
+
+        if flux < minflux:
+            LOG.debug('flux %g less than minflux %g', flux, minflux)
+            flux = minflux
+
+        # convert to local coords in arcsec
+        v, u = jacobian.get_vu(
+            row=cen.y - corner.y,
+            col=cen.x - corner.x,
+        )
+        LOG.debug('v: %g u: %g', v, u)
+
+        g1, g2 = ur(low=-0.01, high=0.01, size=2)
+
+        pars = [v, u, g1, g2, Tguess, flux]
+        gm_model = ngmix.GMixModel(pars, 'dev')
+
+        LOG.debug('gm model guess')
+        LOG.debug('\n%s', gm_model)
+
+        # perturb the models to avoid degeneracies
+        data = gm_model.get_data()
+        for j in range(data.size):
+            data['p'][j] *= ur(low=0.95, high=1.05)
+
+            fac = 0.01
+            data['row'][j] += ur(low=-fac*scale, high=fac*scale)
+            data['col'][j] += ur(low=-fac*scale, high=fac*scale)
+
+            data['irr'][j] *= ur(low=0.95, high=1.05)
+            data['irc'][j] *= ur(low=0.95, high=1.05)
+            data['icc'][j] *= ur(low=0.95, high=1.05)
+
+        guess_pars += list(gm_model.get_full_pars())
+
+    gm_guess = ngmix.GMix(pars=guess_pars)
+    return gm_guess
