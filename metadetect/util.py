@@ -1,4 +1,5 @@
 import logging
+from contextlib import contextmanager
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -127,9 +128,176 @@ except ImportError:
         return error
 
 
+class ContextNoiseReplacer(object):
+    """
+    noise replacer that works as a context manager
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.Exposure
+        The data
+    sources: lsst.afw.table.SourceCatalog
+        Catalog of sources
+    noise_image: array, optional
+        Optional noise image to use
+
+    Examples
+    --------
+    with ContextNoiseReplacer(exposure=exp, sources=sources) as replacer:
+        # do something
+    """
+
+    def __init__(self, exposure, sources, noise_image=None):
+        from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
+
+        # Notes for metacal.
+        #
+        # For metacal we should generate a noise image so that the exact noise
+        # field is used for all versions of the metacal images.  The assumption is
+        # that, because these noise data should contain no signal, metacal is not
+        # calibrating it.  Thus it doesn't matter whether or not the noise field is
+        # representative of the full covariance of the true image noise.  Rather by
+        # making the field the same for all metacal images we reduce variance in
+        # the calculation of the response
+
+        noise_replacer_config = NoiseReplacerConfig()
+        footprints = {
+            source.getId(): (source.getParent(), source.getFootprint())
+            for source in sources
+        }
+
+        # This constructor will replace all detected pixels with noise in the
+        # image
+        self.replacer = NoiseReplacer(
+            noise_replacer_config,
+            exposure=exposure,
+            footprints=footprints,
+            noiseImage=noise_image,
+        )
+
+    @contextmanager
+    def sourceInserted(self, source_id):
+        """
+        Context manager to insert a source
+
+        with replacer.sourceInserted(source_id):
+            # do something with exposure
+        """
+        self.insertSource(source_id)
+
+        try:
+            yield self
+        finally:
+            self.removeSource(source_id)
+
+    def insertSource(self, source_id):
+        """
+        Insert a source
+        """
+        self.replacer.insertSource(source_id)
+
+    def removeSource(self, source_id):
+        """
+        Remove a source
+        """
+        self.replacer.removeSource(source_id)
+
+    def end(self):
+        self.replacer.end()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.end()
+
+
+class MultibandNoiseReplacer(object):
+    """
+    noise replacer that works on multiple bands
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The data
+    sources: lsst.afw.table.SourceCatalog
+        Catalog of sources
+
+    Examples
+    --------
+    with MultibandNoiseReplacer(mbexp=mbexp, sources=sources) as replacer:
+        with replacer.insertSource(source_id):
+            # do something with exposures
+    """
+    def __init__(self, mbexp, sources):
+        self.mbexp = mbexp
+        self.sources = sources
+        self._set_noise_replacers()
+
+    @contextmanager
+    def sourceInserted(self, source_id):
+        """
+        Context manager to insert a source
+
+        with replacer.sourceInserted(source_id):
+            # do something with exposures
+        """
+        self.insertSource(source_id)
+
+        try:
+            # usually won't use this yielded value
+            yield self.mbexp
+        finally:
+            self.removeSource(source_id)
+
+    def insertSource(self, source_id):
+        """
+        Insert a source
+        """
+        for replacer in self.noise_replacers:
+            replacer.insertSource(source_id)
+
+    def removeSource(self, source_id):
+        """
+        Remove a source
+        """
+        for replacer in self.noise_replacers:
+            replacer.removeSource(source_id)
+
+    def end(self):
+        """
+        end the noise replacment.  Called automatically upon leaving the
+        context manager
+        """
+        # we do nothing because our replacers are context managers
+        # for replacer in self.noise_replacers:
+        #     replacer.end()
+        pass
+
+    def _set_noise_replacers(self):
+
+        self.noise_replacers = []
+
+        for exp in self.mbexp.singles:
+            # this needs to be a regular one because the ContextNoiseReplacer
+            # won't do insertSource outside a context manager
+            replacer = ContextNoiseReplacer(
+                exposure=exp,
+                sources=self.sources,
+                # TODO generate consistent noise image
+            )
+            self.noise_replacers.append(replacer)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.end()
+
+
 def get_noise_replacer(exposure, sources, noise_image=None):
     """
-    get a noise replacer for the input exposure and source list
+    get a regular noise replacer for the input exposure and source list
 
     Parameters
     ----------
