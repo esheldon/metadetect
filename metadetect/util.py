@@ -147,7 +147,7 @@ class ContextNoiseReplacer(object):
         # do something
     """
 
-    def __init__(self, exposure, sources, noise_image=None):
+    def __init__(self, exposure, sources, rng, noise_image=None):
         from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
 
         # Notes for metacal.
@@ -160,7 +160,9 @@ class ContextNoiseReplacer(object):
         # making the field the same for all metacal images we reduce variance in
         # the calculation of the response
 
-        noise_replacer_config = NoiseReplacerConfig()
+        config = NoiseReplacerConfig()
+        config.noiseSeedMultiplier = rng.randint(0, 2**24)
+
         footprints = {
             source.getId(): (source.getParent(), source.getFootprint())
             for source in sources
@@ -169,7 +171,7 @@ class ContextNoiseReplacer(object):
         # This constructor will replace all detected pixels with noise in the
         # image
         self.replacer = NoiseReplacer(
-            noise_replacer_config,
+            config,
             exposure=exposure,
             footprints=footprints,
             noiseImage=noise_image,
@@ -229,9 +231,10 @@ class MultibandNoiseReplacer(object):
         with replacer.insertSource(source_id):
             # do something with exposures
     """
-    def __init__(self, mbexp, sources):
+    def __init__(self, mbexp, sources, rng):
         self.mbexp = mbexp
         self.sources = sources
+        self.rng = rng
         self._set_noise_replacers()
 
     @contextmanager
@@ -284,6 +287,7 @@ class MultibandNoiseReplacer(object):
             replacer = ContextNoiseReplacer(
                 exposure=exp,
                 sources=self.sources,
+                rng=self.rng,
                 # TODO generate consistent noise image
             )
             self.noise_replacers.append(replacer)

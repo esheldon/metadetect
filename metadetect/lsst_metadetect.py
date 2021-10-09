@@ -78,6 +78,37 @@ def run_metadetect(
 
     ormask, bmask = get_ormask_and_bmask(mbobs)
     mfrac = get_mfrac(mbobs)
+    if True:
+        from . import lsst_measure_shredder
+        exposures = [obslist[0].coadd_exp for obslist in mbobs]
+        for exp in exposures:
+            import lsst.geom as geom
+            pos = geom.Point2D(50, 50)
+            psf_image = exp.getPsf().computeKernelImage(pos).array
+            psf = KernelPsf(
+                FixedKernel(
+                    afw_image.ImageD(psf_image.astype(float))
+                )
+            )
+            exp.setPsf(psf)
+
+        mbexp = util.get_mbexp(exposures)
+        sources, detexp = lsst_measure_shredder.detect_and_deblend(
+            mbexp=mbexp,
+            thresh=config['detect']['thresh'],
+            rng=rng,
+        )
+        lsst_measure_shredder.measure(
+            mbexp=mbexp,
+            detexp=detexp,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=config['stamp_size'],
+            rng=rng,
+            show=show,
+        )
+
+        raise RuntimeError('end test')
 
     odict = get_all_metacal(
         metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
@@ -169,6 +200,7 @@ def detect_deblend_and_measure(
             sources, detexp = lsst_measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=thresh,
+                rng=rng,
             )
             results = lsst_measure_shredder.measure(
                 mbexp=mbexp,

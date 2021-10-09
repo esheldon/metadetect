@@ -120,6 +120,13 @@ def compare_mbexp(mbexp, model, stretch=DEFAULT_STRETCH, q=DEFAULT_Q):
         The Q parameter for
         astropy.visualization.lupton_rgb. import AsinhMapping
     """
+
+    if isinstance(model, list):
+        mold = model
+        model = copy_mbexp(mbexp)
+        for iband, band in enumerate(model.filters):
+            model[band].image.array[:, :] = mold[iband]
+
     fig, axs = mplt.subplots(nrows=2, ncols=2, figsize=(12, 12))
     show_mbexp(
         mbexp, stretch=stretch, q=q, mess='data', ax=axs[0, 0], show=False,

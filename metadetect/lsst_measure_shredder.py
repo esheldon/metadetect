@@ -37,7 +37,7 @@ import logging
 LOG = logging.getLogger('lsst_measure_shredder')
 
 
-def detect_and_deblend(mbexp, thresh=DEFAULT_THRESH):
+def detect_and_deblend(mbexp, rng, thresh=DEFAULT_THRESH):
     """
     run detection and deblending of peaks, as well as basic measurments such as
     centroid.  The SDSS deblender is run in order to split peaks.
@@ -116,7 +116,7 @@ def detect_and_deblend(mbexp, thresh=DEFAULT_THRESH):
         sources = result.sources
         deblend_task.run(detexp, sources)
 
-        with ContextNoiseReplacer(detexp, sources) as replacer:
+        with ContextNoiseReplacer(detexp, sources, rng) as replacer:
 
             for source in sources:
                 with replacer.sourceInserted(source.getId()):
@@ -171,7 +171,10 @@ def measure(
 
     # wcs = mbexp.singles[0].getWcs()
 
-    with MultibandNoiseReplacer(mbexp=mbexp, sources=sources) as replacer:
+    if show:
+        vis.show_mbexp(mbexp, mess='Original')
+
+    with MultibandNoiseReplacer(mbexp, sources, rng) as replacer:
 
         if show:
             vis.show_mbexp(replacer.mbexp, mess='All replaced')
@@ -210,7 +213,8 @@ def measure(
 
                     bbox = get_blend_bbox(
                         exp=replacer.mbexp, sources=children,
-                        stamp_size=stamp_size,
+                        # stamp_size=stamp_size,
+                        stamp_size=24,  # this is really an expansion factor
                     )
                     stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
                     if show:
@@ -228,7 +232,8 @@ def measure(
                         shredder=shredder,
                         sources=children,
                         bbox=stamp.singles[0].getBBox(),
-                        init_model='turb',
+                        # init_model='turb',
+                        init_model='exp',
                         rng=rng,
                     )
                     # obs = shredder.mbobs[0][0]
@@ -244,7 +249,8 @@ def measure(
                     # from pprint import pprint
                     # pprint(shredder.result)
                     if show:
-                        shredder.plot_comparison()
+                        vis.compare_mbexp(stamp, shredder.get_model_images())
+                        # shredder.plot_comparison()
 
     if len(results) > 0:
         results = np.hstack(results)
