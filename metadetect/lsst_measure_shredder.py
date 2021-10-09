@@ -211,11 +211,15 @@ def measure(
                         cen = child.getCentroid()
                         LOG.info('child centroid: %s', cen)
 
-                    bbox = get_blend_bbox(
-                        exp=replacer.mbexp, sources=children,
-                        # stamp_size=stamp_size,
-                        stamp_size=24,  # this is really an expansion factor
-                    )
+                    # bbox = get_blend_bbox(
+                    #     exp=replacer.mbexp, sources=children,
+                    #     # stamp_size=stamp_size,
+                    #     stamp_size=24,  # this is really an expansion factor
+                    #     grow_footprint=10,
+                    # )
+                    bbox = parent.getFootprint().getBBox()
+                    growth = 20 # half on each side
+                    bbox.grow(growth // 2)
                     stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
                     if show:
                         vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
@@ -299,7 +303,7 @@ def get_stamp(mbexp, source, stamp_size=None, clip=False, bbox=None):
     return util.get_mbexp(exposures)
 
 
-def get_blend_bbox(exp, sources, stamp_size):
+def get_blend_bbox(exp, sources, stamp_size, grow_footprint=None):
     """
     get a bbox for the blend.  Start with the footprint and grow as
     needed to support the requested stamp size
@@ -307,13 +311,18 @@ def get_blend_bbox(exp, sources, stamp_size):
     bbox = deepcopy(sources[0].getFootprint().getBBox())
 
     for i, source in enumerate(sources):
-        this_bbox = get_bbox(exp=exp, source=source, stamp_size=stamp_size)
+        this_bbox = get_bbox(
+            exp=exp, source=source, stamp_size=stamp_size,
+            grow_footprint=grow_footprint,
+        )
         bbox.include(this_bbox)
 
     return bbox
 
 
-def get_bbox(exp, source, stamp_size=None, clip=False):
+def get_bbox(
+    exp, source, stamp_size=None, clip=False, grow_footprint=None,
+):
     """
     Get a bounding box at the location of the specified source.
 
@@ -338,7 +347,9 @@ def get_bbox(exp, source, stamp_size=None, clip=False):
     lsst.geom.Box2I
     """
 
-    fp = source.getFootprint()
+    fp_bbox = source.getFootprint().getBBox()
+    if grow_footprint is not None:
+        fp_bbox.grow(grow_footprint // 2)
 
     if stamp_size is not None:
         cen = source.getCentroid()
@@ -362,7 +373,7 @@ def get_bbox(exp, source, stamp_size=None, clip=False):
                 )
 
     else:
-        bbox = fp.getBBox()
+        bbox = fp_bbox
 
     return bbox
 
