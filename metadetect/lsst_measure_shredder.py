@@ -193,7 +193,8 @@ def measure(
             LOG.info('parent id: %d', parent_id)
 
             with replacer.sourceInserted(parent_id):
-                if show:
+                if show or parent_id == 35:
+                # if show:
                     vis.show_mbexp(replacer.mbexp, mess=f'{parent_id} inserted')
 
                 children = sources.getChildren(parent_id)
@@ -218,10 +219,11 @@ def measure(
                     #     grow_footprint=10,
                     # )
                     bbox = parent.getFootprint().getBBox()
-                    growth = 20 # half on each side
+                    growth = 10  # half on each side
                     bbox.grow(growth // 2)
                     stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
-                    if show:
+                    # if show:
+                    if show or parent_id == 35:
                         vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
 
                     # Use center of footprint bbox for reconstructing the psf and
@@ -230,7 +232,7 @@ def measure(
 
                     shredder = make_shredder(
                         mbexp=stamp, orig_cen=orig_cen, rng=rng,
-                        psf_ngauss=2,
+                        psf_ngauss=3,
                     )
                     guess = get_shredder_guess(
                         shredder=shredder,
@@ -238,6 +240,7 @@ def measure(
                         bbox=stamp.singles[0].getBBox(),
                         # init_model='turb',
                         init_model='exp',
+                        # init_model='dev',
                         rng=rng,
                     )
                     # obs = shredder.mbobs[0][0]
@@ -252,7 +255,9 @@ def measure(
                     assert shredder.result['flags'] == 0
                     # from pprint import pprint
                     # pprint(shredder.result)
-                    if show:
+                    # if show:
+                    # if show or parent_id == 35:
+                    if show or parent_id == 34:
                         vis.compare_mbexp(stamp, shredder.get_model_images())
                         # shredder.plot_comparison()
 
@@ -558,7 +563,10 @@ def make_shredder(mbexp, orig_cen, rng, psf_ngauss=5):
     return Shredder(
         obs=mbobs,
         psf_ngauss=psf_ngauss,
+        # miniter=10,
+        # flux_miniter=5,
         rng=rng,
+        tol=1.0e-6,
     )
 
 

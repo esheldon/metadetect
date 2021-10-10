@@ -93,22 +93,37 @@ def run_metadetect(
             exp.setPsf(psf)
 
         mbexp = util.get_mbexp(exposures)
-        sources, detexp = lsst_measure_shredder.detect_and_deblend(
-            mbexp=mbexp,
-            thresh=config['detect']['thresh'],
-            rng=rng,
-        )
-        lsst_measure_shredder.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=config['stamp_size'],
-            rng=rng,
-            show=show,
-        )
+        if True:
+            sources, detexp = lsst_measure_scarlet.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=config['detect']['thresh'],
+            )
+            results = lsst_measure_scarlet.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
+                rng=rng,
+                show=show,
+            )
+        else:
+            sources, detexp = lsst_measure_shredder.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=config['detect']['thresh'],
+                rng=rng,
+            )
+            lsst_measure_shredder.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
+                rng=rng,
+                show=show,
+            )
 
-        raise RuntimeError('end test')
+        return None
 
     odict = get_all_metacal(
         metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
