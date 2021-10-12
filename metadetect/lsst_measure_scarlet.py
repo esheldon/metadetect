@@ -402,27 +402,31 @@ class ModelSubtractor(object):
         if source_id not in self.source_ids:
             raise ValueError(f'source {source_id} is not in the source list')
 
+        self._add_or_subtract_source(source_id, 'add')
+        try:
+            yield self.mbexp
+        finally:
+            self._add_or_subtract_source(source_id, 'subtract')
+
+    def _add_or_subtract_source(self, source_id, type):
         mbexp = self.mbexp
         scratch = self.scratch
 
         bbox = self.get_bbox(source_id)
 
-        for band, sources in self.sources.items():
+        for band in self.filters:
             # Because footprints can only be used to *replace* pixels, we do so
             # on a scratch image and then subtract that from the model image
 
             heavy_fp = self.heavies[band][source_id]
             heavy_fp.insert(scratch[band].image)
 
-            mbexp[band].image[bbox] += scratch[band].image[bbox]
-
-        try:
-            # usually won't use this yielded value
-            yield self.mbexp
-        finally:
-            for band in self.filters:
+            if type == 'add':
+                mbexp[band].image[bbox] += scratch[band].image[bbox]
+            else:
                 mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                scratch[band].image[bbox] = 0
+
+            scratch[band].image[bbox] = 0
 
     def get_stamp(
         self, source_id, stamp_size=None, clip=False, type='deblended',
