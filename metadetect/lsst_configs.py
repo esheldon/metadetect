@@ -55,6 +55,9 @@ def _fill_config(config):
         if 'weight' not in config or config['weight'] is None:
             config['weight'] = get_default_weight_config(meas_type)
 
+    assert config['deblender'] in ['scarlet', 'shredder'], (
+        'bad deblender "%s", should be scarlet or shredder' % config['deblender']
+    )
     # note we allow ngmix.metacal.get_all_metacal to do its
     # own verification
     _verify_psf_config(config['psf'])

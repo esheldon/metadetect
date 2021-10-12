@@ -9,7 +9,6 @@ feature requests for DM
       twice the memory
     - clone() copy psfs
 """
-from copy import deepcopy
 import ngmix
 import numpy as np
 import lsst.afw.table as afw_table
@@ -26,14 +25,15 @@ from . import vis
 from . import util
 from .util import MultibandNoiseReplacer, ContextNoiseReplacer
 from .defaults import DEFAULT_THRESH
-# from . import procflags
+from . import procflags
 from .lsst_measure import (
-    measure_one,
+    get_output,
+    get_ormask,
     _get_bbox_fixed,
     _get_padded_sub_image,
     _extract_obs,
 )
-# from .lsst_measure_scarlet import get_output
+from .lsst_measure_scarlet import measure_one, extract_obs
 import logging
 
 LOG = logging.getLogger('lsst_measure_shredder')
@@ -193,7 +193,9 @@ def measure(
     if there were no objects to measure
     """
 
-    # wcs = mbexp.singles[0].getWcs()
+    wcs = detexp.getWcs()
+    exp_bbox = detexp.getBBox()
+    ormasks = get_ormasks(sources=sources, exposure=detexp)
 
     if show:
         vis.show_mbexp(mbexp, mess='Original')
@@ -217,81 +219,163 @@ def measure(
             LOG.info('parent id: %d', parent_id)
 
             with replacer.sourceInserted(parent_id):
-                # if show:
-                if show or parent_id == 35:
+                # if show or parent_id == 17:
+                if show:
                     vis.show_mbexp(replacer.mbexp, mess=f'{parent_id} inserted')
 
                 children = sources.getChildren(parent_id)
                 nchild = len(children)
 
-                if nchild == 0:
-                    LOG.info('no children, processing parent')
-                    cen = parent.getCentroid()
-                    LOG.info('parent centroid: %s', cen)
-                    stamp = get_stamp(replacer.mbexp, parent, stamp_size=stamp_size)
-                else:
-                    LOG.info(f'processing {nchild} child objects')
-                    # we need to deblend it
-                    # for child in children:
-                    #     cen = child.getCentroid()
-                    #     LOG.info('child centroid: %s', cen)
+                try:
+                    if nchild == 0:
+                        LOG.info('no children, processing parent')
+                        parent_mbexp = get_stamp(
+                            replacer.mbexp, parent, stamp_size=stamp_size,
+                        )
 
-                    # bbox = get_blend_bbox(
-                    #     exp=replacer.mbexp, sources=children,
-                    #     # stamp_size=stamp_size,
-                    #     stamp_size=24,  # this is really an expansion factor
-                    #     grow_footprint=10,
-                    # )
-                    fp = parent.getFootprint()
-                    bbox = fp.getBBox()
-                    # import ipdb; ipdb.set_trace()
-                    growth = 10  # half on each side
-                    bbox.grow(growth // 2)
-                    stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
-                    # if show:
-                    if show or parent_id == 35:
-                        vis.show_mbexp(stamp, mess=f'{parent_id} stamp')
+                        res = _process_parent(
+                            parent_mbexp=parent_mbexp, stamp_size=stamp_size,
+                            source=parent,
+                            fitter=fitter, wcs=wcs, exp_bbox=exp_bbox,
+                            ormask=ormasks[parent.getId()],
+                            rng=rng, show=show,
+                        )
+                        these_results = [res]
+                    else:
+                        LOG.info(f'deblending {nchild} child objects')
 
-                    # Use center of footprint bbox for reconstructing the psf and
-                    # the calculating the jacobian
-                    orig_cen = children[0].getFootprint().getBBox().getCenter()
+                        bbox = get_blend_bbox(
+                            exp=replacer.mbexp, sources=children,
+                            stamp_size=stamp_size,
+                            grow_footprint=10,  # 5 on each side
+                        )
+                        blend_mbexp = get_stamp(replacer.mbexp, parent, bbox=bbox)
+                        # if show or parent_id == 17:
+                        if show:
+                            vis.show_mbexp(blend_mbexp, mess=f'{parent_id} stamp')
 
-                    shredder = make_shredder(
-                        mbexp=stamp, orig_cen=orig_cen, rng=rng,
-                        psf_ngauss=3,
-                    )
-                    guess = get_shredder_guess(
-                        shredder=shredder,
-                        sources=children,
-                        Tvals=Tvals,
-                        bbox=stamp.singles[0].getBBox(),
-                        # init_model='turb',
-                        init_model='exp',
-                        # init_model='dev',
-                        rng=rng,
-                    )
-                    # obs = shredder.mbobs[0][0]
-                    # image = guess.convolve(obs.psf.gmix).make_image(
-                    #     obs.image.shape,
-                    #     jacobian=obs.jacobian,
-                    # )
-                    # vis.mplt.imshow(image)
-                    # vis.mplt.show()
+                        these_results = _process_blend(
+                            blend_mbexp=blend_mbexp, children=children,
+                            fitter=fitter, wcs=wcs, exp_bbox=exp_bbox,
+                            ormasks=ormasks,
+                            rng=rng,
+                            stamp_size=stamp_size,
+                            Tvals=Tvals, show=show,
+                        )
 
-                    shredder.shred(guess)
-                    assert shredder.result['flags'] == 0
-                    # from pprint import pprint
-                    # pprint(shredder.result)
-                    # if show:
-                    # if show or parent_id == 34:
-                    if show or parent_id == 35:
-                        vis.compare_mbexp(stamp, shredder.get_model_images())
-                        # shredder.plot_comparison()
+                    results += these_results
+
+                except LengthError as err:
+                    LOG.info('failed to get bbox: %s', err)
+                    # note the context manager properly handles a return
+                    ores = {'flags': procflags.BBOX_HITS_EDGE}
+                    pres = {'flags': procflags.NO_ATTEMPT}
+
+                    if nchild == 0:
+                        tosend = [parent]
+                    else:
+                        tosend = children
+
+                    # fill out the now labeled failures
+                    results += [
+                        get_output(wcs=wcs, fitter=fitter,
+                                   source=source, res=ores, pres=pres,
+                                   ormask=ormasks[source.getId()],
+                                   stamp_size=stamp_size,
+                                   exp_bbox=exp_bbox)
+                        for source in tosend
+                    ]
 
     if len(results) > 0:
         results = np.hstack(results)
     else:
         results = None
+
+    return results
+
+
+def _process_parent(
+    parent_mbexp, stamp_size, source, fitter, wcs, rng, ormask, exp_bbox,
+    show=False,
+):
+    coadded_stamp_exp = util.coadd_exposures(parent_mbexp.singles)
+    obs = extract_obs(subim=coadded_stamp_exp, source=source)
+
+    if obs is None:
+        LOG.info('skipping object with all zero weights')
+        ores = {'flags': procflags.ZERO_WEIGHTS}
+        pres = {'flags': procflags.NO_ATTEMPT}
+    else:
+        pres = measure_one(obs=obs.psf, fitter=fitter)
+        ores = measure_one(obs=obs, fitter=fitter)
+
+    return get_output(
+        wcs=wcs, fitter=fitter,
+        source=source, res=ores, pres=pres,
+        ormask=ormask,
+        stamp_size=stamp_size,
+        exp_bbox=exp_bbox,
+    )
+
+
+def _process_blend(
+    blend_mbexp, children, wcs, rng, Tvals, stamp_size, fitter, ormasks, exp_bbox,
+    show=False,
+):
+    from shredder import ModelSubtractor
+    from shredder.coadding import make_coadd_obs
+
+    nchild = len(children)
+
+    # Use center of footprint bbox for reconstructing the psf and
+    # the calculating the jacobian
+    orig_cen = children[0].getFootprint().getBBox().getCenter()
+
+    shredder = make_shredder(
+        mbexp=blend_mbexp, orig_cen=orig_cen, rng=rng,
+        psf_ngauss=3,
+    )
+    guess = get_shredder_guess(
+        shredder=shredder,
+        sources=children,
+        Tvals=Tvals,
+        bbox=blend_mbexp.singles[0].getBBox(),
+        init_model='exp',
+        rng=rng,
+    )
+
+    shredder.shred(guess)
+    assert shredder.result['flags'] == 0
+
+    if show:
+        vis.compare_mbexp(blend_mbexp, shredder.get_model_images())
+
+    subtractor = ModelSubtractor(shredder, nchild)
+
+    results = []
+    for ichild, child in enumerate(children):
+        with subtractor.add_source(ichild):
+            stamp_mbobs = subtractor.get_object_mbobs(
+                index=ichild, stamp_size=stamp_size,
+            )
+            if show:
+                subtractor.plot_object(
+                    index=ichild, stamp_size=stamp_size,
+                )
+
+            # TODO work multi-band
+            coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
+
+            pres = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
+            ores = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
+
+            res = get_output(
+                wcs=wcs, fitter=fitter, source=child,
+                res=ores, pres=pres,
+                ormask=ormasks[child.getId()],
+                stamp_size=stamp_size, exp_bbox=exp_bbox,
+            )
+            results.append(res)
 
     return results
 
@@ -340,12 +424,14 @@ def get_blend_bbox(exp, sources, stamp_size, grow_footprint=None):
     get a bbox for the blend.  Start with the footprint and grow as
     needed to support the requested stamp size
     """
-    bbox = deepcopy(sources[0].getFootprint().getBBox())
+    # this is a copy
+    bbox = sources[0].getFootprint().getBBox()
+    if grow_footprint is not None:
+        bbox.grow(grow_footprint // 2)
 
     for i, source in enumerate(sources):
         this_bbox = get_bbox(
             exp=exp, source=source, stamp_size=stamp_size,
-            grow_footprint=grow_footprint,
         )
         bbox.include(this_bbox)
 
@@ -353,7 +439,7 @@ def get_blend_bbox(exp, sources, stamp_size, grow_footprint=None):
 
 
 def get_bbox(
-    exp, source, stamp_size=None, clip=False, grow_footprint=None,
+    exp, source, stamp_size=None, clip=False,
 ):
     """
     Get a bounding box at the location of the specified source.
@@ -379,10 +465,6 @@ def get_bbox(
     lsst.geom.Box2I
     """
 
-    fp_bbox = source.getFootprint().getBBox()
-    if grow_footprint is not None:
-        fp_bbox.grow(grow_footprint // 2)
-
     if stamp_size is not None:
         cen = source.getCentroid()
 
@@ -405,7 +487,7 @@ def get_bbox(
                 )
 
     else:
-        bbox = fp_bbox
+        bbox = source.getFootprint().getBBox()
 
     return bbox
 
@@ -705,10 +787,14 @@ def get_shredder_guess(
 
     guess_pars = []
 
+    psf_T = shredder.mbobs[0][0].psf.gmix.get_T()
+    Tmin = 0.5 * psf_T
     for i, source in enumerate(sources):
 
         Tguess = Tpsf*ur(low=1.0, high=1.4)
         Tguess = Tvals[source.getId()]
+        if Tguess < Tmin:
+            Tguess = Tmin
 
         # location in big bounding box for exposure
         cen = source.getCentroid()
@@ -750,3 +836,24 @@ def get_shredder_guess(
 
     gm_guess = ngmix.GMix(pars=guess_pars)
     return gm_guess
+
+
+def get_ormasks(sources, exposure):
+    """
+    get a list of all the ormasks for the sources
+
+    Parameters
+    ----------
+    sources: lsst.afw.table.SourceCatalog
+        The sources
+    exposure: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    list of ormask values
+    """
+    ormasks = {}
+    for source in sources:
+        ormasks[source.getId()] = get_ormask(source=source, exposure=exposure)
+    return ormasks

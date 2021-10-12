@@ -236,7 +236,6 @@ def _process_source(
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
 
-    box_size = -1
     with subtractor.add_source(source_id):
 
         if show:
@@ -267,7 +266,7 @@ def _process_source(
             # coadd of the bands
 
             coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
-            obs = _extract_obs(subim=coadded_stamp_exp, source=source)
+            obs = extract_obs(subim=coadded_stamp_exp, source=source)
             if obs is None:
                 LOG.info('skipping object with all zero weights')
                 ores = {'flags': procflags.ZERO_WEIGHTS}
@@ -282,7 +281,6 @@ def _process_source(
 
                     pres = measure_one(obs=obs.psf, fitter=fitter)
                     ores = measure_one(obs=obs, fitter=fitter)
-                    box_size = obs.image.shape[0]
 
                 except CentroidFail as err:
                     LOG.info(str(err))
@@ -299,7 +297,7 @@ def _process_source(
 
         res = get_output(
             obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
-            ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
+            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
     return res
@@ -694,7 +692,7 @@ class ModelSubtractor(object):
                     scratch[band].image[bbox] = 0
 
 
-def _extract_obs(subim, source):
+def extract_obs(subim, source):
     """
     convert an exposure object into an ngmix.Observation, including
     a psf observation.
@@ -922,7 +920,7 @@ def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
         obs.jacobian.set_cen(row=new_row, col=new_col)
 
 
-def get_output(obs, wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
+def get_output(obs, wcs, fitter, source, res, pres, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -941,7 +939,7 @@ def get_output(obs, wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     skypos = wcs.pixelToSky(orig_cen)
 
-    output['box_size'] = box_size
+    output['stamp_size'] = stamp_size
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
     output['row'] = orig_cen.getY()

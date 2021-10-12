@@ -171,15 +171,15 @@ def measure(
             # are always junk
             pres = {'flags': procflags.NO_ATTEMPT}
             ores = {'flags': procflags.ZERO_WEIGHTS}
-            box_size = -1
+            stamp_size = -1
         else:
             pres = measure_one(obs=obs.psf, fitter=fitter)
             ores = measure_one(obs=obs, fitter=fitter)
-            box_size = obs.image.shape[0]
+            stamp_size = obs.image.shape[0]
 
         res = get_output(
             wcs=exposure.getWcs(), fitter=fitter, source=source, res=ores,
-            pres=pres, ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
+            pres=pres, ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -590,7 +590,7 @@ def _get_dtype(meas_type):
     dt = [
         ('flags', 'i4'),
 
-        ('box_size', 'i4'),
+        ('stamp_size', 'i4'),
         ('row0', 'i4'),  # bbox row start
         ('col0', 'i4'),  # bbox col start
         ('row', 'f4'),  # row in image. Use row0 to get to global pixel coords
@@ -651,7 +651,7 @@ def get_output_struct(meas_type):
     return output
 
 
-def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
+def get_output(wcs, fitter, source, res, pres, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -673,7 +673,7 @@ def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
         peak = source.getFootprint().getPeaks()[0]
         orig_cen = peak.getI()
 
-    output['box_size'] = box_size
+    output['stamp_size'] = stamp_size
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
     output['row'] = orig_cen.getY()

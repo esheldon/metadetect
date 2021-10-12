@@ -53,6 +53,7 @@ DEFAULT_MDET_CONFIG = {
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'deblend': DEFAULT_DEBLEND,
+    'deblender': 'scarlet',
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'weight': None,

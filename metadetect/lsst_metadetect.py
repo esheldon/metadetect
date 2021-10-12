@@ -44,7 +44,6 @@ def run_metadetect(
     mbobs, rng, config=None, show=False,
 ):
     """
-        subtract_sky, etc.
     mbobs: ngmix.MultiBandObsList
         The observations to process
     rng: np.random.RandomState
@@ -78,55 +77,6 @@ def run_metadetect(
 
     ormask, bmask = get_ormask_and_bmask(mbobs)
     mfrac = get_mfrac(mbobs)
-    if True:
-        from . import lsst_measure_shredder
-        exposures = [obslist[0].coadd_exp for obslist in mbobs]
-        for exp in exposures:
-            import lsst.geom as geom
-            pos = geom.Point2D(50, 50)
-            psf_image = exp.getPsf().computeKernelImage(pos).array
-            psf = KernelPsf(
-                FixedKernel(
-                    afw_image.ImageD(psf_image.astype(float))
-                )
-            )
-            exp.setPsf(psf)
-
-        mbexp = util.get_mbexp(exposures)
-        if False:
-            sources, detexp = lsst_measure_scarlet.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-            )
-            results = lsst_measure_scarlet.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                rng=rng,
-                show=show,
-            )
-        else:
-            sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                rng=rng,
-            )
-            lsst_measure_shredder.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                Tvals=Tvals,
-                rng=rng,
-                show=show,
-            )
-
-        return None
 
     odict = get_all_metacal(
         metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
