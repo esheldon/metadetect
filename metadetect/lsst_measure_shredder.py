@@ -232,9 +232,9 @@ def measure(
                 else:
                     LOG.info(f'processing {nchild} child objects')
                     # we need to deblend it
-                    for child in children:
-                        cen = child.getCentroid()
-                        LOG.info('child centroid: %s', cen)
+                    # for child in children:
+                    #     cen = child.getCentroid()
+                    #     LOG.info('child centroid: %s', cen)
 
                     # bbox = get_blend_bbox(
                     #     exp=replacer.mbexp, sources=children,
@@ -242,7 +242,9 @@ def measure(
                     #     stamp_size=24,  # this is really an expansion factor
                     #     grow_footprint=10,
                     # )
-                    bbox = parent.getFootprint().getBBox()
+                    fp = parent.getFootprint()
+                    bbox = fp.getBBox()
+                    # import ipdb; ipdb.set_trace()
                     growth = 10  # half on each side
                     bbox.grow(growth // 2)
                     stamp = get_stamp(replacer.mbexp, parent, bbox=bbox)
