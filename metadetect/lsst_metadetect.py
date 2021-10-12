@@ -93,7 +93,7 @@ def run_metadetect(
             exp.setPsf(psf)
 
         mbexp = util.get_mbexp(exposures)
-        if True:
+        if False:
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
@@ -108,9 +108,11 @@ def run_metadetect(
                 show=show,
             )
         else:
-            sources, detexp = lsst_measure_shredder.detect_and_deblend(
+            sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
                 rng=rng,
             )
             lsst_measure_shredder.measure(
@@ -119,6 +121,7 @@ def run_metadetect(
                 sources=sources,
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
+                Tvals=Tvals,
                 rng=rng,
                 show=show,
             )

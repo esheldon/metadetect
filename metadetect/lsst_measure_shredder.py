@@ -27,17 +27,22 @@ from . import util
 from .util import MultibandNoiseReplacer, ContextNoiseReplacer
 from .defaults import DEFAULT_THRESH
 # from . import procflags
-# from .lsst_measure import (
-#     get_ormask,
-#     measure_one,
-# )
+from .lsst_measure import (
+    measure_one,
+    _get_bbox_fixed,
+    _get_padded_sub_image,
+    _extract_obs,
+)
 # from .lsst_measure_scarlet import get_output
 import logging
 
 LOG = logging.getLogger('lsst_measure_shredder')
 
 
-def detect_and_deblend(mbexp, rng, thresh=DEFAULT_THRESH):
+def detect_and_deblend(
+    mbexp, rng,
+    fitter, stamp_size, thresh=DEFAULT_THRESH,
+):
     """
     run detection and deblending of peaks, as well as basic measurments such as
     centroid.  The SDSS deblender is run in order to split peaks.
@@ -112,6 +117,7 @@ def detect_and_deblend(mbexp, rng, thresh=DEFAULT_THRESH):
 
     result = detection_task.run(table, detexp)
 
+    Tvals = {}
     if result is not None:
         sources = result.sources
         deblend_task.run(detexp, sources)
@@ -122,10 +128,27 @@ def detect_and_deblend(mbexp, rng, thresh=DEFAULT_THRESH):
                 with replacer.sourceInserted(source.getId()):
                     meas_task.callMeasure(source, detexp)
 
+                    stamp_bbox = _get_bbox_fixed(
+                        exposure=detexp,
+                        source=source,
+                        stamp_size=stamp_size,
+                    )
+
+                    subim = _get_padded_sub_image(exposure=detexp, bbox=stamp_bbox)
+
+                    obs = _extract_obs(subim=subim, source=source)
+                    if obs is None:
+                        T = 0.3
+                    else:
+                        ores = measure_one(obs=obs, fitter=fitter)
+                        T = ores['T']
+
+                    Tvals[source.getId()] = T
+
     else:
         sources = []
 
-    return sources, detexp
+    return sources, detexp, Tvals
 
 
 def measure(
@@ -134,6 +157,7 @@ def measure(
     sources,
     fitter,
     stamp_size,
+    Tvals,
     rng,
     show=False,
 ):
@@ -193,8 +217,8 @@ def measure(
             LOG.info('parent id: %d', parent_id)
 
             with replacer.sourceInserted(parent_id):
-                if show or parent_id == 35:
                 # if show:
+                if show or parent_id == 35:
                     vis.show_mbexp(replacer.mbexp, mess=f'{parent_id} inserted')
 
                 children = sources.getChildren(parent_id)
@@ -237,6 +261,7 @@ def measure(
                     guess = get_shredder_guess(
                         shredder=shredder,
                         sources=children,
+                        Tvals=Tvals,
                         bbox=stamp.singles[0].getBBox(),
                         # init_model='turb',
                         init_model='exp',
@@ -256,8 +281,8 @@ def measure(
                     # from pprint import pprint
                     # pprint(shredder.result)
                     # if show:
-                    # if show or parent_id == 35:
-                    if show or parent_id == 34:
+                    # if show or parent_id == 34:
+                    if show or parent_id == 35:
                         vis.compare_mbexp(stamp, shredder.get_model_images())
                         # shredder.plot_comparison()
 
@@ -563,10 +588,10 @@ def make_shredder(mbexp, orig_cen, rng, psf_ngauss=5):
     return Shredder(
         obs=mbobs,
         psf_ngauss=psf_ngauss,
-        # miniter=10,
-        # flux_miniter=5,
+        # miniter=100,
+        # flux_miniter=40,
         rng=rng,
-        tol=1.0e-6,
+        # tol=1.0e-6,
     )
 
 
@@ -655,7 +680,7 @@ def _extract_obs_for_shredding(exp, jacobian, orig_cen):
 
 
 def get_shredder_guess(
-    shredder, sources, bbox, rng, minflux=0.01, init_model='dev',
+    shredder, sources, Tvals, bbox, rng, minflux=0.01, init_model='dev',
 ):
     """
     get a guess for the shredder.  Currently we have no guesses for size on
@@ -681,6 +706,7 @@ def get_shredder_guess(
     for i, source in enumerate(sources):
 
         Tguess = Tpsf*ur(low=1.0, high=1.4)
+        Tguess = Tvals[source.getId()]
 
         # location in big bounding box for exposure
         cen = source.getCentroid()
