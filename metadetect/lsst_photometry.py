@@ -4,6 +4,7 @@ from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
 from .lsst_skysub import subtract_sky_mbobs
 from . import util
+from . import vis
 
 from .lsst_configs import get_config
 from . import lsst_measure
@@ -118,6 +119,9 @@ def run_photometry(mbobs, rng, config=None, show=False):
             exposure=exposure,
             thresh=config['detect']['thresh'],
         )
+
+        if show:
+            vis.show_exp(exposure)
 
         res = lsst_measure.measure(
             exposure=exposure,
