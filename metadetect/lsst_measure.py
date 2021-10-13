@@ -225,6 +225,20 @@ def measure_one(obs, fitter):
     res['g'] = res['e']
     res['g_cov'] = res['e_cov']
 
+    if isinstance(fitter, ngmix.runners.Runner):
+        assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter)
+        gm = res.get_gmix()
+        obs.set_gmix(gm)
+        psf_flux_fitter = ngmix.fitting.PSFFluxFitter(do_psf=False)
+        flux_res = psf_flux_fitter.go(obs)
+        res['flux'] = flux_res['flux']
+        res['flux_err'] = flux_res['flux_err']
+
+        # gm.set_flux(res['flux'])
+        # im = gm.make_image(obs.image.shape, jacobian=obs.jacobian)
+        # from espy import images
+        # images.compare_images(obs.image, im)
+
     return res
 
 
