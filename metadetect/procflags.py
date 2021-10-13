@@ -7,6 +7,7 @@ BAD_BBOX = 2**5
 BBOX_HITS_EDGE = 2**6
 ZERO_WEIGHTS = 2**7
 CENTROID_FAIL = 2**8
+DEBLEND_FAIL = 2**9
 
 NAME_MAP = {
     # no attempt was made to measure this object, usually

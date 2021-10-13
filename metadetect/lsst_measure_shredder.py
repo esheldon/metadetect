@@ -351,37 +351,48 @@ def _process_blend(
     )
 
     shredder.shred(guess)
-    assert shredder.result['flags'] == 0
+    if shredder.result['flags'] != 0:
+        ores = {'flags': procflags.DEBLEND_FAIL}
+        pres = {'flags': procflags.NO_ATTEMPT}
 
-    subtractor = ModelSubtractor(shredder, nchild)
+        results = [
+            get_output(wcs=wcs, fitter=fitter,
+                       source=source, res=ores, pres=pres,
+                       ormask=ormasks[source.getId()],
+                       stamp_size=stamp_size,
+                       exp_bbox=exp_bbox)
+            for source in children
+        ]
+    else:
+        subtractor = ModelSubtractor(shredder, nchild)
 
-    if show:
-        subtractor.plot_comparison()
+        if show:
+            subtractor.plot_comparison()
 
-    results = []
-    for ichild, child in enumerate(children):
-        with subtractor.add_source(ichild):
-            stamp_mbobs = subtractor.get_object_mbobs(
-                index=ichild, stamp_size=stamp_size,
-            )
-            # if show:
-            #     subtractor.plot_object(
-            #         index=ichild, stamp_size=stamp_size,
-            #     )
+        results = []
+        for ichild, child in enumerate(children):
+            with subtractor.add_source(ichild):
+                stamp_mbobs = subtractor.get_object_mbobs(
+                    index=ichild, stamp_size=stamp_size,
+                )
+                # if show:
+                #     subtractor.plot_object(
+                #         index=ichild, stamp_size=stamp_size,
+                #     )
 
-            # TODO work multi-band
-            coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
+                # TODO work multi-band
+                coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
 
-            pres = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
-            ores = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
+                pres = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
+                ores = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
 
-            res = get_output(
-                wcs=wcs, fitter=fitter, source=child,
-                res=ores, pres=pres,
-                ormask=ormasks[child.getId()],
-                stamp_size=stamp_size, exp_bbox=exp_bbox,
-            )
-            results.append(res)
+                res = get_output(
+                    wcs=wcs, fitter=fitter, source=child,
+                    res=ores, pres=pres,
+                    ormask=ormasks[child.getId()],
+                    stamp_size=stamp_size, exp_bbox=exp_bbox,
+                )
+                results.append(res)
 
     return results
 
