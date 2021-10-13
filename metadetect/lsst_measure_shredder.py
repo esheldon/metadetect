@@ -141,7 +141,10 @@ def detect_and_deblend(
                         T = 0.3
                     else:
                         ores = measure_one(obs=obs, fitter=fitter)
-                        T = ores['T']
+                        if 'T' not in ores or np.isnan(ores['T']):
+                            T = 0.3
+                        else:
+                            T = ores['T']
 
                     Tvals[source.getId()] = T
 
