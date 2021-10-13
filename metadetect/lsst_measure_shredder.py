@@ -358,10 +358,10 @@ def _process_blend(
             stamp_mbobs = subtractor.get_object_mbobs(
                 index=ichild, stamp_size=stamp_size,
             )
-            if show:
-                subtractor.plot_object(
-                    index=ichild, stamp_size=stamp_size,
-                )
+            # if show:
+            #     subtractor.plot_object(
+            #         index=ichild, stamp_size=stamp_size,
+            #     )
 
             # TODO work multi-band
             coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
