@@ -404,10 +404,12 @@ class ModelSubtractor(object):
             raise ValueError(f'source {source_id} is not in the source list')
 
         self._add_or_subtract_source(source_id, 'add')
+        # self._add_or_subtract_source_new(source_id, 'add')
         try:
             yield self.mbexp
         finally:
             self._add_or_subtract_source(source_id, 'subtract')
+            # self._add_or_subtract_source_new(source_id, 'subtract')
 
     def _add_or_subtract_source(self, source_id, type):
         mbexp = self.mbexp
@@ -426,6 +428,26 @@ class ModelSubtractor(object):
                 mbexp[band].image[bbox] += scratch[band].image[bbox]
             else:
                 mbexp[band].image[bbox] -= scratch[band].image[bbox]
+
+            scratch[band].image[bbox] = 0
+
+    def _add_or_subtract_source_new(self, source_id, type):
+        mbexp = self.mbexp
+        scratch = self.scratch
+
+        bbox = self.get_bbox(source_id)
+
+        for band in self.filters:
+            # Because footprints can only be used to *replace* pixels, we do so
+            # on a scratch image and then subtract that from the model image
+
+            heavy_fp = self.heavies[band][source_id]
+            heavy_fp.insert(scratch[band].image)
+
+            if type == 'add':
+                heavy_fp.addTo(mbexp[band].image[bbox])
+            else:
+                heavy_fp.subtractFrom(mbexp[band].image[bbox])
 
             scratch[band].image[bbox] = 0
 
