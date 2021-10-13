@@ -294,6 +294,7 @@ def _process_source(
             # note the context manager properly handles a return
             ores = {'flags': procflags.BBOX_HITS_EDGE}
             pres = {'flags': procflags.NO_ATTEMPT}
+            obs = None
 
         res = get_output(
             obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
@@ -938,22 +939,23 @@ def get_output(obs, wcs, fitter, source, res, pres, ormask, stamp_size, exp_bbox
     output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
 
-    orig_cen = obs.meta['orig_cen']
-    cen_offset = obs.meta['orig_cen_offset']
-
-    skypos = wcs.pixelToSky(orig_cen)
-
     output['stamp_size'] = stamp_size
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
-    output['row'] = orig_cen.getY()
-    output['col'] = orig_cen.getX()
 
-    output['row_diff'] = cen_offset.getY()
-    output['col_diff'] = cen_offset.getX()
+    if obs is not None:
+        orig_cen = obs.meta['orig_cen']
+        cen_offset = obs.meta['orig_cen_offset']
+        output['row'] = orig_cen.getY()
+        output['col'] = orig_cen.getX()
 
-    output['ra'] = skypos.getRa().asDegrees()
-    output['dec'] = skypos.getDec().asDegrees()
+        output['row_diff'] = cen_offset.getY()
+        output['col_diff'] = cen_offset.getX()
+
+        skypos = wcs.pixelToSky(orig_cen)
+
+        output['ra'] = skypos.getRa().asDegrees()
+        output['dec'] = skypos.getDec().asDegrees()
 
     output['ormask'] = ormask
 

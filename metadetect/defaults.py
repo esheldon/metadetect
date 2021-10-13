@@ -46,6 +46,11 @@ DEFAULT_DETECT_CONFIG = {
     'thresh': DEFAULT_THRESH,
 }
 
+DEFAULT_SHREDDER_CONFIG = {
+    'psf_ngauss': 3,
+    'init_model': 'exp',
+}
+
 # the weight subconfig and the stamp_size defaults we be filled in
 # programatically based on the measurement_type
 DEFAULT_MDET_CONFIG = {
@@ -54,6 +59,7 @@ DEFAULT_MDET_CONFIG = {
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'deblend': DEFAULT_DEBLEND,
     'deblender': 'scarlet',
+    'shredder_config': None,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'weight': None,

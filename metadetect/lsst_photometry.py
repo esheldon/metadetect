@@ -83,6 +83,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
                 show=show,
             )
         else:
+            shredder_config = config['shredder_config']
             sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
@@ -97,6 +98,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
                 Tvals=Tvals,
+                shredder_config=shredder_config,
                 rng=rng,
                 show=show,
             )

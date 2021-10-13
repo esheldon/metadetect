@@ -158,6 +158,7 @@ def measure(
     fitter,
     stamp_size,
     Tvals,
+    shredder_config,
     rng,
     show=False,
 ):
@@ -184,6 +185,10 @@ def measure(
         Random number generator for the centroid algorithm
     stamp_size: int
         Size for postage stamps
+    Tvals: dict
+        Dict of T values for guesses, keyed by source id
+    shredder_config: dict
+        Dict with psf_ngauss and init_model
     show: bool, optional
         If set to True, show images
 
@@ -261,6 +266,7 @@ def measure(
                             rng=rng,
                             stamp_size=stamp_size,
                             Tvals=Tvals, show=show,
+                            shredder_config=shredder_config,
                         )
 
                     results += these_results
@@ -319,8 +325,8 @@ def _process_parent(
 
 
 def _process_blend(
-    blend_mbexp, children, wcs, rng, Tvals, stamp_size, fitter, ormasks, exp_bbox,
-    show=False,
+    blend_mbexp, children, wcs, rng, Tvals, stamp_size, fitter, ormasks,
+    exp_bbox, shredder_config, show=False,
 ):
     from shredder import ModelSubtractor
     from shredder.coadding import make_coadd_obs
@@ -333,14 +339,14 @@ def _process_blend(
 
     shredder = make_shredder(
         mbexp=blend_mbexp, orig_cen=orig_cen, rng=rng,
-        psf_ngauss=3,
+        psf_ngauss=shredder_config['psf_ngauss'],
     )
     guess = get_shredder_guess(
         shredder=shredder,
         sources=children,
         Tvals=Tvals,
         bbox=blend_mbexp.singles[0].getBBox(),
-        init_model='exp',
+        init_model=shredder_config['init_model'],
         rng=rng,
     )
 
@@ -653,7 +659,7 @@ class CentroidFail(Exception):
         return repr(self.value)
 
 
-def make_shredder(mbexp, orig_cen, rng, psf_ngauss=5):
+def make_shredder(mbexp, orig_cen, rng, psf_ngauss):
     """
     Create a Shredder instance from the input MultibandExposure and sources
 
