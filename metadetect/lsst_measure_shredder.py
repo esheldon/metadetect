@@ -350,7 +350,7 @@ def _process_blend(
     subtractor = ModelSubtractor(shredder, nchild)
 
     if show:
-        subtractor.plot_comparison(titles=['image', 'model'])
+        subtractor.plot_comparison()
 
     results = []
     for ichild, child in enumerate(children):
