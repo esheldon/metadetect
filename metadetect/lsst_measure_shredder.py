@@ -347,10 +347,10 @@ def _process_blend(
     shredder.shred(guess)
     assert shredder.result['flags'] == 0
 
-    if show:
-        vis.compare_mbexp(blend_mbexp, shredder.get_model_images())
-
     subtractor = ModelSubtractor(shredder, nchild)
+
+    if show:
+        subtractor.plot_comparison(titles=['image', 'model'])
 
     results = []
     for ichild, child in enumerate(children):
