@@ -302,7 +302,6 @@ def measure(
                     ]
 
     if len(results) > 0:
-        # results = np.hstack(results)
         results = eu.numpy_util.combine_arrlist(results)
     else:
         results = None
