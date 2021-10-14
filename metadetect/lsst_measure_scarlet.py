@@ -11,6 +11,7 @@ feature requests for DM
 """
 from contextlib import contextmanager
 import ngmix
+import esutil as eu
 import numpy as np
 import lsst.afw.detection as afw_det
 import lsst.afw.table as afw_table
@@ -209,7 +210,7 @@ def measure(
         )
 
     if len(results) > 0:
-        results = np.hstack(results)
+        results = eu.numpy_util.combine_arrlist(results)
     else:
         results = None
 
@@ -1026,16 +1027,22 @@ def get_output_scarlet(
     if mbobs is not None:
         orig_cen = mbobs.meta['orig_cen']
         cen_offset = mbobs.meta['orig_cen_offset']
-        output['row'] = orig_cen.getY()
-        output['col'] = orig_cen.getX()
+    else:
+        # we didn't do the center, need to get the integer peak location
+        peak = source.getFootprint().getPeaks()[0]
+        orig_cen = peak.getCentroid()
+        cen_offset = geom.Point2D(np.nan, np.nan)
 
-        output['row_diff'] = cen_offset.getY()
-        output['col_diff'] = cen_offset.getX()
+    output['row'] = orig_cen.getY()
+    output['col'] = orig_cen.getX()
 
-        skypos = wcs.pixelToSky(orig_cen)
+    output['row_diff'] = cen_offset.getY()
+    output['col_diff'] = cen_offset.getX()
 
-        output['ra'] = skypos.getRa().asDegrees()
-        output['dec'] = skypos.getDec().asDegrees()
+    skypos = wcs.pixelToSky(orig_cen)
+
+    output['ra'] = skypos.getRa().asDegrees()
+    output['dec'] = skypos.getDec().asDegrees()
 
     output['ormask'] = ormask
 
