@@ -11,6 +11,7 @@ feature requests for DM
 """
 import ngmix
 import numpy as np
+import esutil as eu
 import lsst.afw.table as afw_table
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
@@ -301,7 +302,8 @@ def measure(
                     ]
 
     if len(results) > 0:
-        results = np.hstack(results)
+        # results = np.hstack(results)
+        results = eu.numpy_util.combine_arrlist(results)
     else:
         results = None
 
@@ -353,19 +355,25 @@ def _process_blend(
         mbexp=blend_mbexp, orig_cen=orig_cen, rng=rng,
         psf_ngauss=shredder_config['psf_ngauss'],
     )
-    guess = get_shredder_guess(
-        shredder=shredder,
-        sources=children,
-        Tvals=Tvals,
-        bbox=blend_mbexp.singles[0].getBBox(),
-        init_model=shredder_config['init_model'],
-        rng=rng,
-    )
+    if shredder is not None:
+        guess = get_shredder_guess(
+            shredder=shredder,
+            sources=children,
+            Tvals=Tvals,
+            bbox=blend_mbexp.singles[0].getBBox(),
+            init_model=shredder_config['init_model'],
+            rng=rng,
+        )
 
-    shredder.shred(guess)
-    if shredder.result['flags'] != 0:
-        object_res = {'flags': procflags.DEBLEND_FAIL}
-        psf_res = {'flags': procflags.NO_ATTEMPT}
+        shredder.shred(guess)
+
+    if shredder is None or shredder.result['flags'] != 0:
+        if shredder is None:
+            object_res = {'flags': procflags.PSF_FAILURE}
+            psf_res = {'flags': procflags.PSF_FAILURE}
+        else:
+            object_res = {'flags': procflags.DEBLEND_FAIL}
+            psf_res = {'flags': procflags.NO_ATTEMPT}
 
         results = [
             get_output(wcs=wcs, fitter=fitter,
@@ -704,14 +712,20 @@ def make_shredder(mbexp, orig_cen, rng, psf_ngauss):
     from shredder import Shredder
 
     mbobs = _extract_mbobs_for_shredding(mbexp=mbexp, orig_cen=orig_cen)
-    return Shredder(
-        obs=mbobs,
-        psf_ngauss=psf_ngauss,
-        # miniter=100,
-        # flux_miniter=40,
-        rng=rng,
-        # tol=1.0e-6,
-    )
+    try:
+        s = Shredder(
+            obs=mbobs,
+            psf_ngauss=psf_ngauss,
+            # miniter=100,
+            # flux_miniter=40,
+            rng=rng,
+            # tol=1.0e-6,
+        )
+    except ngmix.gexceptions.PSFBootFailure as err:
+        LOG.info(str(err))
+        s = None
+
+    return s
 
 
 def _extract_mbobs_for_shredding(mbexp, orig_cen):
