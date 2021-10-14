@@ -31,9 +31,14 @@ from .lsst_measure import (
     get_ormask,
     _get_bbox_fixed,
     _get_padded_sub_image,
-    _extract_obs,
+    _extract_obs,  # TODO make work with extract_obs from _scarlet?
+    measure_one,
 )
-from .lsst_measure_scarlet import measure_one, extract_obs
+from .lsst_measure_scarlet import (
+    # extract_obs,
+    extract_mbobs,
+)
+from .mbobs_measure import measure_mbobs
 import logging
 
 LOG = logging.getLogger('lsst_measure_shredder')
@@ -134,17 +139,17 @@ def detect_and_deblend(
                         stamp_size=stamp_size,
                     )
 
-                    subim = _get_padded_sub_image(exposure=detexp, bbox=stamp_bbox)
+                    subexp = _get_padded_sub_image(exposure=detexp, bbox=stamp_bbox)
 
-                    obs = _extract_obs(subim=subim, source=source)
+                    obs = _extract_obs(subexp, source)
                     if obs is None:
                         T = 0.3
                     else:
-                        ores = measure_one(obs=obs, fitter=fitter)
-                        if 'T' not in ores or np.isnan(ores['T']):
+                        object_res = measure_one(obs=obs, fitter=fitter)
+                        if 'T' not in object_res or np.isnan(object_res['T']):
                             T = 0.3
                         else:
-                            T = ores['T']
+                            T = object_res['T']
 
                     Tvals[source.getId()] = T
 
@@ -277,8 +282,8 @@ def measure(
                 except LengthError as err:
                     LOG.info('failed to get bbox: %s', err)
                     # note the context manager properly handles a return
-                    ores = {'flags': procflags.BBOX_HITS_EDGE}
-                    pres = {'flags': procflags.NO_ATTEMPT}
+                    object_res = {'flags': procflags.BBOX_HITS_EDGE}
+                    psf_res = {'flags': procflags.NO_ATTEMPT}
 
                     if nchild == 0:
                         tosend = [parent]
@@ -288,7 +293,7 @@ def measure(
                     # fill out the now labeled failures
                     results += [
                         get_output(wcs=wcs, fitter=fitter,
-                                   source=source, res=ores, pres=pres,
+                                   source=source, res=object_res, psf_res=psf_res,
                                    ormask=ormasks[source.getId()],
                                    stamp_size=stamp_size,
                                    exp_bbox=exp_bbox)
@@ -307,20 +312,24 @@ def _process_parent(
     parent_mbexp, stamp_size, source, fitter, wcs, rng, ormask, exp_bbox,
     show=False,
 ):
-    coadded_stamp_exp = util.coadd_exposures(parent_mbexp.singles)
-    obs = extract_obs(subim=coadded_stamp_exp, source=source)
 
-    if obs is None:
+    # coadded_stamp_exp = util.coadd_exposures(parent_mbexp.singles)
+    # obs = extract_obs(exp=coadded_stamp_exp, source=source)
+    parent_mbobs = extract_mbobs(mbexp=parent_mbexp, source=source)
+
+    if parent_mbobs is None:
         LOG.info('skipping object with all zero weights')
-        ores = {'flags': procflags.ZERO_WEIGHTS}
-        pres = {'flags': procflags.NO_ATTEMPT}
+        object_res = {'flags': procflags.ZERO_WEIGHTS}
+        psf_res = {'flags': procflags.NO_ATTEMPT}
     else:
-        pres = measure_one(obs=obs.psf, fitter=fitter)
-        ores = measure_one(obs=obs, fitter=fitter)
+        # TODO implement nonshear_mbobs
+        object_res, psf_res = measure_mbobs(
+            mbobs=parent_mbobs, fitter=fitter, nonshear_mbobs=None,
+        )
 
     return get_output(
         wcs=wcs, fitter=fitter,
-        source=source, res=ores, pres=pres,
+        source=source, res=object_res, psf_res=psf_res,
         ormask=ormask,
         stamp_size=stamp_size,
         exp_bbox=exp_bbox,
@@ -332,7 +341,7 @@ def _process_blend(
     exp_bbox, shredder_config, show=False,
 ):
     from shredder import ModelSubtractor
-    from shredder.coadding import make_coadd_obs
+    # from shredder.coadding import make_coadd_obs
 
     nchild = len(children)
 
@@ -355,12 +364,12 @@ def _process_blend(
 
     shredder.shred(guess)
     if shredder.result['flags'] != 0:
-        ores = {'flags': procflags.DEBLEND_FAIL}
-        pres = {'flags': procflags.NO_ATTEMPT}
+        object_res = {'flags': procflags.DEBLEND_FAIL}
+        psf_res = {'flags': procflags.NO_ATTEMPT}
 
         results = [
             get_output(wcs=wcs, fitter=fitter,
-                       source=source, res=ores, pres=pres,
+                       source=source, res=object_res, psf_res=psf_res,
                        ormask=ormasks[source.getId()],
                        stamp_size=stamp_size,
                        exp_bbox=exp_bbox)
@@ -383,15 +392,21 @@ def _process_blend(
                 #         index=ichild, stamp_size=stamp_size,
                 #     )
 
-                # TODO work multi-band
-                coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
+                # coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
+                #
+                # psf_res = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
+                # object_res = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
 
-                pres = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
-                ores = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
+                # TODO implement nonshear_mbobs
+                object_res, psf_res = measure_mbobs(
+                    mbobs=stamp_mbobs,
+                    fitter=fitter,
+                    nonshear_mbobs=None,
+                )
 
                 res = get_output(
                     wcs=wcs, fitter=fitter, source=child,
-                    res=ores, pres=pres,
+                    res=object_res, psf_res=psf_res,
                     ormask=ormasks[child.getId()],
                     stamp_size=stamp_size, exp_bbox=exp_bbox,
                 )
@@ -548,7 +563,7 @@ def _extract_jacobian_for_shredding(wcs, orig_cen):
     return jacob
 
 
-def _extract_weight(subim):
+def _extract_weight(exp):
     """
     TODO get the estimated sky variance rather than this hack
     TODO should we zero out other bits?
@@ -563,11 +578,11 @@ def _extract_weight(subim):
 
     parameters
     ----------
-    subim: sub exposure object
+    exp: sub exposure object
     """
 
     # TODO implement bit checking
-    var_image = subim.variance.array
+    var_image = exp.variance.array
 
     weight = var_image.copy()
 
