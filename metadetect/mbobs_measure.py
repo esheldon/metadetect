@@ -51,12 +51,14 @@ def measure_mbobs(mbobs, fitter, nonshear_mbobs=None):
     )
 
     res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
+    if 'e' in res:
+        res['g'] = res['e']
+        res['g_cov'] = res['e_cov']
 
     psf_res['numiter'] = 1
-    psf_res['g'] = res['e']
-    psf_res['g_cov'] = res['e_cov']
+    if 'e' in psf_res:
+        psf_res['g'] = res['e']
+        psf_res['g_cov'] = res['e_cov']
 
     return res, psf_res
 
@@ -223,7 +225,7 @@ def _compute_wavg_sep(
     else:
         # something above failed so mark this as a failed object
         res = {'flags': procflags.OBJ_FAILURE}
-        psf_res = {'flags': psf_flags}
+        psf_res = {'flags': procflags.OBJ_FAILURE}
 
     res['band_flux_flags'] = band_flux_flags
     res['band_flux'] = band_flux
