@@ -1024,7 +1024,7 @@ def get_output_scarlet(
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
 
-    if mbobs is not None:
+    if mbobs is not None and 'orig_cen' in mbobs.meta:
         orig_cen = mbobs.meta['orig_cen']
         cen_offset = mbobs.meta['orig_cen_offset']
     else:

@@ -223,14 +223,14 @@ def measure(
 
         parents = sources.getChildren(0)
 
-        LOG.info('found %d parents', len(parents))
+        LOG.debug('found %d parents', len(parents))
 
         for parent in parents:
 
             parent_id = parent.getId()
 
-            LOG.info('-'*70)
-            LOG.info('parent id: %d', parent_id)
+            LOG.debug('-'*70)
+            LOG.debug('parent id: %d', parent_id)
 
             with replacer.sourceInserted(parent_id):
                 # if show or parent_id == 17:
@@ -242,7 +242,7 @@ def measure(
 
                 try:
                     if nchild == 0:
-                        LOG.info('no children, processing parent')
+                        LOG.debug('no children, processing parent')
                         parent_mbexp = get_stamp(
                             replacer.mbexp, parent, stamp_size=stamp_size,
                         )
@@ -256,7 +256,7 @@ def measure(
                         )
                         these_results = [res]
                     else:
-                        LOG.info(f'deblending {nchild} child objects')
+                        LOG.debug(f'deblending {nchild} child objects')
 
                         bbox = get_blend_bbox(
                             exp=replacer.mbexp, sources=children,
