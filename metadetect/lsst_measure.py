@@ -164,22 +164,22 @@ def measure(
         if False:
             vis.show_exp(subim)
 
-        obs = _extract_obs(subim=subim, source=source)
+        obs = _extract_obs(exp=subim, source=source)
         if obs is None:
             # all zero weights for the image this occurs when we have zeros in
             # the weight plane near the edge but the image is non-zero. These
             # are always junk
-            pres = {'flags': procflags.NO_ATTEMPT}
-            ores = {'flags': procflags.ZERO_WEIGHTS}
+            psf_res = {'flags': procflags.NO_ATTEMPT}
+            object_res = {'flags': procflags.ZERO_WEIGHTS}
             stamp_size = -1
         else:
-            pres = measure_one(obs=obs.psf, fitter=fitter)
-            ores = measure_one(obs=obs, fitter=fitter)
+            psf_res = measure_one(obs=obs.psf, fitter=fitter)
+            object_res = measure_one(obs=obs, fitter=fitter)
             stamp_size = obs.image.shape[0]
 
         res = get_output(
-            wcs=exposure.getWcs(), fitter=fitter, source=source, res=ores,
-            pres=pres, ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
+            wcs=exposure.getWcs(), fitter=fitter, source=source, res=object_res,
+            psf_res=psf_res, ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -285,7 +285,7 @@ def get_ormask(source, exposure):
     return maskval
 
 
-def _extract_obs(subim, source):
+def _extract_obs(exp, source):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -304,25 +304,25 @@ def _extract_obs(subim, source):
         case None is returned
     """
 
-    im = subim.image.array
+    im = exp.image.array
     # im = im - _get_bg_from_edges(image=im, border=2)
 
-    wt = _extract_weight(subim)
+    wt = _extract_weight(exp)
     if np.all(wt <= 0):
         return None
 
-    maskobj = subim.mask
+    maskobj = exp.mask
     bmask = maskobj.array
     jacob = _extract_jacobian(
-        subim=subim,
+        exp=exp,
         source=source,
     )
 
     # TODO using fixed kernel for now
     orig_cen = source.getCentroid()
-    # orig_cen = subim.getWcs().skyToPixel(source.getCoord())
+    # orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
-    psf_im = _extract_psf_image(exposure=subim, orig_cen=orig_cen)
+    psf_im = _extract_psf_image(exposure=exp, orig_cen=orig_cen)
 
     # fake the psf pixel noise
     psf_err = psf_im.max()*0.0001
@@ -508,7 +508,7 @@ def _extract_psf_image(exposure, orig_cen):
     return psfim
 
 
-def _extract_weight(subim):
+def _extract_weight(exp):
     """
     TODO get the estimated sky variance rather than this hack
     TODO should we zero out other bits?
@@ -523,11 +523,11 @@ def _extract_weight(subim):
 
     parameters
     ----------
-    subim: sub exposure object
+    exp: sub exposure object
     """
 
     # TODO implement bit checking
-    var_image = subim.variance.array
+    var_image = exp.variance.array
 
     weight = var_image.copy()
 
@@ -545,12 +545,12 @@ def _extract_weight(subim):
     return weight
 
 
-def _extract_jacobian(subim, source):
+def _extract_jacobian(exp, source):
     """
     extract an ngmix.Jacobian from the image object
     and object record
 
-    subim: an image object
+    exp: an image object
         TODO I don't actually know what class this is
     source: an object record
         TODO I don't actually know what class this is
@@ -561,9 +561,9 @@ def _extract_jacobian(subim, source):
         The local jacobian
     """
 
-    xy0 = subim.getXY0()
+    xy0 = exp.getXY0()
 
-    orig_cen = subim.getWcs().skyToPixel(source.getCoord())
+    orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
     if np.isnan(orig_cen.getY()):
         print('falling back on integer location')
@@ -580,7 +580,7 @@ def _extract_jacobian(subim, source):
     row = cen.getY()
     col = cen.getX()
 
-    wcs = subim.getWcs().linearizePixelToSky(
+    wcs = exp.getWcs().linearizePixelToSky(
         orig_cen,
         geom.arcseconds,
     )
@@ -598,7 +598,7 @@ def _extract_jacobian(subim, source):
     return jacob
 
 
-def _get_dtype(meas_type):
+def _get_dtype(meas_type, nband):
 
     n = util.Namer(front=meas_type)
     dt = [
@@ -634,16 +634,27 @@ def _get_dtype(meas_type):
         (n('T'), 'f8'),
         (n('T_err'), 'f8'),
         (n('T_ratio'), 'f8'),
-        (n('flux'), 'f8'),
-        (n('flux_err'), 'f8'),
+        # (n('flux'), 'f8'),
+        # (n('flux_err'), 'f8'),
     ]
+
+    if nband > 1:
+        dt += [
+            (n('band_flux'), 'f8', nband),
+            (n('band_flux_err'), 'f8', nband),
+        ]
+    else:
+        dt += [
+            (n('band_flux'), 'f8'),
+            (n('band_flux_err'), 'f8'),
+        ]
 
     return dt
 
 
-def get_output_struct(meas_type):
+def get_output_struct(meas_type, nband=1):
     n = util.Namer(front=meas_type)
-    dt = _get_dtype(meas_type)
+    dt = _get_dtype(meas_type, nband=nband)
 
     output = np.zeros(1, dtype=dt)
 
@@ -656,8 +667,8 @@ def get_output_struct(meas_type):
     output[n('T_err')] = np.nan
     output[n('g_cov')] = np.nan
     output[n('T_ratio')] = np.nan
-    output[n('flux')] = np.nan
-    output[n('flux_err')] = np.nan
+    output[n('band_flux')] = np.nan
+    output[n('band_flux_err')] = np.nan
 
     output['psf_g'] = np.nan
     output['psf_T'] = np.nan
@@ -665,18 +676,24 @@ def get_output_struct(meas_type):
     return output
 
 
-def get_output(wcs, fitter, source, res, pres, ormask, stamp_size, exp_bbox):
+def get_output(wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
     When data are unavailable, a default value of nan is used
     """
     meas_type = get_meas_type(fitter)
-    output = get_output_struct(meas_type)
+
+    if 'band_flux' in res:
+        nband = len(res['band_flux'])
+    else:
+        nband = 1
+
+    output = get_output_struct(meas_type, nband=nband)
 
     n = util.Namer(front=meas_type)
 
-    output['psf_flags'] = pres['flags']
+    output['psf_flags'] = psf_res['flags']
     output[n('flags')] = res['flags']
 
     orig_cen = source.getCentroid()
@@ -699,31 +716,31 @@ def get_output(wcs, fitter, source, res, pres, ormask, stamp_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
-    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
+    if psf_res['flags'] != 0 and psf_res['flags'] != procflags.NO_ATTEMPT:
         flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
         flags |= res['flags'] | procflags.OBJ_FAILURE
 
-    if pres['flags'] == 0:
-        output['psf_g'] = pres['g']
-        output['psf_T'] = pres['T']
+    if psf_res['flags'] == 0:
+        output['psf_g'] = psf_res['g']
+        output['psf_T'] = psf_res['T']
 
     if 'T' in res:
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
 
-    if 'flux' in res:
-        output[n('flux')] = res['flux']
-        output[n('flux_err')] = res['flux_err']
+    if 'band_flux' in res:
+        output[n('band_flux')] = res['band_flux']
+        output[n('band_flux_err')] = res['band_flux_err']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
         output[n('g')] = res['g']
         output[n('g_cov')] = res['g_cov']
 
-        if pres['flags'] == 0:
-            output[n('T_ratio')] = res['T']/pres['T']
+        if psf_res['flags'] == 0:
+            output[n('T_ratio')] = res['T']/psf_res['T']
 
     output['flags'] = flags
     return output
