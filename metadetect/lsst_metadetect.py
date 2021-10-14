@@ -32,7 +32,6 @@ from . import procflags
 from . import util
 from . import fitting
 
-from .defaults import DEFAULT_THRESH, DEFAULT_DEBLEND, DEFAULT_DEBLENDER
 from .lsst_configs import get_config
 from . import lsst_measure
 from . import lsst_measure_scarlet
@@ -90,10 +89,7 @@ def run_metadetect(
             res = detect_deblend_and_measure(
                 mbobs=mbobs,
                 fitter=fitter,
-                stamp_size=config['stamp_size'],
-                thresh=config['detect']['thresh'],
-                deblend=config['deblend'],
-                deblender=config['deblender'],
+                config=config,
                 rng=rng,
                 show=show,
             )
@@ -113,11 +109,8 @@ def run_metadetect(
 def detect_deblend_and_measure(
     mbobs,
     fitter,
-    stamp_size,
+    config,
     rng,
-    thresh=DEFAULT_THRESH,
-    deblend=DEFAULT_DEBLEND,
-    deblender=DEFAULT_DEBLENDER,
     show=False,
 ):
     """
@@ -149,29 +142,34 @@ def detect_deblend_and_measure(
 
     exposures = [obslist[0].exposure for obslist in mbobs]
 
-    if deblend:
+    if config['deblend']:
         LOG.info('measuring with scarlet deblended stamps')
         mbexp = util.get_mbexp(exposures)
 
-        if deblender == 'scarlet':
+        if config['deblender'] == 'scarlet':
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
-                thresh=thresh,
+                thresh=config['detect']['thresh'],
             )
             results = lsst_measure_scarlet.measure(
                 mbexp=mbexp,
                 detexp=detexp,
                 sources=sources,
                 fitter=fitter,
-                stamp_size=stamp_size,
+                stamp_size=config['stamp_size'],
                 rng=rng,
                 show=show,
             )
         else:
             from . import lsst_measure_shredder
-            sources, detexp = lsst_measure_shredder.detect_and_deblend(
+
+            shredder_config = config['shredder_config']
+
+            sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
-                thresh=thresh,
+                thresh=config['detect']['thresh'],
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
                 rng=rng,
             )
             results = lsst_measure_shredder.measure(
@@ -179,7 +177,9 @@ def detect_deblend_and_measure(
                 detexp=detexp,
                 sources=sources,
                 fitter=fitter,
-                stamp_size=stamp_size,
+                stamp_size=config['stamp_size'],
+                Tvals=Tvals,
+                shredder_config=shredder_config,
                 rng=rng,
                 show=show,
             )
@@ -199,14 +199,14 @@ def detect_deblend_and_measure(
 
         sources, meas_task = lsst_measure.detect_and_deblend(
             exposure=exposure,
-            thresh=thresh,
+            thresh=config['detect']['thresh'],
         )
 
         results = lsst_measure.measure(
             exposure=exposure,
             sources=sources,
             fitter=fitter,
-            stamp_size=stamp_size,
+            stamp_size=config['stamp_size'],
             meas_task=meas_task,
         )
 
@@ -238,7 +238,7 @@ def add_mfrac(config, mfrac, res, obs):
             mfrac=mfrac,
             x=res['col_noshear'],
             y=res['row_noshear'],
-            box_sizes=res['box_size'],
+            box_sizes=res['stamp_size'],
             obs=obs,
             fwhm=config.get('mfrac_fwhm', None),
         )
