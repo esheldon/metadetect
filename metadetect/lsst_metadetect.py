@@ -32,7 +32,7 @@ from . import procflags
 from . import util
 from . import fitting
 
-from .defaults import DEFAULT_THRESH, DEFAULT_DEBLEND
+from .defaults import DEFAULT_THRESH, DEFAULT_DEBLEND, DEFAULT_DEBLENDER
 from .lsst_configs import get_config
 from . import lsst_measure
 from . import lsst_measure_scarlet
@@ -93,6 +93,7 @@ def run_metadetect(
                 stamp_size=config['stamp_size'],
                 thresh=config['detect']['thresh'],
                 deblend=config['deblend'],
+                deblender=config['deblender'],
                 rng=rng,
                 show=show,
             )
@@ -116,6 +117,7 @@ def detect_deblend_and_measure(
     rng,
     thresh=DEFAULT_THRESH,
     deblend=DEFAULT_DEBLEND,
+    deblender=DEFAULT_DEBLENDER,
     show=False,
 ):
     """
@@ -139,6 +141,8 @@ def detect_deblend_and_measure(
         If True, use deblended the postage stamps for each measurement using
         the scarlet deblender.  If not True, the SDSS deblender code is used
         but only to find the sub-peaks in the footprint, and bands are coadded
+    deblender: str
+        Deblender to use, scarlet or shredder
     show: bool, optional
         If set to True, show images during processing
     """
@@ -149,7 +153,7 @@ def detect_deblend_and_measure(
         LOG.info('measuring with scarlet deblended stamps')
         mbexp = util.get_mbexp(exposures)
 
-        if False:
+        if deblender == 'scarlet':
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=thresh,

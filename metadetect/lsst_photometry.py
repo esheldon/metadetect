@@ -28,7 +28,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
         Configuration for the fitter, metacal, psf, detect, deblend, Entries
         in this dict override defaults; see lsst_configs.py
     show: bool, optional
-        if True images will be shown
+        if set to True, images will be shown
 
     Returns
     -------

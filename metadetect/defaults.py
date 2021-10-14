@@ -33,6 +33,7 @@ DEFAULT_STAMP_SIZES = {
 
 DEFAULT_THRESH = 5.0
 DEFAULT_DEBLEND = False
+DEFAULT_DEBLENDER = 'scarlet'
 DEFAULT_SUBTRACT_SKY = False
 DEFAULT_PSF_CONFIG = {
     'model': 'am',
@@ -58,7 +59,7 @@ DEFAULT_MDET_CONFIG = {
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'deblend': DEFAULT_DEBLEND,
-    'deblender': 'scarlet',
+    'deblender': DEFAULT_DEBLENDER,
     'shredder_config': None,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
