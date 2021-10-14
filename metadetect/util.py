@@ -125,3 +125,124 @@ except ImportError:
             var = 0
         error = sqrt(var)
         return error
+
+
+def get_mbexp(exposures):
+    """
+    convert a list of exposures into an MultibandExposure
+
+    Parameters
+    ----------
+    exposures: [lsst.afw.image.ExposureF]
+        List of exposures of type F, D etc.
+
+    Returns
+    -------
+    lsst.afw.image.MultibandExposure
+    """
+    from lsst.afw.image import MultibandExposure
+
+    filters = [exp.getFilterLabel().bandLabel for exp in exposures]
+    mbexp = MultibandExposure.fromExposures(filters, exposures)
+
+    for exp, sexp in zip(exposures, mbexp.singles):
+        sexp.setFilterLabel(exp.getFilterLabel())
+    return mbexp
+
+
+def copy_mbexp(mbexp, clear=False):
+    """
+    copy a MultibandExposure with psfs
+
+    clone() does not copy the psfs
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to copy
+    clear: bool, optional
+        If set to True, clear the data
+
+    Returns
+    -------
+    lsst.afw.image.MultibandExposure
+    """
+
+    new_mbexp = mbexp.clone()
+
+    for band in mbexp.filters:
+        new_mbexp[band].setPsf(mbexp[band].getPsf())
+
+    if clear:
+        new_mbexp.image.array[:, :, :] = 0
+    return new_mbexp
+
+
+def coadd_exposures(exposures):
+    """
+    coadd a set of exposures, assuming they share the same wcs
+
+    Parameters
+    ----------
+    exposures: [lsst.afw.image.Exposure]
+        List of exposures to coadd
+
+    Returns
+    --------
+    lsst.afw.image.ExposureF
+    """
+    import lsst.geom as geom
+    import lsst.afw.image as afw_image
+    from lsst.meas.algorithms import KernelPsf
+    from lsst.afw.math import FixedKernel
+
+    wsum = 0.0
+
+    for i, exp in enumerate(exposures):
+
+        shape = exp.image.array.shape
+
+        ycen, xcen = (np.array(shape) - 1)/2
+        cen = geom.Point2D(xcen, ycen)
+
+        psfobj = exp.getPsf()
+        this_psfim = psfobj.computeKernelImage(cen).array
+
+        if i == 0:
+            coadd_exp = afw_image.ExposureF(exp, deep=True)
+            coadd_exp.image.array[:, :] = 0.0
+
+            weight = np.zeros(shape, dtype='f4')
+
+            psf_im = this_psfim.copy()
+            psf_im[:, :] = 0
+
+        coadd_exp.mask.array |= exp.mask.array
+
+        w = np.where(exp.variance.array > 0)
+        medvar = np.median(exp.variance.array[w])
+        this_weight = 1.0/medvar
+        # print('medvar', medvar)
+
+        coadd_exp.image.array[w] += exp.image.array[w] * this_weight
+        psf_im += this_psfim * this_weight
+
+        weight[w] += 1.0/exp.variance.array[w]
+
+        wsum += this_weight
+
+    fac = 1.0/wsum
+
+    coadd_exp.image.array[:, :] *= fac
+    psf_im *= fac
+
+    coadd_exp.variance.array[:, :] = np.inf
+    w = np.where(weight > 0)
+    coadd_exp.variance.array[w] = 1/weight[w]
+    # print('med coadd exp var:', np.median(coadd_exp.variance.array[w]))
+
+    coadd_psf = KernelPsf(FixedKernel(afw_image.ImageD(psf_im)))
+    coadd_exp.setPsf(coadd_psf)
+    coadd_exp.setWcs(exposures[0].getWcs())
+
+    return coadd_exp

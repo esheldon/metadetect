@@ -4,9 +4,10 @@ test using lsst simple sim
 import numpy as np
 import time
 import pytest
-from copy import deepcopy
 
 import ngmix
+import metadetect
+from .. import procflags
 
 lsst_metadetect = pytest.importorskip(
     'metadetect.lsst_metadetect',
@@ -21,30 +22,8 @@ coadd = pytest.importorskip(
     reason='LSST codes need the descwl_coadd module for testing',
 )
 
-CONFIG = {
-    "model": "wmom",
-    "bmask_flags": 0,
-    "metacal": {
-        "use_noise_image": True,
-        "psf": "fitgauss",
-    },
-    "psf": {
-        "model": "gauss",
-        "lm_pars": {},
-        "ntry": 2,
-    },
-    "weight": {
-        "fwhm": 1.2,
-    },
-    "detect": {
-        "thresh": 10.0,
-    },
-    "subtract_sky": False,
-    'meds': {},
-}
 
-
-def make_lsst_sim(seed):
+def make_lsst_sim(seed, mag=14, hlr=0.5):
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
 
@@ -53,8 +32,8 @@ def make_lsst_sim(seed):
         coadd_dim=coadd_dim,
         buff=20,
         layout='grid',
-        mag=14,
-        hlr=0.5,
+        mag=mag,
+        hlr=hlr,
     )
 
     psf = sim.psfs.make_fixed_psf(psf_type='gauss')
@@ -70,14 +49,16 @@ def make_lsst_sim(seed):
     return sim_data
 
 
-@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
+@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
-def test_lsst_metadetect_smoke(cls, subtract_sky):
+@pytest.mark.parametrize('deblend', [None, False, True])
+def test_lsst_metadetect_smoke(meas_type, subtract_sky, deblend):
     rng = np.random.RandomState(seed=116)
 
     sim_data = make_lsst_sim(116)
 
-    print("")
+    print()
+
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
@@ -95,21 +76,125 @@ def test_lsst_metadetect_smoke(cls, subtract_sky):
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    config = deepcopy(CONFIG)
+    config = {}
+
     if subtract_sky is not None:
         config['subtract_sky'] = subtract_sky
-    md = getattr(lsst_metadetect, cls)(
-        config, coadd_mbobs, rng,
+
+    if meas_type is not None:
+        config['meas_type'] = meas_type
+
+    if deblend is not None:
+        config['deblend'] = deblend
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
     )
-    md.go()
-    res = md.result
+
+    if meas_type is None:
+        gname = 'wmom_g'
+    else:
+        gname = '%s_g' % meas_type
+
+    assert gname in res['noshear'].dtype.names
+
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
 
-@pytest.mark.parametrize('cls', ["LSSTMetadetect", "LSSTDeblendMetadetect"])
-def test_lsst_metadetect_mfrac_ormask(cls):
+def test_lsst_zero_weights():
+    nobj = []
+    for do_zero in [False, True]:
+        sim_data = make_lsst_sim(116)
+        exp = sim_data['band_data']['i'][0]
+
+        if do_zero:
+            exp.variance.array[:, :] = np.inf
+
+        fitter = ngmix.gaussmom.GaussMom(fwhm=1.2)
+        stamp_size = 48
+        results = lsst_metadetect.detect_deblend_and_measure(
+            exposure=exp,
+            fitter=fitter,
+            stamp_size=stamp_size,
+        )
+
+        if do_zero:
+            for res in results:
+                assert res['flags'] == (
+                    procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
+                )
+                assert res['psf_flags'] == procflags.NO_ATTEMPT
+        nobj.append(results.size)
+
+    assert nobj[0] == nobj[1]
+
+
+# add prepsf gauss mom when it is available
+@pytest.mark.parametrize('meas_type', ['ksigma'])
+def test_lsst_metadetect_prepsf_stars(meas_type):
+    seed = 55
+    rng = np.random.RandomState(seed=seed)
+
+    sim_data = make_lsst_sim(seed, hlr=1.0e-4, mag=23)
+
+    print()
+
+    coadd_obs = coadd.make_coadd_obs(
+        exps=sim_data['band_data']['i'],
+        coadd_wcs=sim_data['coadd_wcs'],
+        coadd_bbox=sim_data['coadd_bbox'],
+        psf_dims=sim_data['psf_dims'],
+        remove_poisson=False,
+        rng=rng,
+    )
+
+    # to avoid flagged edges
+    coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+    coadd_mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    obslist.append(coadd_obs)
+    coadd_mbobs.append(obslist)
+
+    config = {}
+
+    if meas_type is not None:
+        config['meas_type'] = meas_type
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
+    )
+
+    if meas_type is None:
+        front = 'wmom'
+    else:
+        front = meas_type
+
+    n = metadetect.util.Namer(front=front)
+
+    data = res['noshear']
+
+    wlowT, = np.where(data['flags'] != 0)
+    wgood, = np.where(data['flags'] == 0)
+
+    # some will have T < 0 due to noise. Expect some with flags set
+    assert wlowT.size > 0
+
+    # TODO need to name these flags in ngmix
+    assert np.all(data[n('flags')][wlowT] == 0x8)
+
+    for field in ['s2n', 'g', 'T_ratio']:
+        assert np.all(np.isnan(data[n(field)][wlowT]))
+
+    for field in data.dtype.names:
+        assert np.all(np.isfinite(data[field][wgood]))
+
+
+def test_lsst_metadetect_mfrac_ormask():
     rng = np.random.RandomState(seed=116)
 
     tm0 = time.time()
@@ -137,14 +222,16 @@ def test_lsst_metadetect_mfrac_ormask(cls):
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        md = getattr(lsst_metadetect, cls)(CONFIG, coadd_mbobs, rng)
-        md.go()
-        res = md.result
+        res = lsst_metadetect.run_metadetect(
+            mbobs=coadd_mbobs, rng=rng,
+        )
+
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.any(res[shear]["flags"] == 0)
+            print(res[shear]["mfrac"].min(), res[shear]["mfrac"].max())
             assert np.all(
-                (res[shear]["mfrac"] > 0.45)
-                & (res[shear]["mfrac"] < 0.55)
+                (res[shear]["mfrac"] > 0.40)
+                & (res[shear]["mfrac"] < 0.60)
             )
             assert np.all(res[shear]["ormask"] == 1)
 

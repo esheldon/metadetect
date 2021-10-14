@@ -2,7 +2,7 @@ import numpy as np
 import logging
 import ngmix
 from ngmix.gexceptions import BootPSFFailure, BootGalFailure
-import esutil as eu
+from ngmix.defaults import DEFAULT_LM_PARS
 from .util import Namer
 from . import procflags
 
@@ -85,7 +85,7 @@ class Moments(FitterBase):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _get_max_psf_size(self, mbobs):
         sizes = []
@@ -485,7 +485,7 @@ class MaxLike(Moments):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _print_result(self, data):
         mess = "        s2n: %g Trat: %g"
@@ -640,7 +640,7 @@ class MaxLikeNgmixv1(Moments):
         if len(datalist) == 0:
             return None
         else:
-            return eu.numpy_util.combine_arrlist(datalist)
+            return np.hstack(datalist)
 
     def _print_result(self, data):
         mess = "        s2n: %g Trat: %g"
@@ -700,7 +700,8 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     if 'coellip' in psf_conf['model']:
         ngauss = get_coellip_ngauss(psf_conf['model'])
         fitter = ngmix.fitting.CoellipFitter(
-            ngauss=ngauss, fit_pars=psf_conf['lm_pars'],
+            ngauss=ngauss,
+            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
         )
         guesser = ngmix.guessers.CoellipPSFGuesser(
             rng=rng, ngauss=ngauss,
@@ -708,9 +709,15 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     elif psf_conf['model'] == 'wmom':
         fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
         guesser = None
+    elif psf_conf['model'] == 'admom':
+        fitter = ngmix.admom.AdmomFitter(rng=rng)
+        guesser = ngmix.guessers.GMixPSFGuesser(
+            rng=rng, ngauss=1, guess_from_moms=True,
+        )
     else:
         fitter = ngmix.fitting.Fitter(
-            model=psf_conf['model'], fit_pars=psf_conf['lm_pars'],
+            model=psf_conf['model'],
+            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
         )
         guesser = ngmix.guessers.SimplePSFGuesser(rng=rng)
 

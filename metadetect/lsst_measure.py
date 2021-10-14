@@ -1,6 +1,5 @@
 import numpy as np
 import ngmix
-import esutil as eu
 
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
@@ -19,119 +18,256 @@ from lsst.pex.exceptions import (
 )
 from .lsst_skysub import determine_and_subtract_sky
 
-import lsst.log
+import logging
 
 from . import util
+from . import vis
 from . import procflags
-from .lsst_mbobs_extractor import MBObsMissingDataError
+from .defaults import (
+    DEFAULT_LOGLEVEL,
+    DEFAULT_THRESH,
+    DEFAULT_DEBLEND,
+)
 
 
-def measure_weighted_moments(
-    mbobs,
-    weight,
-    subtract_sky=False,
-    thresh=10,
-    loglevel='INFO',
+def detect_deblend_and_measure(
+    exposure,
+    fitter,
+    stamp_size,
+    thresh=DEFAULT_THRESH,
+    deblend=DEFAULT_DEBLEND,
+    noise_image=None,
+    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection, deblending and measure weighted moments.  These things are
-    combined because of the way that the deblending works to produce
-    neighbor-subtracted images, where the image is temporarily modified
+    run detection, deblending and measurements.
+
+    Note deblending is always run in a hierarchical detection process, but the
+    user has a choice whether to use deblended postage stamps for the
+    measurement.
 
     Parameters
     ----------
-    mbobs: ngmix.MultiBandObsList
-        The observations, currently single band
-    weight: weight GMix
-        For calculating weighted moments
-    subtract_sky: bool, optional
-        Default False
-    thresh: float, optional
-        Default 10
+    exposure: Exposure
+        Exposure on which to detect and measure
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    thresh: float
+        The detection threshold in units of the sky noise
+    stamp_size: int
+        Size for postage stamps.
+    deblend: bool
+        If True, deblend with the scarlet deblender.  If not True, the
+        SDSS deblender code is used but only to find the sub-peaks
+        in the footprint, and the code is inherently single band
+    noise_image: array
+        A noise image for use by the NoiseReplacer.  If you are running
+        metacal you should send the same image for all metacal images.
     loglevel: str, optional
-        Default 'INFO'
+        Log level for logger in string form
     """
-    assert len(mbobs) == 1, 'one combined band for now'
-    assert len(mbobs[0]) == 1, 'one epoch only'
-
-    exposure = mbobs[0][0].exposure
-    exp_bbox = exposure.getBBox()
 
     sources, meas_task = detect_and_deblend(
         exposure=exposure,
         thresh=thresh,
-        subtract_sky=subtract_sky,
         loglevel=loglevel,
     )
 
-    results = []
+    return measure(
+        exposure=exposure,
+        sources=sources,
+        fitter=fitter,
+        meas_task=meas_task,
+        stamp_size=stamp_size,
+        deblend=deblend,
+        noise_image=noise_image,
+    )
+
+
+def measure(
+    exposure,
+    sources,
+    fitter,
+    stamp_size,
+    meas_task=None,
+    deblend=DEFAULT_DEBLEND,
+    noise_image=None,
+):
+    """
+    run measurements on the input exposure, given the input measurement task,
+    list of sources, and fitter.  These steps are combined because of the way
+    that the deblending works to produce noise-replaced images for neighbors
+    where the image is temporarily modified.
+
+    To avoid data inconsistency in the case an exception is raised, a copy of
+    the exposure is made when using the noise replacer.
+
+    Parameters
+    ----------
+    exposure: Exposure
+        The exposure on which to detect and measure
+    sources: list of sources
+        From a detection task
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+        For calculating moments
+    stamp_size: int
+        Size for postage stamps
+    meas_task: SingleFrameMeasurementTask
+        An optional measurement task; if you already have centeroids etc. for
+        sources, no need to send it.  Otherwise this should do basic things
+        like finding the centroid
+    deblend: bool
+        If True, deblend neighbors.
+    noise_image: array
+        A noise image for use by the NoiseReplacer.  If you are running
+        metacal you should send the same image for all metacal images.
+    """
 
     if len(sources) > 0:
-        # ormasks will be different within the loop below due to the replacer
-        ormasks = _get_ormasks(sources=sources, exposure=exposure)
+        if deblend:
+            # this makes a copy of everything, including pixels
+            exp_send = afw_image.ExposureF(exposure, deep=True)
+        else:
+            exp_send = exposure
 
-        replacer = _get_noise_replacer(exposure=exposure, sources=sources)
-
-        for i, source in enumerate(sources):
-
-            # Skip parent objects where all children are inserted
-            if source.get('deblend_nChild') != 0:
-                continue
-
-            ormask = ormasks[i]
-
-            # This will insert a single source into the image
-            replacer.insertSource(source.getId())
-
-            meas_task.callMeasure(source, exposure)
-
-            # TODO variable box size
-            stamp_bbox = _get_bbox_fixed(
-                exposure=exposure,
-                source=source,
-                stamp_size=48,
-            )
-            subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
-
-            obs = _extract_obs(
-                subim=subim,
-                source=source,
-            )
-
-            pres = _measure_moments(obs=obs.psf, weight=weight)
-            ores = _measure_moments(obs=obs, weight=weight)
-
-            res = _get_output(
-                source=source, res=ores, pres=pres, ormask=ormask,
-                box_size=obs.image.shape[0],
-                exp_bbox=exp_bbox,
-            )
-
-            # Remove object
-            replacer.removeSource(source.getId())
-
-            results.append(res)
-
-        # Insert all objects back into image
-        replacer.end()
-
-    if len(results) > 0:
-        results = eu.numpy_util.combine_arrlist(results)
+        results = _do_measure(
+            exposure=exp_send,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=stamp_size,
+            meas_task=meas_task,
+            deblend=deblend,
+            noise_image=noise_image,
+        )
     else:
         results = None
 
     return results
 
 
-def _get_ormasks(*, sources, exposure):
+def _do_measure(
+    exposure,
+    sources,
+    fitter,
+    stamp_size,
+    meas_task,
+    deblend,
+    noise_image=None,
+    seed=None,
+):
+    """
+    See docs for measure()
+    """
+
+    if deblend:
+        # remove all objects and replace with noise
+        noise_replacer = _get_noise_replacer(
+            exposure=exposure, sources=sources, noise_image=noise_image,
+        )
+    else:
+        noise_replacer = None
+
+    exp_bbox = exposure.getBBox()
+    results = []
+
+    # ormasks will be different within the loop below due to the replacer
+    ormasks = get_ormasks(sources=sources, exposure=exposure)
+
+    for i, source in enumerate(sources):
+
+        # Skip parent objects where all children are inserted
+        if source.get('deblend_nChild') != 0:
+            continue
+
+        ormask = ormasks[i]
+
+        if deblend:
+            # This will insert a single source into the image
+            noise_replacer.insertSource(source.getId())
+
+        if meas_task is not None:
+            # results are stored in the source
+            meas_task.callMeasure(source, exposure)
+
+        # TODO variable box size?
+        stamp_bbox = _get_bbox_fixed(
+            exposure=exposure,
+            source=source,
+            stamp_size=stamp_size,
+        )
+        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
+        if False:
+            vis.show_exp(subim)
+
+        obs = _extract_obs(subim=subim, source=source)
+        if obs is None:
+            # all zero weights for the image this occurs when we have zeros in
+            # the weight plane near the edge but the image is non-zero. These
+            # are always junk
+            pres = {'flags': procflags.NO_ATTEMPT}
+            ores = {'flags': procflags.ZERO_WEIGHTS}
+            box_size = -1
+        else:
+            pres = _measure_one(obs=obs.psf, fitter=fitter)
+            ores = _measure_one(obs=obs, fitter=fitter)
+            box_size = obs.image.shape[0]
+
+        res = get_output(
+            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
+            box_size=box_size, exp_bbox=exp_bbox,
+        )
+
+        if deblend:
+            # Remove object
+            noise_replacer.removeSource(source.getId())
+
+        results.append(res)
+
+    if deblend:
+        # put exposure back as it was input
+        noise_replacer.end()
+
+    if len(results) > 0:
+        results = np.hstack(results)
+    else:
+        results = None
+
+    return results
+
+
+def _measure_one(obs, fitter):
+    """
+    run a measurement on an input observation
+    """
+    from ngmix.ksigmamom import KSigmaMom
+
+    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
+        res = fitter.go(obs, no_psf=True)
+    else:
+        res = fitter.go(obs)
+
+    if res['flags'] != 0:
+        return res
+
+    res['numiter'] = 1
+    res['g'] = res['e']
+    res['g_cov'] = res['e_cov']
+
+    return res
+
+
+def get_ormasks(*, sources, exposure):
+    """
+    get a list of all the ormasks for the sources
+    """
     ormasks = []
     for source in sources:
-        ormask = _get_ormask(source=source, exposure=exposure)
+        ormask = get_ormask(source=source, exposure=exposure)
         ormasks.append(ormask)
     return ormasks
 
 
-def _get_ormask(*, source, exposure):
+def get_ormask(*, source, exposure):
     """
     get ormask based on original peak position
     """
@@ -143,30 +279,30 @@ def _get_ormask(*, source, exposure):
 
 def detect_and_deblend(
     exposure,
-    thresh=10,
-    subtract_sky=False,
-    loglevel='INFO',
-    niter=2,
+    thresh=DEFAULT_THRESH,
+    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
-    run detection and deblending, and optionally sky determination
-    and subtraction
+    run detection and deblending of peaks
+
+    we must combine detection and deblending in the same function because the
+    schema gets modified in place, which means we must construct the deblend
+    task at the same time as the detect task
 
     Parameters
     ----------
     exposure: Exposure
         The exposure to process
     thresh: float, optional
-        Default 10
-    subtract_sky: bool, optional
-        Default False
-    niter: int, optional
-        Number of iterations for detection and sky subtraction.
-        Must be >= 1. Default is 2 which is recommended.
+        The detection threshold in units of the sky noise
     loglevel: str, optional
-        Default 'INFO'
+        Log level for logger in string form
+
+    Returns
+    -------
+    sources, meas_task
+        The sources and the measurement task
     """
-    loglevel = loglevel.upper()
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -197,34 +333,30 @@ def detect_and_deblend(
         schema=schema,
     )
 
-    # setup detection config
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
     detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(config=detection_config)
-    detection_task.log.setLevel(getattr(lsst.log, loglevel))
+    detection_task = SourceDetectionTask(
+        # TODO should we send schema?
+        config=detection_config,
+    )
+    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
 
-    deblend_config = SourceDeblendConfig()
-    deblend_task = SourceDeblendTask(config=deblend_config, schema=schema)
-    deblend_task.log.setLevel(getattr(lsst.log, loglevel))
+    # this must occur directly before any tasks are run because schema is
+    # modified in place by tasks, and the constructor does a check that
+    # fails if we construct it separately
 
-    # Detect objects
+    deblend_task = SourceDeblendTask(
+        config=SourceDeblendConfig(),
+        schema=schema,
+    )
+    deblend_task.log.setLevel(getattr(logging, loglevel.upper()))
+
     table = afw_table.SourceTable.make(schema)
-
-    if subtract_sky:
-        result = iterate_detection_and_skysub(
-            exposure=exposure,
-            detection_task=detection_task,
-            table=table,
-            niter=niter,
-        )
-    else:
-        result = detection_task.run(table, exposure)
+    result = detection_task.run(table, exposure)
 
     if result is not None:
         sources = result.sources
-
-        # run the deblender
         deblend_task.run(exposure, sources)
     else:
         sources = []
@@ -233,7 +365,7 @@ def detect_and_deblend(
 
 
 def iterate_detection_and_skysub(
-    exposure, detection_task, table, niter=2,
+    exposure, thresh, niter=2, loglevel=DEFAULT_LOGLEVEL,
 ):
     """
     Iterate detection and sky subtraction
@@ -242,10 +374,8 @@ def iterate_detection_and_skysub(
     ----------
     exposure: Exposure
         The exposure to process
-    detection_task: SourceDetectionTask
-        The detection task from lsst.meas.algorithms
-    table: afw_table.SourceTable
-        The source table to be filled
+    thresh: float
+        threshold for detection
     niter: int, optional
         Number of iterations for detection and sky subtraction.
         Must be >= 1. Default is 2 which is recommended.
@@ -258,6 +388,15 @@ def iterate_detection_and_skysub(
     from lsst.pipe.base.task import TaskError
     if niter < 1:
         raise ValueError(f'niter {niter} is less than 1')
+
+    schema = afw_table.SourceTable.makeMinimalSchema()
+    detection_config = SourceDetectionConfig()
+    detection_config.reEstimateBackground = False
+    detection_config.thresholdValue = thresh
+    detection_task = SourceDetectionTask(config=detection_config)
+    detection_task.log.setLevel(getattr(logging, loglevel.upper()))
+
+    table = afw_table.SourceTable.make(schema)
 
     # keep a running sum of each sky that was subtracted
     try:
@@ -284,7 +423,47 @@ def iterate_detection_and_skysub(
     return result
 
 
-def _get_noise_replacer(*, exposure, sources):
+def subtract_sky_mbobs(mbobs, thresh):
+    """
+    subtract sky
+
+    We combine these because both involve resetting the image
+    and noise image
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations to sky subtract
+    thresh: float
+        Threshold for detection
+    """
+    for obslist in mbobs:
+        for obs in obslist:
+            exp = obs.coadd_exp
+
+            _ = iterate_detection_and_skysub(
+                exposure=exp,
+                thresh=thresh,
+            )
+
+            obs.image = exp.image.array
+
+
+def _get_noise_replacer(exposure, sources, noise_image=None):
+    """
+    get a noise replacer for the input exposure and source list
+    """
+
+    # Notes for metacal.
+    #
+    # For metacal we should generate a noise image so that the exact noise
+    # field is used for all versions of the metacal images.  The assumption is
+    # that, because these noise data should contain no signal, metacal is not
+    # calibrating it.  Thus it doesn't matter whether or not the noise field is
+    # representative of the full covariance of the true image noise.  Rather by
+    # making the field the same for all metacal images we reduce variance in
+    # the calculation of the response
+
     noise_replacer_config = NoiseReplacerConfig()
     footprints = {
         source.getId(): (source.getParent(), source.getFootprint())
@@ -297,10 +476,11 @@ def _get_noise_replacer(*, exposure, sources):
         noise_replacer_config,
         exposure=exposure,
         footprints=footprints,
+        noiseImage=noise_image,
     )
 
 
-def _extract_obs(*, subim, source):
+def _extract_obs(subim, source):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -315,13 +495,17 @@ def _extract_obs(*, subim, source):
     returns
     --------
     obs: ngmix.Observation
-        The Observation, including
+        The Observation unless all the weight are zero, in which
+        case None is returned
     """
 
     im = subim.image.array
     # im = im - _get_bg_from_edges(image=im, border=2)
 
     wt = _extract_weight(subim)
+    if np.all(wt <= 0):
+        return None
+
     maskobj = subim.mask
     bmask = maskobj.array
     jacob = _extract_jacobian(
@@ -367,7 +551,10 @@ def _extract_obs(*, subim, source):
     return obs
 
 
-def _get_bbox_fixed(*, exposure, source, stamp_size):
+def _get_bbox_fixed(exposure, source, stamp_size):
+    """
+    get a fixed sized bounding box
+    """
     radius = stamp_size/2
     radius = int(np.ceil(radius))
 
@@ -379,12 +566,16 @@ def _get_bbox_fixed(*, exposure, source, stamp_size):
     return bbox
 
 
-def _get_bbox_calc(*,
-                   exposure,
-                   source,
-                   min_stamp_size,
-                   max_stamp_size,
-                   sigma_factor):
+def _get_bbox_calc(
+    exposure,
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
+    """
+    get a bounding box with size based on measurements
+    """
     try:
         stamp_radius, stamp_size = _compute_stamp_size(
             source=source,
@@ -397,18 +588,18 @@ def _get_bbox_calc(*,
             wcs=exposure.getWcs(),
             radius=stamp_radius,
         )
-    # except LogicError as err:
     except LogicError:
         bbox = source.getFootprint().getBBox()
 
     return bbox
 
 
-def _compute_stamp_size(*,
-                        source,
-                        min_stamp_size,
-                        max_stamp_size,
-                        sigma_factor):
+def _compute_stamp_size(
+    source,
+    min_stamp_size,
+    max_stamp_size,
+    sigma_factor,
+):
     """
     calculate a stamp radius for the input object, to
     be used for constructing postage stamp sizes
@@ -436,7 +627,7 @@ def _compute_stamp_size(*,
     return radius, stamp_size
 
 
-def _project_box(*, source, wcs, radius):
+def _project_box(source, wcs, radius):
     """
     create a box for the input source
     """
@@ -447,7 +638,7 @@ def _project_box(*, source, wcs, radius):
     return box
 
 
-def _get_padded_sub_image(*, exposure, bbox):
+def _get_padded_sub_image(exposure, bbox):
     """
     extract a sub-image, padded out when it is not contained
     """
@@ -487,7 +678,7 @@ def _get_padded_sub_image(*, exposure, bbox):
     return result
 
 
-def _extract_psf_image(*, exposure, orig_cen):
+def _extract_psf_image(exposure, orig_cen):
     """
     get the psf associated with this image
 
@@ -502,7 +693,7 @@ def _extract_psf_image(*, exposure, orig_cen):
         psfobj = exposure.getPsf()
         psfim = psfobj.computeKernelImage(orig_cen).array
     except InvalidParameterError:
-        raise MBObsMissingDataError("could not reconstruct PSF")
+        raise MissingDataError("could not reconstruct PSF")
 
     psfim = np.array(psfim, dtype='f4', copy=False)
 
@@ -546,40 +737,8 @@ def _extract_weight(subim):
 
     return weight
 
-    """
-    # TODO set the ignor bits
-    bitnames_to_ignore = self.config['stamps']['bits_to_ignore_for_weight']
 
-    bits_to_ignore = util.get_ored_bits(maskobj, bitnames_to_ignore)
-
-    maskobj = subim.mask
-    mask = maskobj.array
-    wuse = np.where(
-        (var_image > 0) &
-        ((mask & bits_to_ignore) == 0)
-    )
-
-    if wuse[0].size > 0:
-        medvar = np.median(var_image[wuse])
-        weight[:, :] = 1.0/medvar
-    else:
-        self.log.debug('    weight is all zero, found '
-                       'none that passed cuts')
-        # _print_bits(maskobj, bitnames_to_ignore)
-
-    bitnames_to_null = self.config['stamps']['bits_to_null']
-    if len(bitnames_to_null) > 0:
-        bits_to_null = util.get_ored_bits(maskobj, bitnames_to_null)
-        wnull = np.where((mask & bits_to_null) != 0)
-        if wnull[0].size > 0:
-            self.log.debug('    nulling %d in weight' % wnull[0].size)
-            weight[wnull] = 0.0
-
-    return weight
-    """
-
-
-def _extract_jacobian(*, subim, source):
+def _extract_jacobian(subim, source):
     """
     extract an ngmix.Jacobian from the image object
     and object record
@@ -632,24 +791,9 @@ def _extract_jacobian(*, subim, source):
     return jacob
 
 
-def _measure_moments(*, obs, weight):
-    res = weight.get_weighted_moments(obs=obs, maxrad=1.e9)
+def _get_dtype(meas_type):
 
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
-
-    return res
-
-
-def _get_dtype():
-
-    model = 'wmom'
-    npars = 6
-    n = util.Namer(front=model)
+    n = util.Namer(front=meas_type)
     dt = [
         ('flags', 'i4'),
 
@@ -674,26 +818,52 @@ def _get_dtype():
 
         (n('flags'), 'i4'),
         (n('s2n'), 'f8'),
-        (n('pars'), 'f8', npars),
         (n('g'), 'f8', 2),
         (n('g_cov'), 'f8', (2, 2)),
         (n('T'), 'f8'),
         (n('T_err'), 'f8'),
         (n('T_ratio'), 'f8'),
+        (n('flux'), 'f8'),
+        (n('flux_err'), 'f8'),
     ]
 
     return dt
 
 
-def _get_output(*, source, res, pres, ormask, box_size, exp_bbox):
+def _get_struct(meas_type):
+    n = util.Namer(front=meas_type)
+    dt = _get_dtype(meas_type)
 
-    model = 'wmom'
-    n = util.Namer(front=model)
-
-    dt = _get_dtype()
     output = np.zeros(1, dtype=dt)
 
-    output['psfrec_flags'] = procflags.NO_ATTEMPT
+    output['flags'] = procflags.NO_ATTEMPT
+    output['psf_flags'] = procflags.NO_ATTEMPT
+
+    output[n('s2n')] = np.nan
+    output[n('g')] = np.nan
+    output[n('T')] = np.nan
+    output[n('T_err')] = np.nan
+    output[n('g_cov')] = np.nan
+    output[n('T_ratio')] = np.nan
+    output[n('flux')] = np.nan
+    output[n('flux_err')] = np.nan
+
+    output['psf_g'] = np.nan
+    output['psf_T'] = np.nan
+
+    return output
+
+
+def get_output(fitter, source, res, pres, ormask, box_size, exp_bbox):
+    """
+    get the output structure, copying in results
+
+    When data are unavailable, a default value of nan is used
+    """
+    meas_type = _get_meas_type(fitter)
+    output = _get_struct(meas_type)
+
+    n = util.Namer(front=meas_type)
 
     output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
@@ -712,26 +882,55 @@ def _get_output(*, source, res, pres, ormask, box_size, exp_bbox):
     output['ormask'] = ormask
 
     flags = 0
-    if pres['flags'] != 0:
+    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
         flags |= procflags.PSF_FAILURE
 
     if res['flags'] != 0:
-        flags |= procflags.OBJ_FAILURE
+        flags |= res['flags'] | procflags.OBJ_FAILURE
 
     if pres['flags'] == 0:
         output['psf_g'] = pres['g']
         output['psf_T'] = pres['T']
 
-    if res['flags'] == 0:
-        output[n('s2n')] = res['s2n']
-        output[n('pars')] = res['pars']
-        output[n('g')] = res['g']
-        output[n('g_cov')] = res['g_cov']
+    if 'T' in res:
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
+
+    if res['flags'] == 0:
+        output[n('s2n')] = res['s2n']
+        output[n('g')] = res['g']
+        output[n('g_cov')] = res['g_cov']
 
         if pres['flags'] == 0:
             output[n('T_ratio')] = res['T']/pres['T']
 
     output['flags'] = flags
     return output
+
+
+def _get_meas_type(fitter):
+    if isinstance(fitter, ngmix.gaussmom.GaussMom):
+        meas_type = 'wmom'
+    elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
+        meas_type = 'ksigma'
+    else:
+        raise ValueError(
+            "don't know how to get name for fitter %s" % repr(fitter)
+        )
+
+    return meas_type
+
+
+class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
