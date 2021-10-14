@@ -32,9 +32,11 @@ from . import util
 from .defaults import DEFAULT_THRESH
 from . import procflags
 from .lsst_measure import (
-    get_output_struct, get_meas_type, get_ormask, measure_one,
+    get_output_struct, get_meas_type, get_ormask,
     MissingDataError,
+    # measure_one,
 )
+from .mbobs_measure import measure_mbobs
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -267,7 +269,9 @@ def _process_source(
 
             coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
             obs = extract_obs(exp=coadded_stamp_exp, source=source)
-            if obs is None:
+            mbobs = extract_mbobs(mbexp=stamp_mbexp, source=source)
+
+            if mbobs is None or obs is None:
                 LOG.info('skipping object with all zero weights')
                 object_res = {'flags': procflags.ZERO_WEIGHTS}
                 psf_res = {'flags': procflags.NO_ATTEMPT}
@@ -278,9 +282,16 @@ def _process_source(
                     # meta['orig_cen'] pixel location in the original image
 
                     find_and_set_center(obs=obs, rng=rng)
+                    mbobs.meta.update(obs.meta)
 
-                    psf_res = measure_one(obs=obs.psf, fitter=fitter)
-                    object_res = measure_one(obs=obs, fitter=fitter)
+                    for _obslist in mbobs:
+                        _obslist[0].jacobian = obs.jacobian
+
+                    object_res, psf_res = measure_mbobs(
+                        mbobs=mbobs,
+                        fitter=fitter,
+                        nonshear_mbobs=None,
+                    )
 
                 except CentroidFail as err:
                     LOG.info(str(err))
@@ -294,10 +305,10 @@ def _process_source(
             # note the context manager properly handles a return
             object_res = {'flags': procflags.BBOX_HITS_EDGE}
             psf_res = {'flags': procflags.NO_ATTEMPT}
-            obs = None
+            mbobs = None
 
-        res = get_output(
-            obs=obs, wcs=wcs, fitter=fitter, source=source, res=object_res,
+        res = get_output_scarlet(
+            mbobs=mbobs, wcs=wcs, fitter=fitter, source=source, res=object_res,
             psf_res=psf_res, ormask=ormask, stamp_size=stamp_size,
             exp_bbox=exp_bbox,
         )
@@ -783,6 +794,7 @@ def extract_obs(exp, source):
 
     wt = _extract_weight(exp)
     if np.all(wt <= 0):
+        LOG.info('all zero weight')
         return None
 
     maskobj = exp.mask
@@ -985,14 +997,22 @@ def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
         obs.jacobian.set_cen(row=new_row, col=new_col)
 
 
-def get_output(obs, wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
+def get_output_scarlet(
+    mbobs, wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox,
+):
     """
     get the output structure, copying in results
 
     When data are unavailable, a default value of nan is used
     """
+
+    if 'band_flux' in res:
+        nband = len(res['band_flux'])
+    else:
+        nband = 1
+
     meas_type = get_meas_type(fitter)
-    output = get_output_struct(meas_type)
+    output = get_output_struct(meas_type, nband=nband)
 
     n = util.Namer(front=meas_type)
 
@@ -1003,9 +1023,9 @@ def get_output(obs, wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_b
     output['row0'] = exp_bbox.getBeginY()
     output['col0'] = exp_bbox.getBeginX()
 
-    if obs is not None:
-        orig_cen = obs.meta['orig_cen']
-        cen_offset = obs.meta['orig_cen_offset']
+    if mbobs is not None:
+        orig_cen = mbobs.meta['orig_cen']
+        cen_offset = mbobs.meta['orig_cen_offset']
         output['row'] = orig_cen.getY()
         output['col'] = orig_cen.getX()
 
@@ -1034,9 +1054,9 @@ def get_output(obs, wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_b
         output[n('T')] = res['T']
         output[n('T_err')] = res['T_err']
 
-    if 'flux' in res:
-        output[n('flux')] = res['flux']
-        output[n('flux_err')] = res['flux_err']
+    if 'band_flux' in res:
+        output[n('band_flux')] = res['band_flux']
+        output[n('band_flux_err')] = res['band_flux_err']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
