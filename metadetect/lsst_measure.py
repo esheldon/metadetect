@@ -1,4 +1,5 @@
 import numpy as np
+import esutil as eu
 import ngmix
 
 import lsst.afw.table as afw_table
@@ -185,7 +186,7 @@ def measure(
         results.append(res)
 
     if len(results) > 0:
-        results = np.hstack(results)
+        results = eu.numpy_util.combine_arrlist(results)
     else:
         results = None
 
@@ -733,6 +734,9 @@ def get_output(wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
     if 'band_flux' in res:
         output[n('band_flux')] = res['band_flux']
         output[n('band_flux_err')] = res['band_flux_err']
+    elif 'flux' in res:
+        output[n('band_flux')] = res['flux']
+        output[n('band_flux_err')] = res['flux_err']
 
     if res['flags'] == 0:
         output[n('s2n')] = res['s2n']
