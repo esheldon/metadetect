@@ -9,7 +9,8 @@ import pytest
 import logging
 import ngmix
 import metadetect
-from .. import procflags
+from metadetect import procflags
+# from .. import procflags
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -30,9 +31,13 @@ coadd = pytest.importorskip(
 )
 
 
-def make_lsst_sim(seed, mag=14, hlr=0.5):
+def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
+
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
+
+    if bands is None:
+        bands = ['i']
 
     galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
         rng=rng,
@@ -52,6 +57,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5):
         g1=0.02,
         g2=0.00,
         psf=psf,
+        bands=bands,
     )
     return sim_data
 
@@ -96,23 +102,27 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     )
 
     if meas_type is None:
-        gname = 'wmom_g'
+        front = 'wmom'
     else:
-        gname = '%s_g' % meas_type
+        front = meas_type
 
+    gname = f'{front}_g'
+    flux_name = f'{front}_band_flux'
     assert gname in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
+        # one band
+        assert len(res[shear][flux_name].shape) == 1
 
-def test_lsst_metadetect_deblend_smoke():
+
+@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
+def test_lsst_metadetect_deblend_smoke(deblender):
     rng = np.random.RandomState(seed=99)
 
     sim_data = make_lsst_sim(99, mag=23)
-
-    print()
 
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
@@ -132,8 +142,9 @@ def test_lsst_metadetect_deblend_smoke():
     coadd_mbobs.append(obslist)
 
     config = {
-        'meas_type': 'am',
+        'meas_type': 'gap',
         'deblend': True,
+        'deblender': deblender,
     }
 
     res = lsst_metadetect.run_metadetect(
@@ -141,7 +152,7 @@ def test_lsst_metadetect_deblend_smoke():
         config=config,
     )
 
-    gname = 'am_g'
+    gname = 'gap_g'
 
     assert gname in res['noshear'].dtype.names
 
@@ -150,11 +161,58 @@ def test_lsst_metadetect_deblend_smoke():
         assert np.all(res[shear]["mfrac"] == 0)
 
 
+@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
+def test_lsst_metadetect_deblend_multiband(deblender):
+    rng = np.random.RandomState(seed=99)
+
+    bands = ('g', 'r', 'i')
+    nband = len(bands)
+
+    sim_data = make_lsst_sim(99, mag=23, bands=bands)
+
+    coadd_mbobs = ngmix.MultiBandObsList()
+
+    for band, exps in sim_data['band_data'].items():
+        coadd_obs = coadd.make_coadd_obs(
+            exps=exps,
+            coadd_wcs=sim_data['coadd_wcs'],
+            coadd_bbox=sim_data['coadd_bbox'],
+            psf_dims=sim_data['psf_dims'],
+            remove_poisson=False,
+            rng=rng,
+        )
+        # to avoid flagged edges
+        coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+        obslist = ngmix.ObsList()
+        obslist.append(coadd_obs)
+        coadd_mbobs.append(obslist)
+
+    config = {
+        'meas_type': 'gap',
+        'deblend': True,
+        'deblender': deblender,
+    }
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
+    )
+
+    name = 'gap_band_flux'
+
+    assert name in res['noshear'].dtype.names
+
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        assert len(res[shear][name].shape) == 2
+        assert len(res[shear][name][0]) == nband
+
+
 def test_lsst_zero_weights():
     nobj = []
     for do_zero in [False, True]:
         rng = np.random.RandomState(55)
-        sim_data = make_lsst_sim(55)
+        sim_data = make_lsst_sim(55, mag=23)
 
         coadd_obs = coadd.make_coadd_obs(
             exps=sim_data['band_data']['i'],
@@ -175,10 +233,8 @@ def test_lsst_zero_weights():
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        config = None
         resdict = lsst_metadetect.run_metadetect(
-            mbobs=coadd_mbobs, rng=rng,
-            config=config,
+            mbobs=coadd_mbobs, rng=rng, config=None,
         )
 
         if do_zero:
@@ -203,8 +259,6 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
 
     sim_data = make_lsst_sim(seed, hlr=1.0e-4, mag=23)
 
-    print()
-
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
@@ -222,22 +276,14 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
     obslist.append(coadd_obs)
     coadd_mbobs.append(obslist)
 
-    config = {}
-
-    if meas_type is not None:
-        config['meas_type'] = meas_type
+    config = {'meas_type': meas_type}
 
     res = lsst_metadetect.run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
 
-    if meas_type is None:
-        front = 'wmom'
-    else:
-        front = meas_type
-
-    n = metadetect.util.Namer(front=front)
+    n = metadetect.util.Namer(front=meas_type)
 
     data = res['noshear']
 
@@ -300,3 +346,9 @@ def test_lsst_metadetect_mfrac_ormask():
 
         total_time = time.time()-tm0
         print("time per:", total_time)
+
+
+if __name__ == '__main__':
+    # test_lsst_metadetect_prepsf_stars('gap')
+    # test_lsst_zero_weights()
+    test_lsst_metadetect_deblend_multiband('scarlet')
