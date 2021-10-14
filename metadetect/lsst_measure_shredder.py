@@ -256,7 +256,7 @@ def measure(
                         )
                         these_results = [res]
                     else:
-                        LOG.debug(f'deblending {nchild} child objects')
+                        LOG.info(f'{parent_id} deblending {nchild} child objects')
 
                         bbox = get_blend_bbox(
                             exp=replacer.mbexp, sources=children,
