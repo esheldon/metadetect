@@ -150,6 +150,7 @@ def detect_deblend_and_measure(
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
+                show=show,
             )
             results = lsst_measure_scarlet.measure(
                 mbexp=mbexp,
@@ -171,6 +172,7 @@ def detect_deblend_and_measure(
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
                 rng=rng,
+                show=show,
             )
             results = lsst_measure_shredder.measure(
                 mbexp=mbexp,
@@ -200,6 +202,7 @@ def detect_deblend_and_measure(
         sources, meas_task = lsst_measure.detect_and_deblend(
             exposure=exposure,
             thresh=config['detect']['thresh'],
+            show=show,
         )
 
         results = lsst_measure.measure(
