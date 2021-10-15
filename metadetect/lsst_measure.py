@@ -22,7 +22,7 @@ from . import procflags
 from .defaults import DEFAULT_THRESH
 
 
-def detect_and_deblend(exposure, thresh=DEFAULT_THRESH):
+def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
     """
     run detection and deblending of peaks.  The SDSS deblender is run in order
     to split peaks, but need not be used to create deblended stamps.
@@ -75,11 +75,13 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH):
 
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
+    # variance here actually means relative to the sqrt(variance)
+    # from the variance plane.
+    # TODO this would include poisson
+    # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(
-        # TODO should we send schema?
-        config=detection_config,
-    )
+
+    detection_task = SourceDetectionTask(config=detection_config)
 
     # this must occur directly before any tasks are run because schema is
     # modified in place by tasks, and the constructor does a check that
@@ -92,6 +94,8 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH):
 
     table = afw_table.SourceTable.make(schema)
     result = detection_task.run(table, exposure)
+    if show:
+        vis.show_exp(exposure)
 
     if result is not None:
         sources = result.sources

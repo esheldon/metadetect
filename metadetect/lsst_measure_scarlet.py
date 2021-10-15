@@ -46,6 +46,7 @@ LOG = logging.getLogger('lsst_measure_scarlet')
 def detect_and_deblend(
     mbexp,
     thresh=DEFAULT_THRESH,
+    show=False,
 ):
     """
     run detection and the scarlet deblender
@@ -63,6 +64,11 @@ def detect_and_deblend(
         Sources is an lsst.afw.table.SourceCatalog
         detexp is lsst.afw.image.ExposureF
     """
+
+    if len(mbexp.singles) > 1:
+        detexp = util.coadd_exposures(mbexp.singles)
+    else:
+        detexp = mbexp.singles[0]
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -95,7 +101,12 @@ def detect_and_deblend(
 
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
+    # variance here actually means relative to the sqrt(variance)
+    # from the variance plane.
+    # TODO this would include poisson
+    # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
+
     detection_task = SourceDetectionTask(config=detection_config)
 
     # configure the scarlet deblender
@@ -117,12 +128,9 @@ def detect_and_deblend(
 
     table = afw_table.SourceTable.make(schema)
 
-    if len(mbexp.singles) > 1:
-        detexp = util.coadd_exposures(mbexp.singles)
-    else:
-        detexp = mbexp.singles[0]
-
     result = detection_task.run(table, detexp)
+    if show:
+        vis.show_exp(detexp)
 
     if result is not None:
         sources = deblend_task.run(mbexp, result.sources)
