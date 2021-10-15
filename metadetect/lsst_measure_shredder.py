@@ -48,6 +48,7 @@ LOG = logging.getLogger('lsst_measure_shredder')
 def detect_and_deblend(
     mbexp, rng,
     fitter, stamp_size, thresh=DEFAULT_THRESH,
+    show=False,
 ):
     """
     run detection and deblending of peaks, as well as basic measurments such as
@@ -69,6 +70,11 @@ def detect_and_deblend(
     sources, meas_task
         The sources and the measurement task
     """
+
+    if len(mbexp.singles) > 1:
+        detexp = util.coadd_exposures(mbexp.singles)
+    else:
+        detexp = mbexp.singles[0]
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -99,11 +105,15 @@ def detect_and_deblend(
 
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
+    # variance here actually means relative to the sqrt(variance)
+    # from the variance plane.
+    # TODO this would include poisson
+    # TODO detection doesn't work right when we tell it to trust
+    # the variance
+    # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
-    detection_task = SourceDetectionTask(
-        # TODO should we send schema?
-        config=detection_config,
-    )
+
+    detection_task = SourceDetectionTask(config=detection_config)
 
     # this must occur directly before any tasks are run because schema is
     # modified in place by tasks, and the constructor does a check that
@@ -116,12 +126,9 @@ def detect_and_deblend(
 
     table = afw_table.SourceTable.make(schema)
 
-    if len(mbexp.singles) > 1:
-        detexp = util.coadd_exposures(mbexp.singles)
-    else:
-        detexp = mbexp.singles[0]
-
     result = detection_task.run(table, detexp)
+    if show:
+        vis.show_exp(detexp)
 
     Tvals = {}
     if result is not None:
@@ -233,7 +240,6 @@ def measure(
             LOG.debug('parent id: %d', parent_id)
 
             with replacer.sourceInserted(parent_id):
-                # if show or parent_id == 17:
                 if show:
                     vis.show_mbexp(replacer.mbexp, mess=f'{parent_id} inserted')
 
@@ -256,7 +262,7 @@ def measure(
                         )
                         these_results = [res]
                     else:
-                        LOG.info(f'{parent_id} deblending {nchild} child objects')
+                        LOG.info(f'deblending {nchild} children of {parent_id}')
 
                         bbox = get_blend_bbox(
                             exp=replacer.mbexp, sources=children,
@@ -264,7 +270,6 @@ def measure(
                             grow_footprint=10,  # 5 on each side
                         )
                         blend_mbexp = get_stamp(replacer.mbexp, parent, bbox=bbox)
-                        # if show or parent_id == 17:
                         if show:
                             vis.show_mbexp(blend_mbexp, mess=f'{parent_id} stamp')
 
@@ -352,7 +357,7 @@ def _process_blend(
 
     shredder = make_shredder(
         mbexp=blend_mbexp, orig_cen=orig_cen, rng=rng,
-        psf_ngauss=shredder_config['psf_ngauss'],
+        config=shredder_config,
     )
     if shredder is not None:
         guess = get_shredder_guess(
@@ -695,7 +700,7 @@ class CentroidFail(Exception):
         return repr(self.value)
 
 
-def make_shredder(mbexp, orig_cen, rng, psf_ngauss):
+def make_shredder(mbexp, orig_cen, rng, config):
     """
     Create a Shredder instance from the input MultibandExposure and sources
 
@@ -709,18 +714,21 @@ def make_shredder(mbexp, orig_cen, rng, psf_ngauss):
     TODO make optional args to the Shredder configurable
     """
     from shredder import Shredder
+    from ngmix.gexceptions import BootPSFFailure
 
     mbobs = _extract_mbobs_for_shredding(mbexp=mbexp, orig_cen=orig_cen)
     try:
         s = Shredder(
             obs=mbobs,
-            psf_ngauss=psf_ngauss,
-            # miniter=100,
-            # flux_miniter=40,
+            psf_ngauss=config['psf_ngauss'],
+            tol=config['tol'],
+            miniter=config['miniter'],
+            maxiter=config['maxiter'],
+            flux_miniter=config['flux_miniter'],
+            flux_maxiter=config['flux_maxiter'],
             rng=rng,
-            # tol=1.0e-6,
         )
-    except ngmix.gexceptions.PSFBootFailure as err:
+    except BootPSFFailure as err:
         LOG.info(str(err))
         s = None
 
