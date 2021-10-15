@@ -139,7 +139,7 @@ class ContextNoiseReplacer(object):
     sources: lsst.afw.table.SourceCatalog
         Catalog of sources
     noise_image: array, optional
-        Optional noise image to use
+        Optional noise image to use.  If not sent one is generated.
 
     Examples
     --------
@@ -161,7 +161,13 @@ class ContextNoiseReplacer(object):
         # the calculation of the response
 
         config = NoiseReplacerConfig()
+        # TODO DM needs to fix the crash
+        # config.noiseSource = 'variance'
         config.noiseSeedMultiplier = rng.randint(0, 2**24)
+
+        if noise_image is None:
+            # TODO remove_poisson should be true for real data
+            noise_image = get_noise_image(exposure, rng=rng, remove_poisson=False)
 
         footprints = {
             source.getId(): (source.getParent(), source.getFootprint())
@@ -344,6 +350,56 @@ def get_noise_replacer(exposure, sources, noise_image=None):
     )
 
 
+def get_noise_image(exp, rng, remove_poisson):
+    """
+    get a noise image based on the input exposure
+
+    TODO gain correct separately in each amplifier, currently
+    averaged
+
+    Parameters
+    ----------
+    exp: afw.image.ExposureF
+        The exposure upon which to base the noise
+    rng: np.random.RandomState
+        The random number generator for making the noise image
+    remove_poisson: bool
+        If True, remove the poisson noise from the variance
+        estimate.
+
+    Returns
+    -------
+    MaskedImage
+    """
+    import lsst.afw.image as afw_image
+
+    noise_exp = afw_image.ExposureF(exp, deep=True)
+
+    signal = exp.image.array
+    variance = exp.variance.array
+
+    use = np.where(np.isfinite(variance) & np.isfinite(signal))
+
+    if remove_poisson:
+        gains = [
+            amp.getGain() for amp in exp.getDetector().getAmplifiers()
+        ]
+        mean_gain = np.mean(gains)
+
+        corrected_var = variance[use] - signal[use] / mean_gain
+
+        var = np.median(corrected_var)
+    else:
+        var = np.median(variance[use])
+
+    noise = rng.normal(scale=np.sqrt(var), size=signal.shape)
+
+    noise_exp.image.array[:, :] = noise
+    noise_exp.variance.array[:, :] = var
+
+    return noise_exp.getMaskedImage()
+
+
 def get_mbexp(exposures):
     """
     convert a list of exposures into an MultibandExposure
@@ -474,12 +530,12 @@ def coadd_exposures(exposures):
     fac = 1.0/wsum
 
     coadd_exp.image.array[:, :] *= fac
-    psf_im *= fac
+    # psf_im *= fac
+    psf_im *= 1.0/psf_im.sum()
 
     coadd_exp.variance.array[:, :] = np.inf
     w = np.where(weight > 0)
     coadd_exp.variance.array[w] = 1/weight[w]
-    # print('med coadd exp var:', np.median(coadd_exp.variance.array[w]))
 
     coadd_psf = KernelPsf(FixedKernel(afw_image.ImageD(psf_im)))
     coadd_exp.setPsf(coadd_psf)
