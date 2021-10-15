@@ -50,6 +50,11 @@ DEFAULT_DETECT_CONFIG = {
 DEFAULT_SHREDDER_CONFIG = {
     'psf_ngauss': 3,
     'init_model': 'exp',
+    'miniter': 40,
+    'maxiter': 500,
+    'flux_miniter': 20,
+    'flux_maxiter': 500,
+    'tol': 0.001,
 }
 
 # the weight subconfig and the stamp_size defaults we be filled in
