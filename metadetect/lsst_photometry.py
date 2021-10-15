@@ -73,6 +73,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
+                show=show,
             )
             res = lsst_measure_scarlet.measure(
                 mbexp=mbexp,
@@ -90,6 +91,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
                 thresh=config['detect']['thresh'],
                 fitter=fitter,
                 stamp_size=config['stamp_size'],
+                show=show,
                 rng=rng,
             )
             res = lsst_measure_shredder.measure(
@@ -118,6 +120,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
         sources, meas_task = lsst_measure.detect_and_deblend(
             exposure=exposure,
             thresh=config['detect']['thresh'],
+            show=show,
         )
 
         if show:
