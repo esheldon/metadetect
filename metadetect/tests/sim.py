@@ -176,69 +176,69 @@ class Sim(dict):
         self._psf_obs = psf_obs
 
 
-def make_mbobs_sim(seed, nobj, nband):
+def make_mbobs_sim(seed, nband):
     rng = np.random.RandomState(seed=seed)
 
     dim = 35
     cen = (dim-1)/2
-    band_mbobs_list = [[] for _ in range(nband)]
-    for _ in range(nobj):
-        gal = galsim.Exponential(
-            half_light_radius=rng.uniform(low=0.5, high=0.7),
+    gal = galsim.Exponential(
+        half_light_radius=rng.uniform(low=0.5, high=0.7),
+    ).shear(
+        g1=rng.uniform(low=-0.1, high=0.1),
+        g2=rng.uniform(low=-0.1, high=0.1),
+    ).withFlux(
+        400
+    )
+    mbobs = ngmix.MultiBandObsList()
+
+    for band in range(nband):
+        psf = galsim.Gaussian(
+            fwhm=rng.uniform(low=0.8, high=0.9),
         ).shear(
             g1=rng.uniform(low=-0.1, high=0.1),
             g2=rng.uniform(low=-0.1, high=0.1),
-        ).withFlux(
-            400
         )
 
-        for band in range(nband):
-            psf = galsim.Gaussian(
-                fwhm=rng.uniform(low=0.8, high=0.9),
-            ).shear(
+        gs_wcs = galsim.ShearWCS(
+            0.25,
+            galsim.Shear(
                 g1=rng.uniform(low=-0.1, high=0.1),
                 g2=rng.uniform(low=-0.1, high=0.1),
             )
+        ).jacobian()
+        offset = rng.uniform(low=-0.5, high=0.5, size=2)
 
-            gs_wcs = galsim.ShearWCS(
-                0.25,
-                galsim.Shear(
-                    g1=rng.uniform(low=-0.1, high=0.1),
-                    g2=rng.uniform(low=-0.1, high=0.1),
-                )
-            ).jacobian()
-            offset = rng.uniform(low=-0.5, high=0.5, size=2)
+        obj = galsim.Convolve([gal, psf])
 
-            obj = galsim.Convolve([gal, psf])
+        im = obj.drawImage(nx=dim, ny=dim, wcs=gs_wcs, offset=offset).array
+        nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100)
+        im += rng.normal(size=im.shape, scale=nse)
 
-            im = obj.drawImage(nx=dim, ny=dim, wcs=gs_wcs, offset=offset).array
-            nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100)
-            im += rng.normal(size=im.shape, scale=nse)
+        psf_im = psf.drawImage(nx=dim, ny=dim, wcs=gs_wcs).array
+        psf_obs = ngmix.Observation(
+            image=psf_im,
+            jacobian=ngmix.Jacobian(
+                row=cen,
+                col=cen,
+                wcs=gs_wcs,
+            )
+        )
 
-            psf_im = psf.drawImage(nx=dim, ny=dim, wcs=gs_wcs).array
-            psf_obs = ngmix.Observation(
-                image=psf_im,
+        obslist = ngmix.ObsList()
+        obslist.append(
+            ngmix.Observation(
+                image=im,
+                weight=np.ones_like(im) / nse**2,
                 jacobian=ngmix.Jacobian(
-                    row=cen,
-                    col=cen,
+                    row=cen+offset[1],
+                    col=cen+offset[0],
                     wcs=gs_wcs,
-                )
+                ),
+                bmask=np.zeros_like(im, dtype=np.int32),
+                psf=psf_obs,
+                meta={"wgt": 1.0/nse**2},
             )
-            band_mbobs_list[band].append(
-                ngmix.observation.get_mb_obs(
-                    ngmix.Observation(
-                        image=im,
-                        weight=np.ones_like(im) / nse**2,
-                        jacobian=ngmix.Jacobian(
-                            row=cen+offset[1],
-                            col=cen+offset[0],
-                            wcs=gs_wcs,
-                        ),
-                        bmask=np.zeros_like(im, dtype=np.int32),
-                        psf=psf_obs,
-                        meta={"wgt": 1.0/nse**2},
-                    )
-                )
-            )
+        )
+        mbobs.append(obslist)
 
-    return band_mbobs_list
+    return mbobs

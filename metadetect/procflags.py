@@ -6,6 +6,7 @@ NOMOMENTS_FAILURE = 2**4
 BAD_BBOX = 2**5
 EDGE = 2**6
 ZERO_WEIGHTS = 2**7
+NO_DATA = 2**8
 
 NAME_MAP = {
     # no attempt was made to measure this object, usually
@@ -41,8 +42,16 @@ NAME_MAP = {
 
     ZERO_WEIGHTS: 'zero_weights',
     'zero_weights': ZERO_WEIGHTS,
+
+    NO_DATA: 'no_data',
+    'no_data': NO_DATA,
 }
 
 
 def get_name(val):
-    return NAME_MAP[val]
+    nstrs = []
+    for pow in range(32):
+        fval = 2**pow
+        if fval in NAME_MAP and ((val & fval) != 0):
+            nstrs.append(NAME_MAP[fval])
+    return "|".join(nstrs)
