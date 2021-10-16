@@ -4,8 +4,9 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 from ngmix.defaults import DEFAULT_LM_PARS
+from ngmix.moments import make_mom_result
 
-from .util import Namer, get_ratio_var, get_ratio_error
+from .util import Namer
 from . import procflags
 
 logger = logging.getLogger(__name__)
@@ -187,24 +188,12 @@ def fit_mbobs_wavg(
     else:
         all_wgts[0:nband] = 0
 
-    if hasattr(fitter, "model"):
-        model = fitter.model
-    else:
-        if isinstance(fitter, ngmix.gaussmom.GaussMom):
-            model = "wmom"
-        elif isinstance(fitter, ngmix.prepsfmom.KSigmaMom):
-            model = "ksigma"
-        elif isinstance(fitter, ngmix.prepsfmom.PrePSFGaussMom):
-            model = "gap"
-        else:
-            model = "mdet"
-
     return _combine_fit_results_wavg(
         all_res=all_res,
         all_psf_res=all_psf_res,
         all_is_shear_band=all_is_shear_band,
         all_wgts=all_wgts,
-        model=model,
+        model=fitter.kind,
         all_flags=all_flags,
     )
 
@@ -302,54 +291,57 @@ def _combine_fit_results_wavg(
     raw_mom_cov = np.zeros((4, 4), dtype=np.float64)
     raw_psf_g = 0
     raw_psf_T = 0
-    mdet_flags = 0
     wgt_sum = 0.0
+    psf_flags = 0
+    mdet_flags = 0
     flux_flags = 0
     for wgt, gres, pres, issb, flags in zip(
         all_wgts, all_res, all_psf_res, all_is_shear_band, all_flags
     ):
+        ###########################
+        # first handle fluxes
         # the input flags mark very basic failures and are ORed across all bands
         # these are things like missing and or all zero-weight data, edges, etc.
         flux_flags |= flags
-        if issb:
-            mdet_flags |= flags
-
-        # a PSF fit failure in any shear band ruins the shear
-        if issb and ((pres is not None and pres["flags"] != 0) or pres is None):
-            mdet_flags |= procflags.PSF_FAILURE
 
         # an object fit missing in any band is bad too
         if gres is None:
             flux_flags |= procflags.OBJ_FAILURE
+            band_flux.append(np.nan)
+            band_flux_err.append(np.nan)
+        else:
+            flux_flags |= gres["flux_flags"]
+            band_flux.append(gres['flux'])
+            band_flux_err.append(gres['flux_err'])
 
-        if issb and gres is None:
-            mdet_flags |= procflags.OBJ_FAILURE
-
+        ###########################
+        # now do shear
         if issb:
+            # the input flags mark very basic failures and are ORed across all bands
+            # these are things like missing and or all zero-weight data, edges, etc.
+            mdet_flags |= flags
+
+            # a PSF fit failure in any shear band ruins the shear
+            if pres is None:
+                mdet_flags |= procflags.PSF_FAILURE
+                psf_flags |= procflags.PSF_FAILURE
+            else:
+                psf_flags |= pres["flags"]
+                if pres["flags"] != 0:
+                    mdet_flags |= procflags.PSF_FAILURE
+
+            if gres is None:
+                mdet_flags |= procflags.OBJ_FAILURE
+
             if (
                 flags == 0
-                and gres is not None
                 and pres is not None
-                and (
-                    ("mom" in gres and "mom_cov" in gres)
-                    or
-                    ("sums" in gres and "sums_cov" in gres)
-                )
                 and pres["flags"] == 0
+                and gres is not None
+                and ("mom" in gres and "mom_cov" in gres)
             ):
-                if "mom" in gres and "mom_cov" in gres:
-                    raw_mom += (wgt * gres["mom"])
-                    raw_mom_cov += (wgt**2 * gres["mom_cov"])
-                else:
-                    raw_mom += np.array([
-                        gres['sums'][5],
-                        gres['sums'][4],
-                        gres['sums'][2],
-                        gres['sums'][3],
-                    ])
-                    for inew, iold in enumerate([5, 4, 2, 3]):
-                        for jnew, jold in enumerate([5, 4, 2, 3]):
-                            raw_mom_cov[inew, jnew] += gres['sums_cov'][iold, jold]
+                raw_mom += (wgt * gres["mom"])
+                raw_mom_cov += (wgt**2 * gres["mom_cov"])
 
                 wgt_sum += wgt
 
@@ -361,78 +353,24 @@ def _combine_fit_results_wavg(
             else:
                 mdet_flags |= procflags.NOMOMENTS_FAILURE
 
-        if gres is not None:
-            if "flux_flags" in gres:
-                if gres["flux_flags"] != 0:
-                    flux_flags |= procflags.OBJ_FAILURE
-            else:
-                if gres["flags"] != 0:
-                    flux_flags |= procflags.OBJ_FAILURE
-
-            band_flux.append(gres['flux'])
-            band_flux_err.append(gres['flux_err'])
-        else:
-            flux_flags |= procflags.OBJ_FAILURE
-            band_flux.append(np.nan)
-            band_flux_err.append(np.nan)
-
-    # we flag anything where not all of the shear bands have an obs or one
-    # of the shear bands has zero weight
-    has_all_shear_bands = (
-        all(
-            gres is not None if issb else True
-            for issb, gres in zip(all_is_shear_band, all_res)
-        )
-        and all(
-            pres is not None if issb else True
-            for issb, pres in zip(all_is_shear_band, all_psf_res)
-        )
-        and np.all(all_wgts[0:nband] > 0)
-    )
-
-    # we need the flux > 0, flux_var > 0, T > 0 and psf measurements
-    # for shears
     if (
-        has_all_shear_bands
+        mdet_flags == 0
+        and psf_flags == 0
         and wgt_sum > 0
-        and raw_mom[0] > 0
-        and raw_mom[1] > 0
-        and raw_mom_cov[0, 0] > 0
-        and mdet_flags == 0
     ):
-        raw_mom /= wgt_sum
-        raw_mom_cov /= (wgt_sum**2)
         raw_psf_g /= wgt_sum
         raw_psf_T /= wgt_sum
-
         data["psf_g"] = raw_psf_g
         data["psf_T"] = raw_psf_T
-        data[n('s2n')] = raw_mom[0] / np.sqrt(raw_mom_cov[0, 0])
-        data[n('T')] = raw_mom[1] / raw_mom[0]
-        data[n('T_err')] = get_ratio_error(
-            raw_mom[1],
-            raw_mom[0],
-            raw_mom_cov[1, 1],
-            raw_mom_cov[0, 0],
-            raw_mom_cov[0, 1],
-        )
-        data[n('g')] = raw_mom[2:] / raw_mom[1]
-        data[n('g_cov')][:, :, :] = 0
-        data[n('g_cov')][:, 0, 0] = get_ratio_var(
-            raw_mom[2],
-            raw_mom[1],
-            raw_mom_cov[2, 2],
-            raw_mom_cov[1, 1],
-            raw_mom_cov[1, 2],
-        )
-        data[n('g_cov')][:, 1, 1] = get_ratio_var(
-            raw_mom[3],
-            raw_mom[1],
-            raw_mom_cov[3, 3],
-            raw_mom_cov[1, 1],
-            raw_mom_cov[1, 3],
-        )
 
+        raw_mom /= wgt_sum
+        raw_mom_cov /= (wgt_sum**2)
+        momres = make_mom_result(raw_mom, raw_mom_cov)
+        mdet_flags |= momres["flags"]
+        for col in ['s2n', 'T', 'T_err']:
+            data[n(col)] = momres[col]
+        for col in ['e', 'e_cov']:
+            data[n(col.replace('e', 'g'))] = momres[col]
         data[n('T_ratio')] = data[n('T')] / data['psf_T']
     else:
         # something above failed so mark this as a failed object
@@ -447,15 +385,16 @@ def _combine_fit_results_wavg(
 
     # now we set the flags as they would have been set in our moments code
     # any PSF failure in a shear band causes a non-zero flags value
-    data[n('flags')] = mdet_flags
+    data['psf_flags'] = psf_flags
+    data[n('flags')] = mdet_flags | psf_flags
     data[n('band_flux_flags')] = flux_flags
-    data['flags'] = mdet_flags | flux_flags
+    data['flags'] = mdet_flags | flux_flags | psf_flags
 
-    if data[n('flags')] != 0 or data[n('band_flux_flags')] != 0:
+    if data['flags'] != 0:
         logger.debug(
-            "fitter failed: shear flags = %s", procflags.get_name(data[n("flags")])
+            "fitter failed: flags = %s",
+            procflags.get_procflags_str(data["flags"])
         )
-        logger.debug("fitter failed: all flags = %s", procflags.get_name(data["flags"]))
 
     return data
 
@@ -472,6 +411,7 @@ def _make_combine_fit_results_wavg_dtype(nband, model):
         (n("g_cov"), "f8", (2, 2)),
         ('psf_g', 'f8', 2),
         ('psf_T', 'f8'),
+        ('psf_flags', 'i4'),
         (n("T_ratio"), "f8"),
     ]
     if nband > 1:

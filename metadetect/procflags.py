@@ -1,57 +1,41 @@
-NO_ATTEMPT = 2**0
-IMAGE_FLAGS = 2**1
-PSF_FAILURE = 2**2
-OBJ_FAILURE = 2**3
-NOMOMENTS_FAILURE = 2**4
-BAD_BBOX = 2**5
-EDGE = 2**6
-ZERO_WEIGHTS = 2**7
-NO_DATA = 2**8
+import copy
 
-NAME_MAP = {
-    # no attempt was made to measure this object, usually
-    # due to a previous step in the code fails.  E.g. this
-    # will be set for the psf flags if there are IMAGE_FLAGS
-    # for the image
+import ngmix.procflags
+from ngmix.procflags import NO_ATTEMPT  # noqa
 
-    'no_attempt': NO_ATTEMPT,
-    NO_ATTEMPT: 'no_attempt',
+# these flags start at 16 always
+# this allows us to combine them with the flags in ngmix
+EDGE_HIT = 2**16
+PSF_FAILURE = 2**17
+OBJ_FAILURE = 2**18
+NOMOMENTS_FAILURE = 2**19
+BAD_BBOX = 2**20
+ZERO_WEIGHTS = 2**21
+NO_DATA = 2**22
 
-    # there was an issue with the image data
-    'image_flags': IMAGE_FLAGS,
-    IMAGE_FLAGS: 'image_flags',
-
-    # psf fitting failed
-    PSF_FAILURE: 'psf_failure',
-    'psf_failure': PSF_FAILURE,
-
-    # object fitting failed
-    OBJ_FAILURE: 'obj_failure',
-    'obj_failure': OBJ_FAILURE,
-
-    # moment measurement failed
-    NOMOMENTS_FAILURE: 'nomoments_failure',
-    'nomoments_failure': NOMOMENTS_FAILURE,
-
-    # there was a problem with the bounding box
-    BAD_BBOX: 'bad_bbox',
-    'bad_bbox': BAD_BBOX,
-
-    EDGE: 'edge',
-    'edge': EDGE,
-
-    ZERO_WEIGHTS: 'zero_weights',
-    'zero_weights': ZERO_WEIGHTS,
-
-    NO_DATA: 'no_data',
-    'no_data': NO_DATA,
-}
+NAME_MAP = copy.deepcopy(ngmix.procflags.NAME_MAP)
+NAME_MAP[EDGE_HIT] = "bbox hit edge"
+NAME_MAP[PSF_FAILURE] = "PSF fit failed"
+NAME_MAP[OBJ_FAILURE] = "object fit failed"
+NAME_MAP[NOMOMENTS_FAILURE] = "no moments"
+NAME_MAP[BAD_BBOX] = "problem making bounding box"
+NAME_MAP[ZERO_WEIGHTS] = "weights all zero"
+NAME_MAP[NO_DATA] = "no/missing data"
+for k, v in list(NAME_MAP.items()):
+    NAME_MAP[v] = k
 
 
-def get_name(val):
-    nstrs = []
-    for pow in range(32):
-        fval = 2**pow
-        if fval in NAME_MAP and ((val & fval) != 0):
-            nstrs.append(NAME_MAP[fval])
-    return "|".join(nstrs)
+def get_procflags_str(val):
+    """Get a descriptive string given a flag value.
+
+    Parameters
+    ----------
+    val : int
+        The flag value.
+
+    Returns
+    -------
+    flagstr : str
+        A string of descriptions for each bit separated by `|`.
+    """
+    return ngmix.procflags.get_procflags_str(val, name_map=NAME_MAP)
