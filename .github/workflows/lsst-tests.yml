@@ -47,4 +47,4 @@ jobs:
       - name: test ngmix w/ conda latest
         shell: bash -l {0}
         run: |
-          pytest -vvs metadetect
+          pytest -vvs --cov=metadetect --cov-report term-missing metadetect

@@ -39,18 +39,19 @@ jobs:
           mamba install --quiet --yes --file requirements.txt
           mamba install --quiet --yes --file dev-requirements.txt
 
+          # remove this once ngmix 2.1 is on conda
           mamba uninstall ngmix --force
           pip install git+https://github.com/esheldon/ngmix.git@flags-moms
 
           python -m pip install -e .
 
-      # - name: lint
-      #   shell: bash -l {0}
-      #   run: |
-      #     flake8 metadetect
+      - name: lint
+        shell: bash -l {0}
+        run: |
+          flake8 metadetect
 
       - name: test
         shell: bash -l {0}
         run: |
-          pytest -vvs metadetect
+          pytest -vvs --cov=metadetect --cov-report term-missing metadetect
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]

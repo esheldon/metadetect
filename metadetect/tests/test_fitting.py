@@ -1,10 +1,12 @@
 import numpy as np
 
+import pytest
+
 from ngmix.gaussmom import GaussMom
 import ngmix
 
 from .sim import make_mbobs_sim
-from ..fitting import fit_mbobs_wavg
+from ..fitting import fit_mbobs_wavg, _combine_fit_results_wavg
 from .. import procflags
 
 
@@ -278,3 +280,555 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
         for i in [4, 5, 6]:
             assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+
+
+@pytest.mark.parametrize("kwargs,psf_flags,model_flags,flux_flags", [
+    # no data at all
+    (
+        dict(
+            all_res=[],
+            all_psf_res=[],
+            all_is_shear_band=[],
+            all_wgts=[],
+            all_flags=[],
+        ),
+        ["MISSING_BAND"],
+        ["MISSING_BAND", "PSF_FAILURE"],
+        ["MISSING_BAND"],
+    ),
+
+    # everything failed
+    (
+        dict(
+            all_res=[None, None, None, None],
+            all_psf_res=[None, None, None, None],
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[0, 0, 0, 0],
+            all_flags=[0, 0, 0, 0],
+        ),
+        ["MISSING_BAND", "ZERO_WEIGHTS"],
+        ["MISSING_BAND", "PSF_FAILURE", "ZERO_WEIGHTS"],
+        ["MISSING_BAND"],
+    ),
+
+    # everything failed w/ input flags that should be in the output
+    (
+        dict(
+            all_res=[None, None, None, None],
+            all_psf_res=[None, None, None, None],
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[0, 0, 0, 0],
+            all_flags=[1, 0, 1, 0],
+        ),
+        ["MISSING_BAND", "ZERO_WEIGHTS", "NO_ATTEMPT"],
+        ["MISSING_BAND", "PSF_FAILURE", "NO_ATTEMPT", "ZERO_WEIGHTS"],
+        ["MISSING_BAND", "NO_ATTEMPT"],
+    ),
+
+    # we do not mark weight zero vs not for failures
+    (
+        dict(
+            all_res=[None, None, None, None],
+            all_psf_res=[None, None, None, None],
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        ["MISSING_BAND"],
+        ["MISSING_BAND", "PSF_FAILURE"],
+        ["MISSING_BAND"],
+    ),
+
+    # everything is fine one band
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 1,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 1,
+            all_is_shear_band=[True],
+            all_wgts=[1],
+            all_flags=[0],
+        ),
+        [],
+        [],
+        [],
+    ),
+
+    # everything is fine
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        [],
+    ),
+
+    # flag a shear
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[1, 0, 0, 0],
+        ),
+        ["NO_ATTEMPT"],
+        ["NO_ATTEMPT", "PSF_FAILURE"],
+        ["NO_ATTEMPT"],
+    ),
+
+    # flag a shear res?
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 1,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] + [{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["NO_ATTEMPT"],
+    ),
+
+    # zero weight a shear
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[0, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        ["ZERO_WEIGHTS"],
+        ["ZERO_WEIGHTS", "PSF_FAILURE"],
+        [],
+    ),
+
+    # missing a shear res
+    (
+        dict(
+            all_res=[None] + [{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        ["MISSING_BAND"],
+        ["MISSING_BAND"],
+    ),
+
+    # zero weight a flux
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 0],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        [],
+    ),
+
+    # flag a flux
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 1],
+        ),
+        [],
+        [],
+        ["NO_ATTEMPT"],
+    ),
+
+    # flag a flux in res
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3 + [
+                {
+                    "flux_flags": 1,
+                    "flux": 1,
+                    "flux_err": 1,
+                    "mom": np.ones(4),
+                    "mom_cov": np.diag(np.ones(4))
+                }
+            ],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["NO_ATTEMPT"],
+    ),
+
+    # missing a flux res
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3 + [None],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["MISSING_BAND"],
+    ),
+
+    # missing flux
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3 + [{
+                "flux_flags": 0,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["NOMOMENTS_FAILURE"],
+    ),
+
+    # missing flux_err
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3 + [{
+                "flux_flags": 0,
+                "flux": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["NOMOMENTS_FAILURE"],
+    ),
+
+    # missing flux_flags
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3 + [{
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        ["NOMOMENTS_FAILURE"],
+    ),
+
+    # missing mom
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom_cov": np.diag(np.ones(4))
+            }] + [{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        ["NOMOMENTS_FAILURE"],
+        [],
+    ),
+
+    # missing mom_cov
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.diag(np.ones(4))
+            }] + [{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 3,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        ["NOMOMENTS_FAILURE"],
+        [],
+    ),
+
+    # missing psf mom
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[
+                {"mom_cov": np.diag(np.ones(4))}
+            ] + [
+                {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
+            ] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        ["NOMOMENTS_FAILURE"],
+        ["PSF_FAILURE"],
+        [],
+    ),
+
+    # missing psf mom cov
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[
+                {"mom": np.diag(np.ones(4))}
+            ] + [
+                {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
+            ] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        ["NOMOMENTS_FAILURE"],
+        ["PSF_FAILURE"],
+        [],
+    ),
+
+    # missing psf mom for flux
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[
+                {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
+            ] * 3 + [
+                {"mom_cov": np.diag(np.ones(4))}
+            ],
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        [],
+    ),
+
+    # missing psf mom for flux
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 4,
+            all_psf_res=[
+                {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
+            ] * 3 + [
+                {"mom": np.diag(np.ones(4))}
+            ],
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        [],
+        [],
+    ),
+
+    # negative weights somehow?
+    (
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 5,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 5,
+            all_is_shear_band=[True, True, True, False, False],
+            all_wgts=[-1, 1, 0, 1, 1],
+            all_flags=[0, 0, 0, 0, 0],
+        ),
+        ["ZERO_WEIGHTS"],
+        ["ZERO_WEIGHTS", "PSF_FAILURE"],
+        [],
+    ),
+
+])
+def test_fitting_combine_fit_results_wavg_flagging(
+    kwargs, psf_flags, model_flags, flux_flags
+):
+    def _print_flags(data):
+        for name in data.dtype.names:
+            if "flag" in name:
+                print("    %s:" % name, procflags.get_procflags_str(data[name][0]))
+        for name in data.dtype.names:
+            if "flag" not in name:
+                print("    %s:" % name, data[name][0])
+
+    def _check_flags(val, flags):
+        fval = 0
+        for flag in flags:
+            fval |= getattr(procflags, flag)
+        if val != fval:
+            for flag in flags:
+                assert (val & getattr(procflags, flag)) != 0, (
+                    "flag val %s failed!" % flag
+                )
+        assert val == fval
+
+    model = "wwmom"
+
+    # all missing
+    data = _combine_fit_results_wavg(model=model, **kwargs)
+    print()
+    _print_flags(data)
+    _check_flags(data["psf_flags"][0], psf_flags)
+    _check_flags(data[model + "_flags"][0], model_flags)
+    _check_flags(data[model + "_band_flux_flags"][0], flux_flags)
+    assert (
+        data["flags"][0] ==
+        (data[model + "_flags"][0] | data[model + "_band_flux_flags"][0])
+    )
+    if data["psf_flags"][0] != 0:
+        assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0
