@@ -180,7 +180,7 @@ def fit_mbobs_wavg(
 
     # the weights here are for all bands for both shear and nonshear
     # measurements. we only normalize them to unity for sums over the shear
-    # bands which is everything up to self.nband
+    # bands which is everything up to nband
     all_wgts = np.array(all_wgts)
     nrm = np.sum(all_wgts[0:nband])
     if nrm > 0:
@@ -248,8 +248,6 @@ def _fit_obs(
         res["obj_res"] = None
         res["psf_res"] = None
     else:
-        # we use the median here since that matches what was done in
-        # metadetect.fitting.Moments when coadding there.
         res["flags"] = flags
         res["wgt"] = np.median(obs.weight[obs.weight > 0])
         res["obj_res"] = fitter.go(obs)
@@ -267,7 +265,6 @@ def _fit_obs(
 def _combine_fit_results_wavg(
     *, all_res, all_psf_res, all_is_shear_band, all_wgts, model, all_flags,
 ):
-    # compute the weighted averages for various columns
     tot_nband = len(all_res)
     nband = sum(1 if issb else 0 for issb in all_is_shear_band)
     nonshear_nband = sum(0 if issb else 1 for issb in all_is_shear_band)
@@ -321,41 +318,34 @@ def _combine_fit_results_wavg(
             # these are things like missing and or all zero-weight data, edges, etc.
             mdet_flags |= flags
 
+            # we mark missing data or moments for PSF and objects separately
             if gres is None:
                 mdet_flags |= procflags.MISSING_BAND
             elif "mom" not in gres or "mom_cov" not in gres:
                 mdet_flags |= procflags.NOMOMENTS_FAILURE
+
+            if wgt <= 0:
+                mdet_flags |= procflags.MISSING_BAND
 
             if pres is None:
                 psf_flags |= procflags.MISSING_BAND
             elif "mom" not in pres or "mom_cov" not in pres:
                 psf_flags |= procflags.NOMOMENTS_FAILURE
 
-            if (
-                flags == 0
-                and pres is not None
-                and gres is not None
-                and ("mom" in gres and "mom_cov" in gres)
-                and ("mom" in pres and "mom_cov" in pres)
-            ):
+            # however we sum in pairs to ensure the weighting is the same across bands
+            if mdet_flags == 0 and psf_flags == 0:
                 raw_mom += (wgt * gres["mom"])
                 raw_mom_cov += (wgt**2 * gres["mom_cov"])
                 raw_psf_mom += (wgt * pres["mom"])
                 raw_psf_mom_cov += (wgt**2 * pres["mom_cov"])
                 wgt_sum += wgt
 
-    # we need positive weights in all bands
-    if not np.all(all_wgts[0:nband] > 0):
-        mdet_flags |= procflags.MISSING_BAND
-
+    # I do not think this could ever happen, but if it does, we flag it
     if wgt_sum <= 0:
         mdet_flags |= procflags.ZERO_WEIGHTS
         psf_flags |= procflags.ZERO_WEIGHTS
 
-    if (
-        mdet_flags == 0
-        and psf_flags == 0
-    ):
+    if mdet_flags == 0 and psf_flags == 0:
         raw_psf_mom /= wgt_sum
         raw_psf_mom_cov /= (wgt_sum**2)
         psf_momres = make_mom_result(raw_psf_mom, raw_psf_mom_cov)
