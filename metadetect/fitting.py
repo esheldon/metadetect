@@ -239,7 +239,7 @@ def _fit_obs(
         flags |= procflags.ZERO_WEIGHTS
 
     if np.any((obs.bmask & bmask_flags) != 0):
-        flags |= procflags.EDGE
+        flags |= procflags.EDGE_HIT
 
     if flags != 0:
         # we will flag this later

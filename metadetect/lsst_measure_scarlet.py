@@ -345,7 +345,7 @@ def _process_source(
             LOG.info(e)
 
             # note the context manager properly handles a return
-            ores = {'flags': procflags.EDGE}
+            ores = {'flags': procflags.EDGE_HIT}
             pres = {'flags': procflags.NO_ATTEMPT}
             box_size = -1
 

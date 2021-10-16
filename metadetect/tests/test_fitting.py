@@ -85,7 +85,7 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         nonshear_mbobs=None,
     )
     _print_res(res[0])
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert not np.any(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
@@ -105,7 +105,7 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         nonshear_mbobs=nonshear_mbobs,
     )
     _print_res(res[0])
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert not np.any(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
@@ -125,7 +125,7 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         nonshear_mbobs=nonshear_mbobs,
     )
     _print_res(res[0])
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert np.all(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
@@ -215,7 +215,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.NO_DATA) != 0)
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert not np.any(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
@@ -243,7 +243,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.NO_DATA) != 0)
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert not np.any(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
@@ -272,7 +272,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.NO_DATA) != 0)
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
-    assert np.all((res["flags"] & procflags.EDGE) != 0)
+    assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
     assert np.all((res["wmom_band_flux_flags"] & procflags.OBJ_FAILURE) != 0)
     assert np.all(np.isfinite(res["wmom_g_cov"]))
     for tail in ["", "_err"]:
