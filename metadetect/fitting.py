@@ -208,7 +208,7 @@ def _fit_obslist(
         # we will flag this later
         res = {}
         res["flags"] = 0
-        res["flags"] |= procflags.NO_DATA
+        res["flags"] |= procflags.MISSING_BAND
         res["wgt"] = 0
         res["obj_res"] = None
         res["psf_res"] = None
@@ -321,14 +321,8 @@ def _combine_fit_results_wavg(
             # these are things like missing and or all zero-weight data, edges, etc.
             mdet_flags |= flags
 
-            # a PSF fit failure in any shear band ruins the shear
             if pres is None:
-                mdet_flags |= procflags.PSF_FAILURE
                 psf_flags |= procflags.PSF_FAILURE
-            else:
-                psf_flags |= pres["flags"]
-                if pres["flags"] != 0:
-                    mdet_flags |= procflags.PSF_FAILURE
 
             if gres is None:
                 mdet_flags |= procflags.OBJ_FAILURE
@@ -336,7 +330,6 @@ def _combine_fit_results_wavg(
             if (
                 flags == 0
                 and pres is not None
-                and pres["flags"] == 0
                 and gres is not None
                 and ("mom" in gres and "mom_cov" in gres)
                 and ("mom" in pres and "mom_cov" in pres)
@@ -347,7 +340,14 @@ def _combine_fit_results_wavg(
                 raw_psf_mom_cov += (wgt**2 * pres["mom_cov"])
                 wgt_sum += wgt
             else:
-                mdet_flags |= procflags.NOMOMENTS_FAILURE
+                if gres is None or "mom" not in gres or "mom_cov" not in gres:
+                    mdet_flags |= procflags.NOMOMENTS_FAILURE
+                if pres is None or "mom" not in pres or "mom_cov" not in pres:
+                    psf_flags |= procflags.NOMOMENTS_FAILURE
+
+    # we need positive weights in all bands
+    if not np.all(all_wgts[0:nband] > 0):
+        mdet_flags |= procflags.MISSING_BAND
 
     if (
         mdet_flags == 0
@@ -369,10 +369,14 @@ def _combine_fit_results_wavg(
             data[n(col)] = momres[col]
         for col in ['e', 'e_cov']:
             data[n(col.replace('e', 'g'))] = momres[col]
-        data[n('T_ratio')] = data[n('T')] / data['psf_T']
+        if psf_flags == 0:
+            data[n('T_ratio')] = data[n('T')] / data['psf_T']
     else:
         # something above failed so mark this as a failed object
         mdet_flags |= procflags.OBJ_FAILURE
+
+    if psf_flags != 0:
+        mdet_flags |= procflags.PSF_FAILURE
 
     if tot_nband > 1:
         data[n('band_flux')] = np.array(band_flux)
@@ -384,9 +388,9 @@ def _combine_fit_results_wavg(
     # now we set the flags as they would have been set in our moments code
     # any PSF failure in a shear band causes a non-zero flags value
     data['psf_flags'] = psf_flags
-    data[n('flags')] = mdet_flags | psf_flags
+    data[n('flags')] = mdet_flags
     data[n('band_flux_flags')] = flux_flags
-    data['flags'] = mdet_flags | flux_flags | psf_flags
+    data['flags'] = mdet_flags | flux_flags
 
     if data['flags'] != 0:
         logger.debug(
