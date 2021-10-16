@@ -289,8 +289,8 @@ def _combine_fit_results_wavg(
     band_flux_err = []
     raw_mom = np.zeros(4, dtype=np.float64)
     raw_mom_cov = np.zeros((4, 4), dtype=np.float64)
-    raw_psf_g = 0
-    raw_psf_T = 0
+    raw_psf_mom = np.zeros(4, dtype=np.float64)
+    raw_psf_mom_cov = np.zeros((4, 4), dtype=np.float64)
     wgt_sum = 0.0
     psf_flags = 0
     mdet_flags = 0
@@ -339,17 +339,13 @@ def _combine_fit_results_wavg(
                 and pres["flags"] == 0
                 and gres is not None
                 and ("mom" in gres and "mom_cov" in gres)
+                and ("mom" in pres and "mom_cov" in pres)
             ):
                 raw_mom += (wgt * gres["mom"])
                 raw_mom_cov += (wgt**2 * gres["mom_cov"])
-
+                raw_psf_mom += (wgt * pres["mom"])
+                raw_psf_mom_cov += (wgt**2 * pres["mom_cov"])
                 wgt_sum += wgt
-
-                if "g" in pres:
-                    raw_psf_g += (wgt * pres['g'])
-                else:
-                    raw_psf_g += (wgt * pres['e'])
-                raw_psf_T += (wgt * pres['T'])
             else:
                 mdet_flags |= procflags.NOMOMENTS_FAILURE
 
@@ -358,10 +354,12 @@ def _combine_fit_results_wavg(
         and psf_flags == 0
         and wgt_sum > 0
     ):
-        raw_psf_g /= wgt_sum
-        raw_psf_T /= wgt_sum
-        data["psf_g"] = raw_psf_g
-        data["psf_T"] = raw_psf_T
+        raw_psf_mom /= wgt_sum
+        raw_psf_mom_cov /= (wgt_sum**2)
+        psf_momres = make_mom_result(raw_psf_mom, raw_psf_mom_cov)
+        psf_flags |= psf_momres["flags"]
+        data["psf_g"] = psf_momres['e']
+        data["psf_T"] = psf_momres['T']
 
         raw_mom /= wgt_sum
         raw_mom_cov /= (wgt_sum**2)
