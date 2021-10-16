@@ -306,7 +306,7 @@ def _combine_fit_results_wavg(
 
         # an object fit missing in any band is bad too
         if gres is None:
-            flux_flags |= procflags.OBJ_FAILURE
+            flux_flags |= procflags.MISSING_BAND
             band_flux.append(np.nan)
             band_flux_err.append(np.nan)
         else:
@@ -321,11 +321,15 @@ def _combine_fit_results_wavg(
             # these are things like missing and or all zero-weight data, edges, etc.
             mdet_flags |= flags
 
-            if pres is None:
-                psf_flags |= procflags.PSF_FAILURE
-
             if gres is None:
-                mdet_flags |= procflags.OBJ_FAILURE
+                mdet_flags |= procflags.MISSING_BAND
+            elif "mom" not in gres or "mom_cov" not in gres:
+                mdet_flags |= procflags.NOMOMENTS_FAILURE
+
+            if pres is None:
+                psf_flags |= procflags.MISSING_BAND
+            elif "mom" not in pres or "mom_cov" not in pres:
+                psf_flags |= procflags.NOMOMENTS_FAILURE
 
             if (
                 flags == 0
@@ -339,20 +343,18 @@ def _combine_fit_results_wavg(
                 raw_psf_mom += (wgt * pres["mom"])
                 raw_psf_mom_cov += (wgt**2 * pres["mom_cov"])
                 wgt_sum += wgt
-            else:
-                if gres is None or "mom" not in gres or "mom_cov" not in gres:
-                    mdet_flags |= procflags.NOMOMENTS_FAILURE
-                if pres is None or "mom" not in pres or "mom_cov" not in pres:
-                    psf_flags |= procflags.NOMOMENTS_FAILURE
 
     # we need positive weights in all bands
     if not np.all(all_wgts[0:nband] > 0):
         mdet_flags |= procflags.MISSING_BAND
 
+    if wgt_sum <= 0:
+        mdet_flags |= procflags.ZERO_WEIGHTS
+        psf_flags |= procflags.ZERO_WEIGHTS
+
     if (
         mdet_flags == 0
         and psf_flags == 0
-        and wgt_sum > 0
     ):
         raw_psf_mom /= wgt_sum
         raw_psf_mom_cov /= (wgt_sum**2)
@@ -371,9 +373,6 @@ def _combine_fit_results_wavg(
             data[n(col.replace('e', 'g'))] = momres[col]
         if psf_flags == 0:
             data[n('T_ratio')] = data[n('T')] / data['psf_T']
-    else:
-        # something above failed so mark this as a failed object
-        mdet_flags |= procflags.OBJ_FAILURE
 
     if psf_flags != 0:
         mdet_flags |= procflags.PSF_FAILURE
