@@ -13,6 +13,7 @@ BAD_BBOX = 2**20
 ZERO_WEIGHTS = 2**21
 NO_DATA = 2**22
 MISSING_BAND = 2**23
+INCONSISTENT_BANDS = 2**24
 
 NAME_MAP = copy.deepcopy(ngmix.procflags.NAME_MAP)
 NAME_MAP[EDGE_HIT] = "bbox hit edge"
@@ -23,6 +24,7 @@ NAME_MAP[BAD_BBOX] = "problem making bounding box"
 NAME_MAP[ZERO_WEIGHTS] = "weights all zero"
 NAME_MAP[NO_DATA] = "no data"
 NAME_MAP[MISSING_BAND] = "missing data in one or more bands"
+NAME_MAP[INCONSISTENT_BANDS] = "# of bands for PSF vs shear vs flux is not correct"
 for k, v in list(NAME_MAP.items()):
     NAME_MAP[v] = k
 

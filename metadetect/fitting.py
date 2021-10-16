@@ -259,7 +259,7 @@ def _sum_bands_wavg(
     raw_mom = np.zeros(4, dtype=np.float64)
     raw_mom_cov = np.zeros((4, 4), dtype=np.float64)
     wgt_sum = 0.0
-    used_shear_bands = [0] * tot_nband
+    used_shear_bands = [False] * tot_nband
     final_flags = 0
 
     for iband, (wgt, res, issb, flags) in enumerate(zip(
@@ -283,7 +283,7 @@ def _sum_bands_wavg(
                 raw_mom += (wgt * res["mom"])
                 raw_mom_cov += (wgt**2 * res["mom_cov"])
                 wgt_sum += wgt
-                used_shear_bands[iband] = 1
+                used_shear_bands[iband] = True
 
     # make sure we flag missing data or all zero weight sums
     if sum(used_shear_bands) > 0 and wgt_sum <= 0:
@@ -298,11 +298,10 @@ def _combine_fit_results_wavg(
     tot_nband = len(all_res)
     nband = sum(1 if issb else 0 for issb in all_is_shear_band)
     nonshear_nband = sum(0 if issb else 1 for issb in all_is_shear_band)
-    assert tot_nband == nband + nonshear_nband, (
-        "Inconsistent number of bands for shear vs non-shear when "
-        "combining fit results!"
-    )
-
+    blens = [
+        len(all_res), len(all_psf_res), len(all_is_shear_band),
+        len(all_wgts), len(all_flags)
+    ]
     n = Namer(front=model)
     data = np.zeros(
         1,
@@ -312,10 +311,19 @@ def _combine_fit_results_wavg(
         if "flags" not in name:
             data[name] = np.nan
 
-    if nband == 0:
-        psf_flags = procflags.MISSING_BAND
-        mdet_flags = procflags.MISSING_BAND
-        flux_flags = procflags.MISSING_BAND
+    if (
+        nband == 0
+        or tot_nband != nband + nonshear_nband
+        or not all(b == tot_nband for b in blens)
+    ):
+        if nband == 0:
+            psf_flags = procflags.MISSING_BAND
+            mdet_flags = procflags.MISSING_BAND
+            flux_flags = procflags.MISSING_BAND
+        else:
+            psf_flags = procflags.INCONSISTENT_BANDS
+            mdet_flags = procflags.INCONSISTENT_BANDS
+            flux_flags = procflags.INCONSISTENT_BANDS
         band_flux = [np.nan] * tot_nband
         band_flux_err = [np.nan] * tot_nband
     else:
@@ -324,7 +332,7 @@ def _combine_fit_results_wavg(
             raw_mom_cov,
             wgt_sum,
             mdet_flags,
-            used_shear_bands
+            used_shear_bands,
         ) = _sum_bands_wavg(
             all_res=all_res,
             all_is_shear_band=all_is_shear_band,
@@ -337,7 +345,7 @@ def _combine_fit_results_wavg(
             psf_raw_mom_cov,
             psf_wgt_sum,
             psf_flags,
-            psf_used_shear_bands
+            psf_used_shear_bands,
         ) = _sum_bands_wavg(
             all_res=all_psf_res,
             all_is_shear_band=all_is_shear_band,
@@ -345,8 +353,13 @@ def _combine_fit_results_wavg(
             all_flags=all_flags,
         )
 
-        if psf_flags == 0 and mdet_flags == 0:
-            assert used_shear_bands == psf_used_shear_bands
+        if (
+            mdet_flags == 0
+            and psf_flags == 0
+            and used_shear_bands != psf_used_shear_bands
+        ):
+            psf_flags |= procflags.INCONSISTENT_BANDS
+            mdet_flags |= procflags.INCONSISTENT_BANDS
 
         band_flux = []
         band_flux_err = []

@@ -282,9 +282,9 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, i]))
 
 
-@pytest.mark.parametrize("kwargs,psf_flags,model_flags,flux_flags", [
-    # no data at all
+@pytest.mark.parametrize("purpose,kwargs,psf_flags,model_flags,flux_flags", [
     (
+        "no data at all",
         dict(
             all_res=[],
             all_psf_res=[],
@@ -296,9 +296,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["MISSING_BAND", "PSF_FAILURE"],
         ["MISSING_BAND"],
     ),
-
-    # everything failed
     (
+        "everything failed",
         dict(
             all_res=[None, None, None, None],
             all_psf_res=[None, None, None, None],
@@ -311,8 +310,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["MISSING_BAND"],
     ),
 
-    # everything failed w/ input flags that should be in the output
     (
+        "everything failed w/ input flags that should be in the output",
         dict(
             all_res=[None, None, None, None],
             all_psf_res=[None, None, None, None],
@@ -324,9 +323,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["MISSING_BAND", "PSF_FAILURE", "NO_ATTEMPT", "ZERO_WEIGHTS"],
         ["MISSING_BAND", "NO_ATTEMPT"],
     ),
-
-    # we do not mark weight zero vs not for failures
     (
+        "we mark weights zero vs not for failures",
         dict(
             all_res=[None, None, None, None],
             all_psf_res=[None, None, None, None],
@@ -338,9 +336,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["MISSING_BAND", "PSF_FAILURE"],
         ["MISSING_BAND"],
     ),
-
-    # everything is fine one band
     (
+        "everything is fine one band",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -358,9 +355,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         [],
     ),
-
-    # everything is fine
     (
+        "everything is fine for more than one band",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -378,9 +374,103 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         [],
     ),
-
-    # flag a shear
     (
+        "extra shear bands",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }] * 2,
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 1,
+            all_is_shear_band=[True],
+            all_wgts=[1],
+            all_flags=[0],
+        ),
+        ["INCONSISTENT_BANDS"],
+        ["INCONSISTENT_BANDS", "PSF_FAILURE"],
+        ["INCONSISTENT_BANDS"],
+    ),
+    (
+        "extra PSF bands",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}] * 2,
+            all_is_shear_band=[True],
+            all_wgts=[1],
+            all_flags=[0],
+        ),
+        ["INCONSISTENT_BANDS"],
+        ["INCONSISTENT_BANDS", "PSF_FAILURE"],
+        ["INCONSISTENT_BANDS"],
+    ),
+    (
+        "extra weights",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}],
+            all_is_shear_band=[True],
+            all_wgts=[1, 1],
+            all_flags=[0],
+        ),
+        ["INCONSISTENT_BANDS"],
+        ["INCONSISTENT_BANDS", "PSF_FAILURE"],
+        ["INCONSISTENT_BANDS"],
+    ),
+    (
+        "extra flags",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}],
+            all_is_shear_band=[True],
+            all_wgts=[1],
+            all_flags=[0, 0],
+        ),
+        ["INCONSISTENT_BANDS"],
+        ["INCONSISTENT_BANDS", "PSF_FAILURE"],
+        ["INCONSISTENT_BANDS"],
+    ),
+    (
+        "extra shear bands",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.ones(4),
+                "mom_cov": np.diag(np.ones(4))
+            }],
+            all_psf_res=[{"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}],
+            all_is_shear_band=[True, False],
+            all_wgts=[1],
+            all_flags=[0, 0],
+        ),
+        ["INCONSISTENT_BANDS"],
+        ["INCONSISTENT_BANDS", "PSF_FAILURE"],
+        ["INCONSISTENT_BANDS"],
+    ),
+    (
+        "flag a single shear",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -398,9 +488,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["NO_ATTEMPT", "PSF_FAILURE"],
         ["NO_ATTEMPT"],
     ),
-
-    # flag a shear res?
     (
+        "flag a shear res is fine",
         dict(
             all_res=[{
                 "flux_flags": 1,
@@ -424,9 +513,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NO_ATTEMPT"],
     ),
-
-    # zero weight a shear
     (
+        "zero weight a shear",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -444,9 +532,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["ZERO_WEIGHTS", "PSF_FAILURE"],
         [],
     ),
-
-    # missing a shear res
     (
+        "missing a shear res",
         dict(
             all_res=[None] + [{
                 "flux_flags": 0,
@@ -464,9 +551,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["MISSING_BAND"],
         ["MISSING_BAND"],
     ),
-
-    # zero weight a flux
     (
+        "zero weight a flux",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -484,9 +570,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         [],
     ),
-
-    # flag a flux
     (
+        "flag a flux",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -504,9 +589,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NO_ATTEMPT"],
     ),
-
-    # flag a flux in res
     (
+        "flag a flux in res",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -532,9 +616,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NO_ATTEMPT"],
     ),
-
-    # missing a flux res
     (
+        "missing a flux res",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -552,9 +635,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["MISSING_BAND"],
     ),
-
-    # missing flux
     (
+        "missing flux",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -577,9 +659,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NOMOMENTS_FAILURE"],
     ),
-
-    # missing flux_err
     (
+        "missing flux_err",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -602,9 +683,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NOMOMENTS_FAILURE"],
     ),
-
-    # missing flux_flags
     (
+        "missing flux_flags",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -627,9 +707,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         ["NOMOMENTS_FAILURE"],
     ),
-
-    # missing mom
     (
+        "missing mom",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -652,9 +731,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["NOMOMENTS_FAILURE"],
         [],
     ),
-
-    # missing mom_cov
     (
+        "missing mom_cov",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -677,9 +755,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["NOMOMENTS_FAILURE"],
         [],
     ),
-
-    # missing psf mom
     (
+        "missing psf mom",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -692,7 +769,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 {"mom_cov": np.diag(np.ones(4))}
             ] + [
                 {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
-            ] * 4,
+            ] * 3,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -701,9 +778,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["PSF_FAILURE"],
         [],
     ),
-
-    # missing psf mom cov
     (
+        "missing psf mom cov",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -716,7 +792,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 {"mom": np.diag(np.ones(4))}
             ] + [
                 {"mom": np.ones(4), "mom_cov": np.diag(np.ones(4))}
-            ] * 4,
+            ] * 3,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -725,9 +801,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["PSF_FAILURE"],
         [],
     ),
-
-    # missing psf mom for flux
     (
+        "missing psf mom for flux",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -749,9 +824,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         [],
     ),
-
-    # missing psf mom for flux
     (
+        "missing psf mom for flux",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -773,9 +847,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         [],
         [],
     ),
-
-    # negative weights somehow?
     (
+        "negative/cancelling weights somehow",
         dict(
             all_res=[{
                 "flux_flags": 0,
@@ -796,7 +869,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
 
 ])
 def test_fitting_combine_fit_results_wavg_flagging(
-    kwargs, psf_flags, model_flags, flux_flags
+    purpose, kwargs, psf_flags, model_flags, flux_flags
 ):
     def _print_flags(data):
         for name in data.dtype.names:
@@ -813,9 +886,9 @@ def test_fitting_combine_fit_results_wavg_flagging(
         if val != fval:
             for flag in flags:
                 assert (val & getattr(procflags, flag)) != 0, (
-                    "flag val %s failed!" % flag
+                    "%s: flag val %s failed!" % (purpose, flag)
                 )
-        assert val == fval
+        assert val == fval, purpose
 
     model = "wwmom"
 
@@ -829,6 +902,6 @@ def test_fitting_combine_fit_results_wavg_flagging(
     assert (
         data["flags"][0] ==
         (data[model + "_flags"][0] | data[model + "_band_flux_flags"][0])
-    )
+    ), purpose
     if data["psf_flags"][0] != 0:
-        assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0
+        assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
