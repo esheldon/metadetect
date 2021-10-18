@@ -3,6 +3,9 @@ from .util import copy_mbexp
 
 DEFAULT_STRETCH = 1.25
 DEFAULT_Q = 7.5
+SIZE = 16
+COLOR = 'red'
+EDGECOLOR = 'white'
 
 
 def show_exp(exp, mess=None):
@@ -31,6 +34,7 @@ def show_exp(exp, mess=None):
 
 def show_mbexp(
     mbexp, stretch=DEFAULT_STRETCH, q=DEFAULT_Q, mess=None, ax=None,
+    sources=None,
     show=True,
 ):
     """
@@ -92,6 +96,13 @@ def show_mbexp(
 
         imshow_norm(timage, ax=ax, stretch=AsinhStretch())
 
+    if sources is not None:
+        x, y = _extract_xy(mbexp, sources)
+        ax.scatter(
+            x, y,
+            s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
+        )
+
     if mess is not None:
         ax.set_title(mess)
 
@@ -101,7 +112,24 @@ def show_mbexp(
     return ax
 
 
-def compare_mbexp(mbexp, model, stretch=DEFAULT_STRETCH, q=DEFAULT_Q):
+def _extract_xy(mbexp, sources):
+    bbox = mbexp.getBBox()
+    x0 = bbox.getBeginX()
+    y0 = bbox.getBeginY()
+    x = []
+    y = []
+    for source in sources[mbexp.filters[0]]:
+        peak = source.getFootprint().getPeaks()[0]
+        cen = peak.getCentroid()
+        x.append(cen.getX() - x0)
+        y.append(cen.getY() - y0)
+
+    return x, y
+
+
+def compare_mbexp(
+    mbexp, model, sources=None, stretch=DEFAULT_STRETCH, q=DEFAULT_Q,
+):
     """
     compare two MultibandExposure with residuals
 
@@ -130,9 +158,11 @@ def compare_mbexp(mbexp, model, stretch=DEFAULT_STRETCH, q=DEFAULT_Q):
     fig, axs = mplt.subplots(nrows=2, ncols=2, figsize=(12, 12))
     show_mbexp(
         mbexp, stretch=stretch, q=q, mess='data', ax=axs[0, 0], show=False,
+        sources=sources,
     )
     show_mbexp(
         model, stretch=stretch, q=q, mess='model', ax=axs[0, 1], show=False,
+        sources=sources,
     )
     axs[1, 1].axis('off')
 
@@ -140,6 +170,7 @@ def compare_mbexp(mbexp, model, stretch=DEFAULT_STRETCH, q=DEFAULT_Q):
     c.image.array -= model.image.array
     show_mbexp(
         c, stretch=stretch, q=q, mess='data - model', ax=axs[1, 0], show=False,
+        sources=sources,
     )
     mplt.show()
 

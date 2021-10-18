@@ -192,7 +192,7 @@ def measure(
 
     if show:
         model = subtractor.get_full_model()
-        vis.compare_mbexp(mbexp=mbexp, model=model)
+        vis.compare_mbexp(mbexp=mbexp, model=model, sources=sources)
 
     results = []
 
