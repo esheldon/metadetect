@@ -59,8 +59,6 @@ def detect_and_deblend(mbexp):
     from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
     from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 
-    # TODO always do a coadd to work around issue of psf bounding box
-    # in descwl-shear-sims
     detexp = util.coadd_exposures(mbexp.singles)
 
     schema = afw_table.SourceTable.makeMinimalSchema()
@@ -176,12 +174,13 @@ def test_multiband_noise_replacer(show=False):
         for source in sources[:5]:
             source_id = source.getId()
             with replacer.sourceInserted(source_id):
+
+                if show:
+                    vis.compare_mbexp(rmbexp_copy, replacer.mbexp)
+
                 for band, rexp, exp in zip(
                     bands, replaced_copys, replacer.mbexp.singles
                 ):
-
-                    if show:
-                        vis.compare_mbexp(rmbexp_copy, replacer.mbexp)
 
                     assert np.any(rexp.image.array != exp.image.array), (
                         f'after inserting source {source_id}, band {band} does not '
