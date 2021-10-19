@@ -230,8 +230,10 @@ def add_ormask(ormask, res):
     copy in ormask values using the row, col positions
     """
     for i in range(res.size):
-        local_row = int(res['row'][i] - res['row0'][i])
-        local_col = int(res['col'][i] - res['col0'][i])
+        row_diff = res['row'][i] - res['row0'][i]
+        col_diff = res['col'][i] - res['col0'][i]
+        local_row = int(np.floor(row_diff + 0.5))
+        local_col = int(np.floor(col_diff + 0.5))
 
         res['ormask'][i] = ormask[local_row, local_col]
 
