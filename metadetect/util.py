@@ -1,5 +1,5 @@
 import logging
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -278,25 +278,25 @@ class MultibandNoiseReplacer(object):
         end the noise replacment.  Called automatically upon leaving the
         context manager
         """
-        # we do nothing because our replacers are context managers
-        # for replacer in self.noise_replacers:
-        #     replacer.end()
-        pass
+        self.exit_stack.close()
 
     def _set_noise_replacers(self):
+        """
+        set a noise replacer for each exp and put it on the
+        context lib ExitStack for cleanup later
+        """
 
         self.noise_replacers = []
+        self.exit_stack = ExitStack()
 
         for exp in self.mbexp.singles:
-            # this needs to be a regular one because the ContextNoiseReplacer
-            # won't do insertSource outside a context manager
             replacer = ContextNoiseReplacer(
                 exposure=exp,
                 sources=self.sources,
                 rng=self.rng,
-                # TODO generate consistent noise image
             )
             self.noise_replacers.append(replacer)
+            self.exit_stack.enter_context(replacer)
 
     def __enter__(self):
         return self
