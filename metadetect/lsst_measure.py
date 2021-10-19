@@ -123,7 +123,7 @@ def measure(
         The exposure on which to detect and measure
     sources: list of sources
         From a detection task
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
+    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.PGaussMom
         For calculating moments
     stamp_size: int
         Size for postage stamps
@@ -200,20 +200,15 @@ def measure_one(obs, fitter):
     ----------
     obs: ngmix.Observation
         The observation to measure
-    fitter: e.g. ngmix.prepsfmom.PrePsfGaussMom
+    fitter: e.g. ngmix.prepsfmom.PGaussMom
         The measurement object
 
     Returns
     -------
     res dict
     """
-    from ngmix.ksigmamom import KSigmaMom
-    from ngmix.prepsfmom import PrePSFGaussMom
 
-    is_prepsf = (
-        isinstance(fitter, KSigmaMom) or isinstance(fitter, PrePSFGaussMom)
-    )
-    if is_prepsf and not obs.has_psf():
+    if fitter.kind in ['ksigma', 'pgauss'] and not obs.has_psf():
         res = fitter.go(obs, no_psf=True)
     else:
         res = fitter.go(obs)
@@ -584,9 +579,9 @@ def _extract_jacobian(subim, source):
     return jacob
 
 
-def _get_dtype(meas_type):
+def _get_dtype(kind):
 
-    n = util.Namer(front=meas_type)
+    n = util.Namer(front=kind)
     dt = [
         ('flags', 'i4'),
 
@@ -627,9 +622,9 @@ def _get_dtype(meas_type):
     return dt
 
 
-def get_output_struct(meas_type):
-    n = util.Namer(front=meas_type)
-    dt = _get_dtype(meas_type)
+def get_output_struct(kind):
+    n = util.Namer(front=kind)
+    dt = _get_dtype(kind)
 
     output = np.zeros(1, dtype=dt)
 
@@ -657,10 +652,9 @@ def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     When data are unavailable, a default value of nan is used
     """
-    meas_type = get_meas_type(fitter)
-    output = get_output_struct(meas_type)
+    output = get_output_struct(fitter.kind)
 
-    n = util.Namer(front=meas_type)
+    n = util.Namer(front=fitter.kind)
 
     output['psf_flags'] = pres['flags']
     output[n('flags')] = res['flags']
@@ -713,38 +707,6 @@ def get_output(wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
 
     output['flags'] = flags
     return output
-
-
-def get_meas_type(fitter):
-    """
-    Get the measurement type as a string for the input fitter
-
-    Parameters
-    ----------
-    fitter: e.g. ngmix.prepsfmom.PrePSFGaussMom
-        The fitter
-
-    Returns
-    -------
-    name for measurement type
-    """
-    if isinstance(fitter, ngmix.gaussmom.GaussMom):
-        meas_type = 'wmom'
-    elif isinstance(fitter, ngmix.ksigmamom.KSigmaMom):
-        meas_type = 'ksigma'
-    elif isinstance(fitter, ngmix.prepsfmom.PrePSFGaussMom):
-        meas_type = 'gap'
-    elif isinstance(fitter, ngmix.runners.Runner):
-        assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter), (
-            'only meas_type "am" for a runner'
-        )
-        meas_type = 'am'
-    else:
-        raise ValueError(
-            "don't know how to get name for fitter %s" % repr(fitter)
-        )
-
-    return meas_type
 
 
 class MissingDataError(Exception):

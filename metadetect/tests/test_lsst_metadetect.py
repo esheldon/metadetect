@@ -56,7 +56,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5):
     return sim_data
 
 
-@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'gap'])
+@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     rng = np.random.RandomState(seed=116)
@@ -196,7 +196,7 @@ def test_lsst_zero_weights():
     assert nobj[0] == nobj[1]
 
 
-@pytest.mark.parametrize('meas_type', ['ksigma', 'gap'])
+@pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
 def test_lsst_metadetect_prepsf_stars(meas_type):
     seed = 55
     rng = np.random.RandomState(seed=seed)
