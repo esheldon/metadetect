@@ -97,7 +97,7 @@ def _verify_psf_config(config):
     )
 
     model = config['model']
-    if model == 'am':
+    if model in ['am', 'admom']:
         allowed_keys = ['model', 'ntry']
     elif model == 'wmom':
         allowed_keys = ['model', 'weight_fwhm']
