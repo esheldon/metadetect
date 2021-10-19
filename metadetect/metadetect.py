@@ -192,8 +192,8 @@ class Metadetect(dict):
             self._fitter = ngmix.gaussmom.GaussMom(fwhm=self["weight"]["fwhm"])
         elif self['model'] == 'ksigma':
             self._fitter = ngmix.prepsfmom.KSigmaMom(fwhm=self["weight"]["fwhm"])
-        elif self['model'] == "gap":
-            self._fitter = ngmix.prepsfmom.PrePSFGaussMom(fwhm=self["weight"]["fwhm"])
+        elif self['model'] == "pgauss":
+            self._fitter = ngmix.prepsfmom.PGaussMom(fwhm=self["weight"]["fwhm"])
         else:
             raise ValueError("bad model: '%s'" % self['model'])
 

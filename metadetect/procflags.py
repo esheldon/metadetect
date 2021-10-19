@@ -1,21 +1,21 @@
 import copy
 
-import ngmix.procflags
-from ngmix.procflags import NO_ATTEMPT  # noqa
+import ngmix.flags
+from ngmix.flags import NO_ATTEMPT  # noqa
 
-# these flags start at 16 always
+# these flags start at 20 always
 # this allows us to combine them with the flags in ngmix
-EDGE_HIT = 2**16
-PSF_FAILURE = 2**17
-OBJ_FAILURE = 2**18
-NOMOMENTS_FAILURE = 2**19
-BAD_BBOX = 2**20
-ZERO_WEIGHTS = 2**21
-NO_DATA = 2**22
-MISSING_BAND = 2**23
-INCONSISTENT_BANDS = 2**24
+EDGE_HIT = 2**20
+PSF_FAILURE = 2**21
+OBJ_FAILURE = 2**22
+NOMOMENTS_FAILURE = 2**23
+BAD_BBOX = 2**24
+ZERO_WEIGHTS = 2**25
+NO_DATA = 2**26
+MISSING_BAND = 2**27
+INCONSISTENT_BANDS = 2**28
 
-NAME_MAP = copy.deepcopy(ngmix.procflags.NAME_MAP)
+NAME_MAP = copy.deepcopy(ngmix.flags.NAME_MAP)
 NAME_MAP[EDGE_HIT] = "bbox hit edge"
 NAME_MAP[PSF_FAILURE] = "PSF fit failed"
 NAME_MAP[OBJ_FAILURE] = "object fit failed"
@@ -42,4 +42,4 @@ def get_procflags_str(val):
     flagstr : str
         A string of descriptions for each bit separated by `|`.
     """
-    return ngmix.procflags.get_procflags_str(val, name_map=NAME_MAP)
+    return ngmix.flags.get_procflags_str(val, name_map=NAME_MAP)

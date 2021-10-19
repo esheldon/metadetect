@@ -174,7 +174,7 @@ def test_detect_masking(ntrial=1, show=False):
         assert mer.cat.size == 0
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect(model):
     """
     test full metadetection
@@ -206,7 +206,7 @@ def test_metadetect(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
@@ -244,7 +244,7 @@ def test_metadetect_mfrac(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_mfrac_all(model):
     """
     test full metadetection w/ mfrac all 1
@@ -268,7 +268,7 @@ def test_metadetect_mfrac_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_zero_weight_all(model):
     """
     test full metadetection w/ all zero weight
@@ -293,7 +293,7 @@ def test_metadetect_zero_weight_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_zero_weight_some(model):
     """
     test full metadetection w/ some zero weight
@@ -318,7 +318,7 @@ def test_metadetect_zero_weight_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_maskflags_all(model):
     """
     test full metadetection w/ all bmask all maskflags
@@ -344,7 +344,7 @@ def test_metadetect_maskflags_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 def test_metadetect_bmask_some(model):
     """
     test full metadetection w/ some bmask all maskflags
@@ -371,7 +371,7 @@ def test_metadetect_bmask_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "gap", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 @pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
 def test_metadetect_flux(model, nband, nshear):
     """

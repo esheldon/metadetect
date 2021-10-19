@@ -254,7 +254,7 @@ def run_sim(seed, mdet_seed, model, **kwargs):
     'model,snr,ngrid,ntrial', [
         ("wmom", 1e6, 7, 50),
         ("ksigma", 1e6, 7, 50),
-        ("gap", 1e6, 7, 50),
+        ("pgauss", 1e6, 7, 50),
         ("wmom", 1e6, None, 10000),
     ]
 )
