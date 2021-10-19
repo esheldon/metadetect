@@ -147,7 +147,7 @@ class ContextNoiseReplacer(object):
         # do something
     """
 
-    def __init__(self, exposure, sources, noise_image=None):
+    def __init__(self, exposure, sources, rng, noise_image=None):
         from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
 
         # Notes for metacal.
@@ -160,7 +160,16 @@ class ContextNoiseReplacer(object):
         # making the field the same for all metacal images we reduce variance in
         # the calculation of the response
 
-        noise_replacer_config = NoiseReplacerConfig()
+        config = NoiseReplacerConfig()
+
+        # TODO DM needs to fix the crash
+        # config.noiseSource = 'variance'
+        config.noiseSeedMultiplier = rng.randint(0, 2**24)
+
+        if noise_image is None:
+            # TODO remove_poisson should be true for real data
+            noise_image = get_noise_image(exposure, rng=rng, remove_poisson=False)
+
         footprints = {
             source.getId(): (source.getParent(), source.getFootprint())
             for source in sources
@@ -169,7 +178,7 @@ class ContextNoiseReplacer(object):
         # This constructor will replace all detected pixels with noise in the
         # image
         self.replacer = NoiseReplacer(
-            noise_replacer_config,
+            config,
             exposure=exposure,
             footprints=footprints,
             noiseImage=noise_image,
@@ -194,12 +203,14 @@ class ContextNoiseReplacer(object):
         """
         Insert a source
         """
+        print(f'inserting {source_id}')
         self.replacer.insertSource(source_id)
 
     def removeSource(self, source_id):
         """
         Remove a source
         """
+        print(f'removing {source_id}')
         self.replacer.removeSource(source_id)
 
     def end(self):
@@ -229,9 +240,10 @@ class MultibandNoiseReplacer(object):
         with replacer.insertSource(source_id):
             # do something with exposures
     """
-    def __init__(self, mbexp, sources):
+    def __init__(self, mbexp, sources, rng):
         self.mbexp = mbexp
         self.sources = sources
+        self.rng = rng
         self._set_noise_replacers()
 
     @contextmanager
@@ -283,7 +295,7 @@ class MultibandNoiseReplacer(object):
             replacer = ContextNoiseReplacer(
                 exposure=exp,
                 sources=self.sources,
-                # TODO generate consistent noise image
+                rng=self.rng,
             )
             self.noise_replacers.append(replacer)
             self.exit_stack.enter_context(replacer)
@@ -338,6 +350,56 @@ def get_noise_replacer(exposure, sources, noise_image=None):
         footprints=footprints,
         noiseImage=noise_image,
     )
+
+
+def get_noise_image(exp, rng, remove_poisson):
+    """
+    get a noise image based on the input exposure
+
+    TODO gain correct separately in each amplifier, currently
+    averaged
+
+    Parameters
+    ----------
+    exp: afw.image.ExposureF
+        The exposure upon which to base the noise
+    rng: np.random.RandomState
+        The random number generator for making the noise image
+    remove_poisson: bool
+        If True, remove the poisson noise from the variance
+        estimate.
+
+    Returns
+    -------
+    MaskedImage
+    """
+    import lsst.afw.image as afw_image
+
+    noise_exp = afw_image.ExposureF(exp, deep=True)
+
+    signal = exp.image.array
+    variance = exp.variance.array
+
+    use = np.where(np.isfinite(variance) & np.isfinite(signal))
+
+    if remove_poisson:
+        gains = [
+            amp.getGain() for amp in exp.getDetector().getAmplifiers()
+        ]
+        mean_gain = np.mean(gains)
+
+        corrected_var = variance[use] - signal[use] / mean_gain
+
+        var = np.median(corrected_var)
+    else:
+        var = np.median(variance[use])
+
+    noise = rng.normal(scale=np.sqrt(var), size=signal.shape)
+
+    noise_exp.image.array[:, :] = noise
+    noise_exp.variance.array[:, :] = var
+
+    return noise_exp.getMaskedImage()
 
 
 def get_mbexp(exposures):
