@@ -37,9 +37,6 @@ def subtract_sky_mbobs(mbobs, thresh=DEFAULT_THRESH):
     """
     subtract sky
 
-    We combine these because both involve resetting the image
-    and noise image
-
     Parameters
     ----------
     mbobs: ngmix.MultiBandObsList
@@ -51,7 +48,7 @@ def subtract_sky_mbobs(mbobs, thresh=DEFAULT_THRESH):
         for obs in obslist:
             exp = obs.coadd_exp
 
-            _ = iterate_detection_and_skysub(
+            iterate_detection_and_skysub(
                 exposure=exp,
                 thresh=thresh,
             )
