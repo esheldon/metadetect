@@ -29,80 +29,20 @@ import lsst.geom as geom
 from lsst.pex.exceptions import InvalidParameterError, LengthError
 from . import vis
 from . import util
-from .defaults import (
-    DEFAULT_THRESH, DEFAULT_LOGLEVEL
-)
+from .defaults import DEFAULT_THRESH
 from . import procflags
-from .lsst_measure import get_output, get_ormask
+from .lsst_measure import (
+    get_output_struct, get_meas_type, get_ormask, measure_one,
+    MissingDataError,
+)
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
 
 
-def detect_deblend_and_measure(
-    exposures,
-    fitter,
-    stamp_size,
-    thresh=DEFAULT_THRESH,
-    loglevel=DEFAULT_LOGLEVEL,
-    show=False,
-):
-    """
-    run detection, deblending and measurements using scarlet as the deblender
-
-    Note deblending is always run in a hierarchical detection process, but the
-    user has a choice whether to use deblended postage stamps for the
-    measurement.
-
-    We could just take in the MultibandExposure but it drops the wcs
-    and filter labels, so instead we take the exposures and build
-    it ourselves, so we can pass on the wcs
-
-    Parameters
-    ----------
-    exposures: lsst.afw.image.ExposureF or list thereof
-        The exposures to process, can be an exposure or list
-        of exposures
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
-        For calculating moments
-    thresh: float
-        The detection threshold in units of the sky noise
-    stamp_size: int
-        Size for postage stamps.
-    loglevel: str, optional
-        Log level for logger in string form
-
-    Returns
-    -------
-    array of results, with flags, positions, shapes, etc. or None
-    if there were no objects to measure
-    """
-
-    if not isinstance(exposures, list):
-        exposures = [exposures]
-
-    mbexp = util.get_mbexp(exposures)
-    sources, detexp = detect_and_deblend(
-        mbexp=mbexp,
-        thresh=thresh,
-        loglevel=loglevel,
-    )
-
-    return measure(
-        mbexp=mbexp,
-        original_exposures=exposures,
-        detexp=detexp,
-        sources=sources,
-        fitter=fitter,
-        stamp_size=stamp_size,
-        show=show,
-    )
-
-
 def detect_and_deblend(
     mbexp,
     thresh=DEFAULT_THRESH,
-    loglevel=DEFAULT_LOGLEVEL,
 ):
     """
     run detection and the scarlet deblender
@@ -113,8 +53,6 @@ def detect_and_deblend(
         The exposures to process
     thresh: float
         The detection threshold in units of the sky noise
-    loglevel: str, optional
-        Log level for logger in string form
 
     Returns
     -------
@@ -194,10 +132,10 @@ def detect_and_deblend(
 
 def measure(
     mbexp,
-    original_exposures,
     detexp,
     sources,
     fitter,
+    rng,
     stamp_size,
     show=False,
 ):
@@ -214,15 +152,15 @@ def measure(
     ----------
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
-    original_exposures: list of Exposure s
-        The exposures from which the mbexp was created. We need this
-        to get the wcs
     detexp: Exposure
-        The detection exposure, used for getting ormasks
+        The detection exposure, used for getting ormasks. This is returned
+        by lsst_measure_scarlet.detect_and_deblend
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    rng: np.random.RandomState
+        Random number generator for the centroid algorithm
     stamp_size: int
         Size for postage stamps
     show: bool, optional
@@ -234,8 +172,7 @@ def measure(
     if there were no objects to measure
     """
 
-    # Must get wcs from an original exposure
-    wcs = original_exposures[0].getWcs()
+    wcs = mbexp.singles[0].getWcs()
 
     subtractor = ModelSubtractor(
         mbexp=mbexp,
@@ -266,8 +203,7 @@ def measure(
         )
         results += _process_sources(
             subtractor=subtractor, sources=children, stamp_size=stamp_size,
-            detexp=detexp,
-            wcs=wcs, fitter=fitter, show=show,
+            detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
         )
 
     if len(results) > 0:
@@ -279,14 +215,13 @@ def measure(
 
 
 def _process_sources(
-    subtractor, sources, stamp_size, wcs, fitter, detexp, show=False,
+    subtractor, sources, stamp_size, wcs, fitter, detexp, rng, show=False,
 ):
     results = []
     for source in sources:
         res = _process_source(
             subtractor=subtractor, source=source, stamp_size=stamp_size,
-            detexp=detexp,
-            wcs=wcs, fitter=fitter, show=show,
+            detexp=detexp, wcs=wcs, fitter=fitter, rng=rng, show=show,
         )
         results.append(res)
 
@@ -294,13 +229,14 @@ def _process_sources(
 
 
 def _process_source(
-    subtractor, source, stamp_size, wcs, fitter, detexp, show=False,
+    subtractor, source, stamp_size, wcs, fitter, detexp, rng, show=False,
 ):
     source_id = source.getId()
 
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
 
+    box_size = -1
     with subtractor.add_source(source_id):
 
         if show:
@@ -312,6 +248,8 @@ def _process_source(
             stamp_mbexp = subtractor.get_stamp(
                 source_id, stamp_size=stamp_size,
             )
+            # make sure wcs is getting propagated
+            assert wcs == stamp_mbexp.singles[0].wcs
 
             if show:
                 ostamp_mbexp = subtractor.get_stamp(
@@ -329,16 +267,27 @@ def _process_source(
             # coadd of the bands
 
             coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
-            obs = _extract_obs(wcs=wcs, subim=coadded_stamp_exp, source=source)
+            obs = _extract_obs(subim=coadded_stamp_exp, source=source)
             if obs is None:
                 LOG.info('skipping object with all zero weights')
                 ores = {'flags': procflags.ZERO_WEIGHTS}
                 pres = {'flags': procflags.NO_ATTEMPT}
-                box_size = -1
             else:
-                pres = _measure_one(obs=obs.psf, fitter=fitter)
-                ores = _measure_one(obs=obs, fitter=fitter)
-                box_size = obs.image.shape[0]
+                try:
+
+                    # this updates the jacobian center as well as the
+                    # meta['orig_cen'] pixel location in the original image
+
+                    find_and_set_center(obs=obs, rng=rng)
+
+                    pres = measure_one(obs=obs.psf, fitter=fitter)
+                    ores = measure_one(obs=obs, fitter=fitter)
+                    box_size = obs.image.shape[0]
+
+                except CentroidFail as err:
+                    LOG.info(str(err))
+                    ores = {'flags': procflags.CENTROID_FAIL}
+                    pres = {'flags': procflags.NO_ATTEMPT}
 
         except LengthError as e:
             # bounding box did not fit. TODO keep output with flag set
@@ -347,33 +296,11 @@ def _process_source(
             # note the context manager properly handles a return
             ores = {'flags': procflags.EDGE_HIT}
             pres = {'flags': procflags.NO_ATTEMPT}
-            box_size = -1
 
         res = get_output(
-            fitter=fitter, source=source, res=ores, pres=pres, ormask=ormask,
-            box_size=box_size, exp_bbox=exp_bbox,
+            obs=obs, wcs=wcs, fitter=fitter, source=source, res=ores, pres=pres,
+            ormask=ormask, box_size=box_size, exp_bbox=exp_bbox,
         )
-
-    return res
-
-
-def _measure_one(obs, fitter):
-    """
-    run a measurement on an input observation
-    """
-    from ngmix.ksigmamom import KSigmaMom
-
-    if isinstance(fitter, KSigmaMom) and not obs.has_psf():
-        res = fitter.go(obs, no_psf=True)
-    else:
-        res = fitter.go(obs)
-
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
 
     return res
 
@@ -442,7 +369,8 @@ class ModelSubtractor(object):
 
         self.mbexp = util.copy_mbexp(mbexp)
         for band in self.filters:
-            self.mbexp[band].setPsf(self.orig[band].getPsf())
+            psf = util.try_clone_psf(self.orig[band].getPsf())
+            self.mbexp[band].setPsf(psf)
 
         # we need a scratch array because heavy footprings don't
         # have addTo or subtractFrom methods
@@ -462,7 +390,7 @@ class ModelSubtractor(object):
         of interest, minus models of other objects
 
         with subtractor.add_source(source_id):
-            # do something with subtractor.exp
+            # do something with subtractor.mbexp
 
         Parameters
         ----------
@@ -471,7 +399,7 @@ class ModelSubtractor(object):
 
         Yields
         -------
-        ExposureF, although more typically one uses the .exp attribute
+        ExposureF, although more typically one uses the .mbexp attribute
         """
         if source_id not in self.source_ids:
             raise ValueError(f'source {source_id} is not in the source list')
@@ -561,7 +489,8 @@ class ModelSubtractor(object):
             mbexp = self.mbexp
 
         exposures = [mbexp[band][bbox] for band in self.filters]
-        return MultibandExposure.fromExposures(self.filters, exposures)
+        # return MultibandExposure.fromExposures(self.filters, exposures)
+        return util.get_mbexp(exposures)
 
     def get_model(self, source_id, stamp_size=None, clip=False):
         """
@@ -609,7 +538,8 @@ class ModelSubtractor(object):
 
             exposures.append(model_exp)
 
-        return MultibandExposure.fromExposures(self.filters, exposures)
+        # return MultibandExposure.fromExposures(self.filters, exposures)
+        return util.get_mbexp(exposures)
 
     def get_full_model(self):
         """
@@ -684,7 +614,9 @@ class ModelSubtractor(object):
         if stamp_size is not None:
             parent_id, fp = self.footprints[band][source_id]
             peak = fp.getPeaks()[0]
-            x_peak, y_peak = peak.getIx() - 0.5, peak.getIy() - 0.5
+
+            # note we previously had -0.5 on each of these based on Bob's code
+            x_peak, y_peak = peak.getIx(), peak.getIy()
 
             bbox = geom.Box2I(
                 geom.Point2I(x_peak, y_peak),
@@ -762,7 +694,7 @@ class ModelSubtractor(object):
                     scratch[band].image[bbox] = 0
 
 
-def _extract_obs(wcs, subim, source):
+def _extract_obs(subim, source):
     """
     convert an exposure object into an ngmix.Observation, including
     a psf observation.
@@ -772,8 +704,6 @@ def _extract_obs(wcs, subim, source):
 
     Parameters
     ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
     imobj: lsst.afw.image.Exposure
         An Exposure object, e.g. ExposureF
     source: lsst.afw.table.SourceRecord
@@ -802,7 +732,6 @@ def _extract_obs(wcs, subim, source):
     peak_location = peak.getCentroid()
 
     jacob = _extract_jacobian(
-        wcs=wcs,
         subim=subim,
         source=source,
         orig_cen=peak_location,
@@ -823,7 +752,10 @@ def _extract_obs(wcs, subim, source):
     # get from the mask object
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
-    meta = {'maskobj': maskobj}
+    meta = {
+        'maskobj': maskobj,
+        'orig_cen': peak_location,
+    }
 
     psf_obs = ngmix.Observation(
         psf_im,
@@ -842,15 +774,13 @@ def _extract_obs(wcs, subim, source):
     return obs
 
 
-def _extract_jacobian(wcs, subim, source, orig_cen):
+def _extract_jacobian(subim, source, orig_cen):
     """
     extract an ngmix.Jacobian from the image object
     and object record
 
     Parameters
     ----------
-    wcs: stack wcs
-        The wcs for the full image not this sub image
     imobj: lsst.afw.image.Exposure
         An Exposure object, e.g. ExposureF
     source: lsst.afw.table.SourceRecord
@@ -863,6 +793,9 @@ def _extract_jacobian(wcs, subim, source, orig_cen):
     Jacobian: ngmix.Jacobian
         The local jacobian
     """
+
+    # this will still be the wcs for the full exposure
+    wcs = subim.getWcs()
 
     xy0 = subim.getXY0()
     stamp_cen = orig_cen - geom.Extent2D(xy0)
@@ -949,7 +882,111 @@ def _extract_psf_image(exposure, orig_cen):
     return psfim
 
 
-class MissingDataError(Exception):
+def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
+    """
+    Attempt to find the centroid and update the jacobian.  Update
+    'orig_cen' in the metadata with the difference. Add entry
+    "orig_cen_offset" as an Extend2D
+
+    If the centroiding fails, raise CentroidFail
+    """
+
+    obs.meta['orig_cen_offset'] = geom.Extent2D(x=np.nan, y=np.nan)
+
+    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
+    if res['flags'] != 0:
+        raise CentroidFail('failed to find centroid')
+
+    jac = obs.jacobian
+
+    # this is an offset in arcsec
+    voff, uoff = res['cen']
+
+    # current center within stamp, in pixels
+    rowcen, colcen = jac.get_cen()
+
+    # new center within stamp, in pixels
+    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
+
+    # difference, which we will use to update the center in the original image
+    rowdiff = new_row - rowcen
+    coldiff = new_col - colcen
+
+    diff = geom.Extent2D(x=coldiff, y=rowdiff)
+
+    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
+    obs.meta['orig_cen_offset'] = diff
+
+    # update jacobian center within the stamp
+    with obs.writeable():
+        obs.jacobian.set_cen(row=new_row, col=new_col)
+
+
+def get_output(obs, wcs, fitter, source, res, pres, ormask, box_size, exp_bbox):
+    """
+    get the output structure, copying in results
+
+    When data are unavailable, a default value of nan is used
+    """
+    meas_type = get_meas_type(fitter)
+    output = get_output_struct(meas_type)
+
+    n = util.Namer(front=meas_type)
+
+    output['psf_flags'] = pres['flags']
+    output[n('flags')] = res['flags']
+
+    orig_cen = obs.meta['orig_cen']
+    cen_offset = obs.meta['orig_cen_offset']
+
+    skypos = wcs.pixelToSky(orig_cen)
+
+    output['box_size'] = box_size
+    output['row0'] = exp_bbox.getBeginY()
+    output['col0'] = exp_bbox.getBeginX()
+    output['row'] = orig_cen.getY()
+    output['col'] = orig_cen.getX()
+
+    output['row_diff'] = cen_offset.getY()
+    output['col_diff'] = cen_offset.getX()
+
+    output['ra'] = skypos.getRa().asDegrees()
+    output['dec'] = skypos.getDec().asDegrees()
+
+    output['ormask'] = ormask
+
+    flags = 0
+    if pres['flags'] != 0 and pres['flags'] != procflags.NO_ATTEMPT:
+        flags |= procflags.PSF_FAILURE
+
+    if res['flags'] != 0:
+        flags |= res['flags'] | procflags.OBJ_FAILURE
+
+    if pres['flags'] == 0:
+        output['psf_g'] = pres['g']
+        output['psf_T'] = pres['T']
+
+    if 'T' in res:
+        output[n('T')] = res['T']
+        output[n('T_err')] = res['T_err']
+
+    if 'flux' in res:
+        output[n('flux')] = res['flux']
+        output[n('flux_err')] = res['flux_err']
+
+    if res['flags'] == 0:
+        output[n('s2n')] = res['s2n']
+        output[n('g')] = res['g']
+        output[n('g_cov')] = res['g_cov']
+
+        if pres['flags'] == 0:
+            output[n('T_ratio')] = res['T']/pres['T']
+
+    output['flags'] = flags
+    return output
+
+
+class CentroidFail(Exception):
     """
     Some number was out of range
     """
