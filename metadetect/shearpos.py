@@ -17,11 +17,9 @@ def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     Parameters
     ----------
     rows: array
-        array of row values in sheared coordinates.  Should be pixels
-        in the image, not in a larger system
+        array of row values in sheared coordinates
     cols: array
-        array of col values in sheared coordinates.  Should be pixels
-        in the image, not in a larger system
+        array of col values in sheared coordinates
     shear_str: string
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian

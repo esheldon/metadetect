@@ -22,12 +22,12 @@ def test_config_smoke():
         lsst_configs.get_config({'blah': 3})
 
 
-@pytest.mark.parametrize('model', ['am', 'wmom', 'gauss', 'coellip3'])
+@pytest.mark.parametrize('model', ['admom', 'wmom', 'gauss', 'coellip3'])
 def test_psf_configs(model):
 
     psf_config = {'model': model}
 
-    if model == 'am':
+    if model == 'admom':
         psf_config['ntry'] = 3
     elif model == 'wmom':
         psf_config['weight_fwhm'] = 1.2
@@ -39,7 +39,7 @@ def test_psf_configs(model):
 
     config = lsst_configs.get_config({'psf': psf_config})
 
-    if model == 'am':
+    if model == 'admom':
         assert 'ntry' in config['psf']
         assert config['psf']['ntry'] == psf_config['ntry']
     elif model == 'wmom':
@@ -55,7 +55,7 @@ def test_psf_configs(model):
             assert config['psf']['lm_pars'][key] == psf_config['lm_pars'][key]
 
 
-@pytest.mark.parametrize('model', ['am', 'wmom', 'gauss', 'coellip3'])
+@pytest.mark.parametrize('model', ['admom', 'wmom', 'gauss', 'coellip3'])
 def test_psf_configs_bad(model):
 
     with pytest.raises(ValueError):
@@ -63,8 +63,8 @@ def test_psf_configs_bad(model):
 
     psf_config = {'model': model}
 
-    if model == 'am':
-        # lm_pars not allowed for adaptive moments
+    if model == 'admom':
+        # lm_pars not allowed for admom
         psf_config['lm_pars'] = {
             "maxfev": 4000, "ftol": 1.0e-5, "xtol": 1.0e-5,
         }

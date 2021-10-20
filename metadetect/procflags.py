@@ -4,9 +4,8 @@ PSF_FAILURE = 2**2
 OBJ_FAILURE = 2**3
 NOMOMENTS_FAILURE = 2**4
 BAD_BBOX = 2**5
-BBOX_HITS_EDGE = 2**6
+EDGE = 2**6
 ZERO_WEIGHTS = 2**7
-CENTROID_FAIL = 2**8
 
 NAME_MAP = {
     # no attempt was made to measure this object, usually
@@ -37,14 +36,11 @@ NAME_MAP = {
     BAD_BBOX: 'bad_bbox',
     'bad_bbox': BAD_BBOX,
 
-    BBOX_HITS_EDGE: 'bbox_hits_edge',
-    'bbox_hits_edge': BBOX_HITS_EDGE,
+    EDGE: 'edge',
+    'edge': EDGE,
 
     ZERO_WEIGHTS: 'zero_weights',
     'zero_weights': ZERO_WEIGHTS,
-
-    CENTROID_FAIL: 'centroid_fail',
-    'centroid_fail': CENTROID_FAIL,
 }
 
 
