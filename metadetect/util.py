@@ -97,37 +97,6 @@ def get_ored_bits(maskobj, bitnames):
     return bits
 
 
-try:
-    # only in ngmix v2 - can remove eventually
-    from ngmix.util import get_ratio_var, get_ratio_error
-except ImportError:
-    def get_ratio_var(a, b, var_a, var_b, cov_ab):
-        """
-        get variance in a/b
-        """
-
-        if b == 0:
-            raise ValueError("zero in denominator")
-
-        rsq = (a/b)**2
-
-        var = rsq * (var_a/a**2 + var_b/b**2 - 2*cov_ab/(a*b))
-        return var
-
-    def get_ratio_error(a, b, var_a, var_b, cov_ab):
-        """
-        get error on a/b
-        """
-        from math import sqrt
-
-        var = get_ratio_var(a, b, var_a, var_b, cov_ab)
-
-        if var < 0:
-            var = 0
-        error = sqrt(var)
-        return error
-
-
 class ContextNoiseReplacer(object):
     """
     noise replacer that works as a context manager

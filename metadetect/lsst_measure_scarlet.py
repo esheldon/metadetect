@@ -312,8 +312,9 @@ def _process_source(
             LOG.info(e)
 
             # note the context manager properly handles a return
-            object_res = {'flags': procflags.BBOX_HITS_EDGE}
+            object_res = {'flags': procflags.EDGE_HIT}
             psf_res = {'flags': procflags.NO_ATTEMPT}
+
             mbobs = None
 
         res = get_output_scarlet(
