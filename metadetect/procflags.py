@@ -42,4 +42,4 @@ def get_procflags_str(val):
     flagstr : str
         A string of descriptions for each bit separated by `|`.
     """
-    return ngmix.flags.get_procflags_str(val, name_map=NAME_MAP)
+    return ngmix.flags.get_flags_str(val, name_map=NAME_MAP)

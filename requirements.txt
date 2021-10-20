@@ -6,7 +6,7 @@ pyyaml
 numba!=0.54.0
 esutil
 sep
-ngmix>1
+ngmix>=2.0.3
 meds
 des-sxdes
 scipy

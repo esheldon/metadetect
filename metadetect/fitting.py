@@ -256,8 +256,8 @@ def _sum_bands_wavg(
     *, all_res, all_is_shear_band, all_wgts, all_flags,
 ):
     tot_nband = len(all_res)
-    raw_mom = np.zeros(4, dtype=np.float64)
-    raw_mom_cov = np.zeros((4, 4), dtype=np.float64)
+    raw_mom = np.zeros(6, dtype=np.float64)
+    raw_mom_cov = np.zeros((6, 6), dtype=np.float64)
     wgt_sum = 0.0
     used_shear_bands = [False] * tot_nband
     final_flags = 0

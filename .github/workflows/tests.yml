@@ -39,10 +39,6 @@ jobs:
           mamba install --quiet --yes --file requirements.txt
           mamba install --quiet --yes --file dev-requirements.txt
 
-          # remove this once ngmix 2.1 is on conda
-          mamba uninstall ngmix --force
-          pip install git+https://github.com/esheldon/ngmix.git@flags-moms
-
           python -m pip install -e .
 
       - name: lint
