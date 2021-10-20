@@ -1,14 +1,7 @@
-import sys
 import os
 import numpy as np
 import pytest
 import tqdm
-import logging
-
-logging.basicConfig(
-    stream=sys.stdout,
-    level=logging.WARN,
-)
 
 lsst_skysub_mod = pytest.importorskip(
     'metadetect.lsst_skysub',
@@ -194,6 +187,7 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
     """
     seed = 184
     rng = np.random.RandomState(seed)
+    loglevel = 'WARN'
 
     ntrial = 20
     meanvals = np.zeros(ntrial)
@@ -210,8 +204,8 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
         if False:
             show_image(exp)
 
-        lsst_skysub_mod.iterate_detection_and_skysub(
-            exposure=exp, thresh=5,
+        lsst_meas_mod.iterate_detection_and_skysub(
+            exposure=exp, thresh=5, loglevel=loglevel,
         )
         meta = exp.getMetadata()
         if 'BGMEAN' not in meta:
@@ -242,6 +236,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
     """
     seed = 312
     rng = np.random.RandomState(seed)
+    loglevel = 'WARN'
 
     ntrial = 20
     meanvals = np.zeros(ntrial)
@@ -262,8 +257,8 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
             show_image(exp)
 
         if True:
-            lsst_skysub_mod.iterate_detection_and_skysub(
-                exposure=exp, thresh=5,
+            lsst_meas_mod.iterate_detection_and_skysub(
+                exposure=exp, thresh=5, loglevel=loglevel,
             )
             meta = exp.getMetadata()
             sky_meas = meta['BGMEAN']
@@ -271,7 +266,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
             # this one is for debugging; we do the iterations ourselves so we
             # can display the result
             _, _ = lsst_meas_mod.detect_and_deblend(
-                exposure=exp, thresh=5,
+                exposure=exp, thresh=5, loglevel=loglevel,
             )
             if False:
                 show_mask(exp)
@@ -280,7 +275,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
             sky_meas = exp.getMetadata()['BGMEAN']
 
             _, _ = lsst_meas_mod.detect_and_deblend(
-                exposure=exp, thresh=5,
+                exposure=exp, thresh=5, loglevel=loglevel,
             )
             if False:
                 show_mask(exp)
