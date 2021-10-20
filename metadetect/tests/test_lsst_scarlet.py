@@ -86,7 +86,7 @@ def test_lsst_scarlet_smoke(
     exposures = [exps[0] for band, exps in band_data.items()]
 
     config = {
-        'meas_type': 'gap',
+        'meas_type': 'pgauss',
         'weight': {'fwhm': 2.0},
     }
 
@@ -120,7 +120,7 @@ def test_lsst_scarlet_zero_weights(
     stamp_size = 48
 
     config = {
-        'meas_type': 'gap',
+        'meas_type': 'pgauss',
         'weight': {'fwhm': 2.0},
     }
 
