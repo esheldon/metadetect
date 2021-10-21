@@ -295,6 +295,7 @@ def _process_source(
                         _obslist[0].jacobian = obs.jacobian
 
                     # TODO do something with bmask_flags?
+                    # TODO implement nonshear_mbobs
                     this_res = fit_mbobs_wavg(
                         mbobs=mbobs,
                         fitter=fitter,
@@ -1007,7 +1008,7 @@ def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
 
 
 def get_output_scarlet(
-    mbobs, wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox,
+    mbobs, wcs, fitter, source, res, ormask, stamp_size, exp_bbox,
 ):
     """
     get the output structure, copying in results
@@ -1015,21 +1016,7 @@ def get_output_scarlet(
     When data are unavailable, a default value of nan is used
     """
 
-    if 'band_flux' in res:
-        nband = len(res['band_flux'])
-    else:
-        nband = 1
-
-    output = get_output_struct(fitter.kind, nband=nband)
-
-    n = util.Namer(front=fitter.kind)
-
-    output['psf_flags'] = psf_res['flags']
-    output[n('flags')] = res['flags']
-
-    output['stamp_size'] = stamp_size
-    output['row0'] = exp_bbox.getBeginY()
-    output['col0'] = exp_bbox.getBeginX()
+    output = get_output_struct(res)
 
     if mbobs is not None and 'orig_cen' in mbobs.meta:
         orig_cen = mbobs.meta['orig_cen']
@@ -1040,9 +1027,11 @@ def get_output_scarlet(
         orig_cen = peak.getCentroid()
         cen_offset = geom.Point2D(np.nan, np.nan)
 
+    output['stamp_size'] = stamp_size
+    output['row0'] = exp_bbox.getBeginY()
+    output['col0'] = exp_bbox.getBeginX()
     output['row'] = orig_cen.getY()
     output['col'] = orig_cen.getX()
-
     output['row_diff'] = cen_offset.getY()
     output['col_diff'] = cen_offset.getX()
 
@@ -1053,34 +1042,6 @@ def get_output_scarlet(
 
     output['ormask'] = ormask
 
-    flags = 0
-    if psf_res['flags'] != 0 and psf_res['flags'] != procflags.NO_ATTEMPT:
-        flags |= procflags.PSF_FAILURE
-
-    if res['flags'] != 0:
-        flags |= res['flags'] | procflags.OBJ_FAILURE
-
-    if psf_res['flags'] == 0:
-        output['psf_g'] = psf_res['g']
-        output['psf_T'] = psf_res['T']
-
-    if 'T' in res:
-        output[n('T')] = res['T']
-        output[n('T_err')] = res['T_err']
-
-    if 'band_flux' in res:
-        output[n('band_flux')] = res['band_flux']
-        output[n('band_flux_err')] = res['band_flux_err']
-
-    if res['flags'] == 0:
-        output[n('s2n')] = res['s2n']
-        output[n('g')] = res['g']
-        output[n('g_cov')] = res['g_cov']
-
-        if psf_res['flags'] == 0:
-            output[n('T_ratio')] = res['T']/psf_res['T']
-
-    output['flags'] = flags
     return output
 
 
