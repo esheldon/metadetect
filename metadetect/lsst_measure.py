@@ -3,7 +3,6 @@ import esutil as eu
 import ngmix
 
 import lsst.afw.table as afw_table
-import lsst.afw.image as afw_image
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 from lsst.meas.base import (
@@ -13,29 +12,38 @@ from lsst.meas.base import (
 import lsst.geom as geom
 from lsst.pex.exceptions import (
     InvalidParameterError,
-    LogicError,
+    LengthError,
 )
 
 from . import util
+from .util import ContextNoiseReplacer
 from . import vis
 from . import procflags
 from .defaults import DEFAULT_THRESH
 from .fitting import fit_mbobs_wavg, get_wavg_output_struct
+import logging
+
+LOG = logging.getLogger('lsst_measure')
 
 
-def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
+def detect_and_deblend(
+    mbexp,
+    rng,
+    thresh=DEFAULT_THRESH,
+    show=False,
+):
     """
-    run detection and deblending of peaks.  The SDSS deblender is run in order
-    to split peaks, but need not be used to create deblended stamps.
+    run detection and deblending of peaks, as well as basic measurments such as
+    centroid.  The SDSS deblender is run in order to split peaks.
 
-    we must combine detection and deblending in the same function because the
+    We must combine detection and deblending in the same function because the
     schema gets modified in place, which means we must construct the deblend
     task at the same time as the detect task
 
     Parameters
     ----------
-    exposure: Exposure
-        The exposure to process
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
     thresh: float, optional
         The detection threshold in units of the sky noise
 
@@ -45,6 +53,11 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
         The sources and the measurement task
     """
 
+    if len(mbexp.singles) > 1:
+        detexp = util.coadd_exposures(mbexp.singles)
+    else:
+        detexp = mbexp.singles[0]
+
     schema = afw_table.SourceTable.makeMinimalSchema()
 
     # Setup algorithms to run
@@ -53,8 +66,6 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
         "base_SdssCentroid",
         "base_PsfFlux",
         "base_SkyCoord",
-        # "base_SdssShape",
-        # "base_LocalBackground",
     ]
 
     # set these slots to none because we aren't running these algorithms
@@ -79,6 +90,8 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
     # variance here actually means relative to the sqrt(variance)
     # from the variance plane.
     # TODO this would include poisson
+    # TODO detection doesn't work right when we tell it to trust
+    # the variance
     # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
 
@@ -94,25 +107,40 @@ def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
     )
 
     table = afw_table.SourceTable.make(schema)
-    result = detection_task.run(table, exposure)
+
+    result = detection_task.run(table, detexp)
+
     if show:
-        vis.show_exp(exposure)
+        vis.show_exp(detexp)
 
     if result is not None:
         sources = result.sources
-        deblend_task.run(exposure, sources)
+        deblend_task.run(detexp, sources)
+
+        with ContextNoiseReplacer(detexp, sources, rng) as replacer:
+
+            for source in sources:
+
+                if source.get('deblend_nChild') != 0:
+                    continue
+
+                source_id = source.getId()
+
+                with replacer.sourceInserted(source_id):
+                    meas_task.callMeasure(source, detexp)
+
     else:
         sources = []
 
-    return sources, meas_task
+    return sources, detexp
 
 
 def measure(
-    exposure,
+    mbexp,
+    detexp,
     sources,
     fitter,
     stamp_size,
-    meas_task=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -133,62 +161,51 @@ def measure(
         For calculating moments
     stamp_size: int
         Size for postage stamps
-    meas_task: SingleFrameMeasurementTask
-        An optional measurement task; if you already have centeroids etc. for
-        sources, no need to send it.  Otherwise this should do basic things
-        like finding the centroid
     """
 
     if len(sources) == 0:
         return None
 
-    exp_bbox = exposure.getBBox()
+    exp_bbox = mbexp.getBBox()
+    wcs = mbexp.singles[0].getWcs()
     results = []
 
     # ormasks will be different within the loop below due to the replacer
-    ormasks = get_ormasks(sources=sources, exposure=exposure)
+    ormasks = get_ormasks(sources=sources, exposure=detexp)
 
     for i, source in enumerate(sources):
 
-        # Skip parent objects where all children are inserted
         if source.get('deblend_nChild') != 0:
             continue
 
         ormask = ormasks[i]
 
-        if meas_task is not None:
-            # results are stored in the source
-            meas_task.callMeasure(source, exposure)
-
-        # TODO variable box size?
-        stamp_bbox = _get_bbox_fixed(
-            exposure=exposure,
-            source=source,
-            stamp_size=stamp_size,
-        )
-        subim = _get_padded_sub_image(exposure=exposure, bbox=stamp_bbox)
-        if False:
-            vis.show_exp(subim)
-
-        # TODO work multiband
-        mbobs = _extract_mbobs(exp=subim, source=source)
-        if mbobs is None:
-            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
-            # all zero weights for the image this occurs when we have zeros in
-            # the weight plane near the edge but the image is non-zero. These
-            # are always junk
-            this_res['flags'] = procflags.ZERO_WEIGHTS
-        else:
+        flags = 0
+        try:
+            mbobs = _get_stamp_mbobs(
+                mbexp=mbexp, source=source, stamp_size=stamp_size,
+            )
             # TODO do something with bmask_flags?
+            # TODO implement nonshear_mbobs
             this_res = fit_mbobs_wavg(
                 mbobs=mbobs,
                 fitter=fitter,
                 bmask_flags=0,
                 nonshear_mbobs=None,
             )
+        except LengthError as err:
+            LOG.info('%s', err)
+            flags = procflags.EDGE_HIT
+        except AllZeroWeight as err:
+            LOG.info('%s', err)
+            flags = procflags.ZERO_WEIGHTS
+
+        if flags != 0:
+            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res['flags'] = flags
 
         res = get_output(
-            wcs=exposure.getWcs(), fitter=fitter, source=source, res=this_res,
+            wcs=wcs, fitter=fitter, source=source, res=this_res,
             ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
@@ -200,46 +217,6 @@ def measure(
         results = None
 
     return results
-
-
-def measure_one(obs, fitter):
-    """
-    run a measurement on an input observation
-
-    Parameters
-    ----------
-    obs: ngmix.Observation
-        The observation to measure
-    fitter: e.g. ngmix.prepsfmom.PGaussMom
-        The measurement object
-
-    Returns
-    -------
-    res dict
-    """
-
-    if fitter.kind in ['ksigma', 'pgauss'] and not obs.has_psf():
-        res = fitter.go(obs, no_psf=True)
-    else:
-        res = fitter.go(obs)
-
-    if res['flags'] != 0:
-        return res
-
-    res['numiter'] = 1
-    res['g'] = res['e']
-    res['g_cov'] = res['e_cov']
-
-    if isinstance(fitter, ngmix.runners.Runner):
-        assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter)
-        gm = res.get_gmix()
-        obs.set_gmix(gm)
-        psf_flux_fitter = ngmix.fitting.PSFFluxFitter(do_psf=False)
-        flux_res = psf_flux_fitter.go(obs)
-        res['flux'] = flux_res['flux']
-        res['flux_err'] = flux_res['flux_err']
-
-    return res
 
 
 def get_ormasks(sources, exposure):
@@ -285,40 +262,7 @@ def get_ormask(source, exposure):
     return maskval
 
 
-def _extract_mbobs(exp, source):
-    """
-    convert an image object into an ngmix.MultiBandObservation, including a psf
-    observation.  TODO work multiband for real, see
-    lsst_measure_scarlet.extract_mbobs
-
-    parameters
-    ----------
-    imobj: lsst.afw.image.ExposureF
-        The exposure
-    source: lsst.afw.table.SourceRecord
-        The source record
-
-    returns
-    --------
-    mbobs: ngmix.MultiBandObsList
-        The MultiBandObsList unless all the weight are zero, in which
-        case None is returned
-    """
-
-    obs = _extract_obs(exp, source)
-
-    if obs is not None:
-        obslist = ngmix.ObsList()
-        obslist.append(obs)
-        mbobs = ngmix.MultiBandObsList()
-        mbobs.append(obslist)
-    else:
-        mbobs = None
-
-    return mbobs
-
-
-def _extract_obs(exp, source):
+def extract_obs(exp, source):
     """
     convert an image object into an ngmix.Observation, including
     a psf observation
@@ -338,24 +282,20 @@ def _extract_obs(exp, source):
     """
 
     im = exp.image.array
-    # im = im - _get_bg_from_edges(image=im, border=2)
 
     wt = _extract_weight(exp)
     if np.all(wt <= 0):
-        return None
+        raise AllZeroWeight('all weights <= 0')
 
-    maskobj = exp.mask
-    bmask = maskobj.array
+    bmask = exp.mask.array
     jacob = _extract_jacobian(
         exp=exp,
         source=source,
     )
 
-    # TODO using fixed kernel for now
     orig_cen = source.getCentroid()
-    # orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
-    psf_im = _extract_psf_image(exposure=exp, orig_cen=orig_cen)
+    psf_im = extract_psf_image(exposure=exp, orig_cen=orig_cen)
 
     # fake the psf pixel noise
     psf_err = psf_im.max()*0.0001
@@ -370,7 +310,6 @@ def _extract_obs(exp, source):
     # get from the mask object
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
-    meta = {'maskobj': maskobj}
 
     psf_obs = ngmix.Observation(
         psf_im,
@@ -383,142 +322,143 @@ def _extract_obs(exp, source):
         bmask=bmask,
         jacobian=jacob,
         psf=psf_obs,
-        meta=meta,
     )
 
     return obs
 
 
-def _get_bbox_fixed(exposure, source, stamp_size):
+def _get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
     """
-    get a fixed sized bounding box
-    """
-    radius = stamp_size/2
-    radius = int(np.ceil(radius))
+    Get a postage stamp MultibandExposure
 
-    bbox = _project_box(
-        source=source,
-        wcs=exposure.getWcs(),
-        radius=radius,
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures
+    source: lsst.afw.table.SourceRecord
+        The source for which to get the stamp
+    stamp_size: int
+        If sent, a bounding box is created with about this size rather than
+        using the footprint bounding box. Typically the returned size is
+        stamp_size + 1
+    clip: bool, optional
+        If set to True, clip the bbox to fit into the exposure.
+
+        If clip is False and the bbox does not fit, a
+        lsst.pex.exceptions.LengthError is raised
+
+        Only relevant if stamp_size is sent.  Default False
+
+    Returns
+    -------
+    lsst.afw.image.ExposureF
+    """
+
+    bbox = _get_bbox(mbexp, source, stamp_size, clip=clip)
+
+    mbobs = ngmix.MultiBandObsList()
+    for band in mbexp.filters:
+
+        subexp = mbexp[band][bbox]
+        obs = extract_obs(
+            exp=subexp,
+            source=source,
+        )
+
+        obslist = ngmix.ObsList(meta={'band': band})
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    return mbobs
+
+
+def _get_bbox(mbexp, source, stamp_size, clip=False):
+    """
+    Get a bounding box at the location of the specified source.
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures
+    source: lsst.afw.table.SourceRecord
+        The source for which to get the stamp
+    stamp_size: int
+        If sent, a bounding box is created with about this size rather than
+        using the footprint bounding box. Typically the returned size is
+        stamp_size + 1
+    clip: bool, optional
+        If set to True, clip the bbox to fit into the exposure.
+
+        If clip is False and the bbox does not fit, a
+        lsst.pex.exceptions.LengthError is raised
+
+        Only relevant if stamp_size is sent.  Default False
+
+    Returns
+    -------
+    lsst.geom.Box2I
+    """
+
+    fp = source.getFootprint()
+    peak = fp.getPeaks()[0]
+
+    x_peak, y_peak = peak.getIx(), peak.getIy()
+
+    bbox = geom.Box2I(
+        geom.Point2I(x_peak, y_peak),
+        geom.Extent2I(1, 1),
     )
+    bbox.grow(stamp_size // 2)
+
+    exp_bbox = mbexp.getBBox()
+    if clip:
+        bbox.clip(exp_bbox)
+    else:
+        if not exp_bbox.contains(bbox):
+            source_id = source.getId()
+            raise LengthError(
+                f'requested stamp size {stamp_size} for source '
+                f'{source_id} does not fit into the exposoure.  '
+                f'Use clip=True to clip the bbox to fit'
+            )
+
     return bbox
 
 
-def _get_bbox_calc(
-    exposure,
-    source,
-    min_stamp_size,
-    max_stamp_size,
-    sigma_factor,
-):
+def extract_psf_image(exposure, orig_cen):
     """
-    get a bounding box with size based on measurements
+    get the psf associated with this image.
+
+    coadded psfs from DM are generally not square, but the coadd in cells code
+    makes them so.  We will assert they are square and odd dimensions
+
+    Parameters
+    ----------
+    exposure: lsst.afw.image.ExposureF
+        The exposure data
+    orig_cen: lsst.geom.Point2D
+        The location at which to draw the image
+
+    Returns
+    -------
+    ndarray
     """
     try:
-        stamp_radius, stamp_size = _compute_stamp_size(
-            source=source,
-            min_stamp_size=min_stamp_size,
-            max_stamp_size=max_stamp_size,
-            sigma_factor=sigma_factor,
-        )
-        bbox = _project_box(
-            source=source,
-            wcs=exposure.getWcs(),
-            radius=stamp_radius,
-        )
-    except LogicError:
-        bbox = source.getFootprint().getBBox()
+        psfobj = exposure.getPsf()
+        psfim = psfobj.computeKernelImage(orig_cen).array
+    except InvalidParameterError:
+        raise MissingDataError("could not reconstruct PSF")
 
-    return bbox
+    psfim = np.array(psfim, dtype='f4', copy=False)
+
+    shape = psfim.shape
+    assert shape[0] == shape[1], 'require square psf images'
+    assert shape[0] % 2 != 0, 'require odd psf images'
+
+    return psfim
 
 
-def _compute_stamp_size(
-    source,
-    min_stamp_size,
-    max_stamp_size,
-    sigma_factor,
-):
-    """
-    calculate a stamp radius for the input object, to
-    be used for constructing postage stamp sizes
-    """
-
-    min_radius = min_stamp_size/2
-    max_radius = max_stamp_size/2
-
-    quad = source.getShape()
-    T = quad.getIxx() + quad.getIyy()  # noqa
-    if np.isnan(T):  # noqa
-        T = 4.0  # noqa
-
-    sigma = np.sqrt(T/2.0)  # noqa
-    radius = sigma_factor*sigma
-
-    if radius < min_radius:
-        radius = min_radius
-    elif radius > max_radius:
-        radius = max_radius
-
-    radius = int(np.ceil(radius))
-    stamp_size = 2*radius+1
-
-    return radius, stamp_size
-
-
-def _project_box(source, wcs, radius):
-    """
-    create a box for the input source
-    """
-    pixel = geom.Point2I(wcs.skyToPixel(source.getCoord()))
-    box = geom.Box2I()
-    box.include(pixel)
-    box.grow(radius)
-    return box
-
-
-def _get_padded_sub_image(exposure, bbox):
-    """
-    extract a sub-image, padded out when it is not contained
-    """
-    exp_bbox = exposure.getBBox()
-
-    if exp_bbox.contains(bbox):
-        return exposure.Factory(exposure, bbox, afw_image.PARENT, True)
-
-    result = exposure.Factory(bbox)
-    bbox2 = geom.Box2I(bbox)
-    bbox2.clip(exp_bbox)
-
-    if isinstance(exposure, afw_image.Exposure):
-        result.setPsf(exposure.getPsf().clone())
-
-        result.setWcs(exposure.getWcs())
-
-        result.setPhotoCalib(exposure.getPhotoCalib())
-        # result.image.array[:, :] = float("nan")
-        result.image.array[:, :] = 0.0
-        result.variance.array[:, :] = float("inf")
-        result.mask.array[:, :] = \
-            np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
-        sub_in = afw_image.MaskedImageF(
-            exposure.maskedImage, bbox=bbox2,
-            origin=afw_image.PARENT, deep=False
-        )
-        result.maskedImage.assign(sub_in, bbox=bbox2, origin=afw_image.PARENT)
-
-    elif isinstance(exposure, afw_image.ImageI):
-        result.array[:, :] = 0
-        sub_in = afw_image.ImageI(exposure, bbox=bbox2,
-                                  origin=afw_image.PARENT, deep=False)
-        result.assign(sub_in, bbox=bbox2, origin=afw_image.PARENT)
-
-    else:
-        raise ValueError("Image type not supported")
-
-    return result
-
-
-def _extract_psf_image(exposure, orig_cen):
+def _extract_psf_image_fix(exposure, orig_cen):
     """
     get the psf associated with this image
 
@@ -754,79 +694,20 @@ def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
     return output
 
 
-def get_output_old(wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
-    """
-    get the output structure, copying in results
-
-    When data are unavailable, a default value of nan is used
-    """
-
-    if 'band_flux' in res:
-        nband = len(res['band_flux'])
-    else:
-        nband = 1
-
-    output = get_output_struct(fitter.kind, nband=nband)
-
-    n = util.Namer(front=fitter.kind)
-
-    output['psf_flags'] = psf_res['flags']
-    output[n('flags')] = res['flags']
-
-    orig_cen = source.getCentroid()
-
-    skypos = wcs.pixelToSky(orig_cen)
-
-    if np.isnan(orig_cen.getY()):
-        peak = source.getFootprint().getPeaks()[0]
-        orig_cen = peak.getI()
-
-    output['stamp_size'] = stamp_size
-    output['row0'] = exp_bbox.getBeginY()
-    output['col0'] = exp_bbox.getBeginX()
-    output['row'] = orig_cen.getY()
-    output['col'] = orig_cen.getX()
-
-    output['ra'] = skypos.getRa().asDegrees()
-    output['dec'] = skypos.getDec().asDegrees()
-
-    output['ormask'] = ormask
-
-    flags = 0
-    if psf_res['flags'] != 0 and psf_res['flags'] != procflags.NO_ATTEMPT:
-        flags |= procflags.PSF_FAILURE
-
-    if res['flags'] != 0:
-        flags |= res['flags'] | procflags.OBJ_FAILURE
-
-    if psf_res['flags'] == 0:
-        output['psf_g'] = psf_res['g']
-        output['psf_T'] = psf_res['T']
-
-    if 'T' in res:
-        output[n('T')] = res['T']
-        output[n('T_err')] = res['T_err']
-
-    if 'band_flux' in res:
-        output[n('band_flux')] = res['band_flux']
-        output[n('band_flux_err')] = res['band_flux_err']
-    elif 'flux' in res:
-        output[n('band_flux')] = res['flux']
-        output[n('band_flux_err')] = res['flux_err']
-
-    if res['flags'] == 0:
-        output[n('s2n')] = res['s2n']
-        output[n('g')] = res['g']
-        output[n('g_cov')] = res['g_cov']
-
-        if psf_res['flags'] == 0:
-            output[n('T_ratio')] = res['T']/psf_res['T']
-
-    output['flags'] = flags
-    return output
-
-
 class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class AllZeroWeight(Exception):
     """
     Some number was out of range
     """
