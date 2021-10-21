@@ -13,6 +13,7 @@ import ngmix
 import numpy as np
 import esutil as eu
 import lsst.afw.table as afw_table
+import lsst.afw.image as afw_image
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
     SingleFrameMeasurementTask,
@@ -21,7 +22,7 @@ from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 import lsst.geom as geom
 
-from lsst.pex.exceptions import InvalidParameterError, LengthError
+from lsst.pex.exceptions import LengthError
 from . import vis
 from . import util
 from .util import MultibandNoiseReplacer, ContextNoiseReplacer
@@ -30,15 +31,10 @@ from . import procflags
 from .lsst_measure import (
     get_output,
     get_ormask,
-    _get_bbox_fixed,
-    _get_padded_sub_image,
-    _extract_obs,  # TODO make work with extract_obs from _scarlet?
-    measure_one,
+    extract_psf_image,
+    extract_obs,
 )
-from .lsst_measure_scarlet import (
-    # extract_obs,
-    extract_mbobs,
-)
+from .lsst_measure_scarlet import extract_mbobs
 from .fitting import fit_mbobs_wavg, get_wavg_output_struct
 import logging
 
@@ -149,7 +145,7 @@ def detect_and_deblend(
 
                     subexp = _get_padded_sub_image(exposure=detexp, bbox=stamp_bbox)
 
-                    obs = _extract_obs(subexp, source)
+                    obs = extract_obs(subexp, source)
                     if obs is None:
                         T = 0.3
                     else:
@@ -614,28 +610,6 @@ def _extract_weight(exp):
     return weight
 
 
-def _extract_psf_image(exposure, orig_cen):
-    """
-    get the psf associated with this image.
-
-    coadded psfs from DM are generally not square, but the coadd in cells code
-    makes them so.  We will assert they are square and odd dimensions
-    """
-    try:
-        psfobj = exposure.getPsf()
-        psfim = psfobj.computeKernelImage(orig_cen).array
-    except InvalidParameterError:
-        raise MissingDataError("could not reconstruct PSF")
-
-    psfim = np.array(psfim, dtype='f4', copy=False)
-
-    shape = psfim.shape
-    assert shape[0] == shape[1], 'require square psf images'
-    assert shape[0] % 2 != 0, 'require odd psf images'
-
-    return psfim
-
-
 def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
     """
     Attempt to find the centroid and update the jacobian.  Update
@@ -781,10 +755,9 @@ def _extract_obs_for_shredding(exp, jacobian, orig_cen):
     if np.all(wt <= 0):
         return None
 
-    maskobj = exp.mask
-    bmask = maskobj.array
+    bmask = exp.mask.array
 
-    psf_im = _extract_psf_image(exposure=exp, orig_cen=orig_cen)
+    psf_im = extract_psf_image(exposure=exp, orig_cen=orig_cen)
 
     # fake the psf pixel noise
     psf_err = psf_im.max()*0.0001
@@ -799,10 +772,7 @@ def _extract_obs_for_shredding(exp, jacobian, orig_cen):
     # get from the mask object
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
-    meta = {
-        'maskobj': maskobj,
-        'orig_cen': orig_cen,
-    }
+    meta = {'orig_cen': orig_cen}
 
     psf_obs = ngmix.Observation(
         psf_im,
@@ -915,3 +885,111 @@ def get_ormasks(sources, exposure):
     for source in sources:
         ormasks[source.getId()] = get_ormask(source=source, exposure=exposure)
     return ormasks
+
+
+def measure_one(obs, fitter):
+    """
+    run a measurement on an input observation
+
+    Parameters
+    ----------
+    obs: ngmix.Observation
+        The observation to measure
+    fitter: e.g. ngmix.prepsfmom.PGaussMom
+        The measurement object
+
+    Returns
+    -------
+    res dict
+    """
+
+    if fitter.kind in ['ksigma', 'pgauss'] and not obs.has_psf():
+        res = fitter.go(obs, no_psf=True)
+    else:
+        res = fitter.go(obs)
+
+    if res['flags'] != 0:
+        return res
+
+    res['numiter'] = 1
+    res['g'] = res['e']
+    res['g_cov'] = res['e_cov']
+
+    if isinstance(fitter, ngmix.runners.Runner):
+        assert isinstance(fitter.fitter, ngmix.admom.AdmomFitter)
+        gm = res.get_gmix()
+        obs.set_gmix(gm)
+        psf_flux_fitter = ngmix.fitting.PSFFluxFitter(do_psf=False)
+        flux_res = psf_flux_fitter.go(obs)
+        res['flux'] = flux_res['flux']
+        res['flux_err'] = flux_res['flux_err']
+
+    return res
+
+
+def _get_bbox_fixed(exposure, source, stamp_size):
+    """
+    get a fixed sized bounding box
+    """
+    radius = stamp_size/2
+    radius = int(np.ceil(radius))
+
+    bbox = _project_box(
+        source=source,
+        wcs=exposure.getWcs(),
+        radius=radius,
+    )
+    return bbox
+
+
+def _project_box(source, wcs, radius):
+    """
+    create a box for the input source
+    """
+    pixel = geom.Point2I(wcs.skyToPixel(source.getCoord()))
+    box = geom.Box2I()
+    box.include(pixel)
+    box.grow(radius)
+    return box
+
+
+def _get_padded_sub_image(exposure, bbox):
+    """
+    extract a sub-image, padded out when it is not contained
+    """
+    exp_bbox = exposure.getBBox()
+
+    if exp_bbox.contains(bbox):
+        return exposure.Factory(exposure, bbox, afw_image.PARENT, True)
+
+    result = exposure.Factory(bbox)
+    bbox2 = geom.Box2I(bbox)
+    bbox2.clip(exp_bbox)
+
+    if isinstance(exposure, afw_image.Exposure):
+        result.setPsf(exposure.getPsf().clone())
+
+        result.setWcs(exposure.getWcs())
+
+        result.setPhotoCalib(exposure.getPhotoCalib())
+        # result.image.array[:, :] = float("nan")
+        result.image.array[:, :] = 0.0
+        result.variance.array[:, :] = float("inf")
+        result.mask.array[:, :] = \
+            np.uint16(result.mask.getPlaneBitMask("NO_DATA"))
+        sub_in = afw_image.MaskedImageF(
+            exposure.maskedImage, bbox=bbox2,
+            origin=afw_image.PARENT, deep=False
+        )
+        result.maskedImage.assign(sub_in, bbox=bbox2, origin=afw_image.PARENT)
+
+    elif isinstance(exposure, afw_image.ImageI):
+        result.array[:, :] = 0
+        sub_in = afw_image.ImageI(exposure, bbox=bbox2,
+                                  origin=afw_image.PARENT, deep=False)
+        result.assign(sub_in, bbox=bbox2, origin=afw_image.PARENT)
+
+    else:
+        raise ValueError("Image type not supported")
+
+    return result
