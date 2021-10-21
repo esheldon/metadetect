@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 lsst_phot = pytest.importorskip(
-    'metadetect.lsst_photometry',
+    'metadetect.lsst.photometry',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 sim = pytest.importorskip(

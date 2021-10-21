@@ -22,19 +22,23 @@ import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
+
 from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
-from .lsst_skysub import subtract_sky_mbobs
-from . import shearpos
-from .mfrac import measure_mfrac
-from . import procflags
-from . import util
-from . import fitting
 
-from .lsst_configs import get_config
-from . import lsst_measure
-from . import lsst_measure_scarlet
+from ..mfrac import measure_mfrac
+from .. import fitting
+from .. import shearpos
+from .. import procflags
+
+from .skysub import subtract_sky_mbobs
+from . import util
+
+from .configs import get_config
+from . import measure
+from . import measure_scarlet
+from . import measure_shredder
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -148,12 +152,12 @@ def detect_deblend_and_measure(
         LOG.info('measuring with scarlet deblended stamps')
 
         if config['deblender'] == 'scarlet':
-            sources, detexp = lsst_measure_scarlet.detect_and_deblend(
+            sources, detexp = measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
                 show=show,
             )
-            results = lsst_measure_scarlet.measure(
+            results = measure_scarlet.measure(
                 mbexp=mbexp,
                 detexp=detexp,
                 sources=sources,
@@ -163,11 +167,10 @@ def detect_deblend_and_measure(
                 show=show,
             )
         else:
-            from . import lsst_measure_shredder
 
             shredder_config = config['shredder_config']
 
-            sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
+            sources, detexp, Tvals = measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
                 fitter=fitter,
@@ -175,7 +178,7 @@ def detect_deblend_and_measure(
                 rng=rng,
                 show=show,
             )
-            results = lsst_measure_shredder.measure(
+            results = measure_shredder.measure(
                 mbexp=mbexp,
                 detexp=detexp,
                 sources=sources,
@@ -194,13 +197,13 @@ def detect_deblend_and_measure(
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
 
-        sources, detexp = lsst_measure.detect_and_deblend(
+        sources, detexp = measure.detect_and_deblend(
             mbexp=mbexp,
             rng=rng,
             thresh=config['detect']['thresh'],
             show=show,
         )
-        results = lsst_measure.measure(
+        results = measure.measure(
             mbexp=mbexp,
             detexp=detexp,
             sources=sources,

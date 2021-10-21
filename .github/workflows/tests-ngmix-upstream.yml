@@ -50,6 +50,7 @@ jobs:
       - name: test ngmix w/ conda latest
         shell: bash -l {0}
         run: |
-          pytest -vvs metadetect
+          # don't run metadetect/lsst/tests
+          pytest -vvs metadetect/tests
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[ksigma-1000000.0-7-50]

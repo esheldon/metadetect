@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import esutil as eu
 import ngmix
@@ -15,13 +16,13 @@ from lsst.pex.exceptions import (
     LengthError,
 )
 
+from .. import procflags
+from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
+
 from . import util
 from .util import ContextNoiseReplacer
 from . import vis
-from . import procflags
 from .defaults import DEFAULT_THRESH
-from .fitting import fit_mbobs_wavg, get_wavg_output_struct
-import logging
 
 LOG = logging.getLogger('lsst_measure')
 

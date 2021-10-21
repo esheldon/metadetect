@@ -10,9 +10,11 @@ feature requests for DM
     - clone() copy psfs
 """
 from contextlib import contextmanager
+import logging
 import ngmix
 import esutil as eu
 import numpy as np
+
 import lsst.afw.detection as afw_det
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
@@ -28,13 +30,14 @@ from lsst.meas.extensions.scarlet import (
 import lsst.geom as geom
 
 from lsst.pex.exceptions import LengthError
+
+from .. import procflags
+from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
+
 from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
-from . import procflags
-from .lsst_measure import get_output_struct, get_ormask, extract_psf_image
-from .fitting import fit_mbobs_wavg, get_wavg_output_struct
-import logging
+from .measure import get_output_struct, get_ormask, extract_psf_image
 
 LOG = logging.getLogger('lsst_measure_scarlet')
 

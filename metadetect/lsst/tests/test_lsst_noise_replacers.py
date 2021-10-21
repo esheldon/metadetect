@@ -1,17 +1,18 @@
 import sys
-# import os
 import numpy as np
 import pytest
-# import tqdm
 import logging
-from metadetect import util
 
-logging.basicConfig(stream=sys.stdout, level=logging.WARN)
-
+util = pytest.importorskip(
+    'metadetect.lsst.util',
+    reason='LSST codes need the Rubin Obs. science pipelines',
+)
 sim = pytest.importorskip(
     'descwl_shear_sims',
     reason='LSST codes need the descwl_shear_sims module for testing',
 )
+
+logging.basicConfig(stream=sys.stdout, level=logging.WARN)
 
 
 def make_lsst_sim(rng):
@@ -114,7 +115,6 @@ def detect_and_deblend(mbexp):
 
 def test_noise_replacer():
     import lsst.afw.image as afw_image
-    from metadetect.util import ContextNoiseReplacer
     seed = 981
     rng = np.random.RandomState(seed)
 
@@ -126,7 +126,7 @@ def test_noise_replacer():
 
     exposure = mbexp.singles[0]
     exp_copy = afw_image.ExposureF(exposure, deep=True)
-    with ContextNoiseReplacer(exposure, sources, rng) as replacer:
+    with util.ContextNoiseReplacer(exposure, sources, rng) as replacer:
 
         assert np.any(exp_copy.image.array != exposure.image.array)
 
@@ -142,8 +142,7 @@ def test_noise_replacer():
 
 def test_multiband_noise_replacer(show=False):
     import lsst.afw.image as afw_image
-    from metadetect.util import MultibandNoiseReplacer
-    from metadetect import vis
+    from metadetect.lsst import vis
 
     seed = 981
     rng = np.random.RandomState(seed)
@@ -160,7 +159,7 @@ def test_multiband_noise_replacer(show=False):
 
     bands = list(sim['band_data'].keys())
 
-    with MultibandNoiseReplacer(mbexp, sources, rng) as replacer:
+    with util.MultibandNoiseReplacer(mbexp, sources, rng) as replacer:
         if show:
             vis.compare_mbexp(mbexp_copy, replacer.mbexp)
 

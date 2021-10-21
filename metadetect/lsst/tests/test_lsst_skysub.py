@@ -11,11 +11,11 @@ logging.basicConfig(
 )
 
 lsst_skysub_mod = pytest.importorskip(
-    'metadetect.lsst_skysub',
+    'metadetect.lsst.skysub',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 lsst_meas_mod = pytest.importorskip(
-    'metadetect.lsst_measure',
+    'metadetect.lsst.measure',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 sim = pytest.importorskip(

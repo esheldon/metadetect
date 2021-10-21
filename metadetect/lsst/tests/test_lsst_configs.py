@@ -7,7 +7,7 @@ of the metacal sub config
 import pytest
 
 lsst_configs = pytest.importorskip(
-    'metadetect.lsst_configs',
+    'metadetect.lsst.configs',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 

@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 lsst_metadetect = pytest.importorskip(
-    'metadetect.lsst_metadetect',
+    'metadetect.lsst.metadetect',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 sim = pytest.importorskip(

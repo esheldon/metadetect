@@ -1,15 +1,12 @@
 import logging
-# from lsst.meas.algorithms import KernelPsf
-# from lsst.afw.math import FixedKernel
-# import lsst.afw.image as afw_image
-from .lsst_skysub import subtract_sky_mbobs
+from .skysub import subtract_sky_mbobs
 from . import util
 
-from .lsst_configs import get_config
-from . import lsst_measure
-from . import lsst_measure_scarlet
-from . import lsst_measure_shredder
-from .lsst_metadetect import (
+from .configs import get_config
+from . import measure
+from . import measure_scarlet
+from . import measure_shredder
+from .metadetect import (
     fit_original_psfs, get_mfrac, get_fitter, get_ormask_and_bmask,
     add_original_psf, add_ormask, add_mfrac,
 )
@@ -59,12 +56,12 @@ def run_photometry(mbobs, rng, config=None, show=False):
     mbexp = util.get_mbexp(exposures)
     if config['deblend']:
         if config['deblender'] == 'scarlet':
-            sources, detexp = lsst_measure_scarlet.detect_and_deblend(
+            sources, detexp = measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
                 show=show,
             )
-            res = lsst_measure_scarlet.measure(
+            res = measure_scarlet.measure(
                 mbexp=mbexp,
                 detexp=detexp,
                 sources=sources,
@@ -75,7 +72,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
             )
         else:
             shredder_config = config['shredder_config']
-            sources, detexp, Tvals = lsst_measure_shredder.detect_and_deblend(
+            sources, detexp, Tvals = measure_shredder.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
                 fitter=fitter,
@@ -83,7 +80,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
                 show=show,
                 rng=rng,
             )
-            res = lsst_measure_shredder.measure(
+            res = measure_shredder.measure(
                 mbexp=mbexp,
                 detexp=detexp,
                 sources=sources,
@@ -100,14 +97,14 @@ def run_photometry(mbobs, rng, config=None, show=False):
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
 
-        sources, detexp = lsst_measure.detect_and_deblend(
+        sources, detexp = measure.detect_and_deblend(
             mbexp=mbexp,
             rng=rng,
             thresh=config['detect']['thresh'],
             show=show,
         )
 
-        res = lsst_measure.measure(
+        res = measure.measure(
             mbexp=mbexp,
             detexp=detexp,
             sources=sources,

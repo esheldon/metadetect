@@ -1,14 +1,17 @@
 import galsim
 import pytest
 import numpy as np
-from .. import util
 
+util = pytest.importorskip(
+    'metadetect.lsst.util',
+    reason='LSST codes need the Rubin Obs. science pipelines',
+)
 lsst_measure_scarlet = pytest.importorskip(
-    'metadetect.lsst_measure_scarlet',
+    'metadetect.lsst.measure_scarlet',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 lsst_metadetect = pytest.importorskip(
-    'metadetect.lsst_metadetect',
+    'metadetect.lsst.metadetect',
     reason='LSST codes need the Rubin Obs. science pipelines',
 )
 sim = pytest.importorskip(

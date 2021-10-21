@@ -9,9 +9,11 @@ feature requests for DM
       twice the memory
     - clone() copy psfs
 """
+import logging
 import ngmix
 import numpy as np
 import esutil as eu
+
 import lsst.afw.table as afw_table
 import lsst.afw.image as afw_image
 from lsst.meas.base import (
@@ -23,20 +25,21 @@ from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
 import lsst.geom as geom
 
 from lsst.pex.exceptions import LengthError
+
+from .. import procflags
+from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
+
 from . import vis
 from . import util
 from .util import MultibandNoiseReplacer, ContextNoiseReplacer
 from .defaults import DEFAULT_THRESH
-from . import procflags
-from .lsst_measure import (
+from .measure import (
     get_output,
     get_ormask,
     extract_psf_image,
     extract_obs,
 )
-from .lsst_measure_scarlet import extract_mbobs
-from .fitting import fit_mbobs_wavg, get_wavg_output_struct
-import logging
+from .measure_scarlet import extract_mbobs
 
 LOG = logging.getLogger('lsst_measure_shredder')
 
