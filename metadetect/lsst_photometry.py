@@ -1,10 +1,9 @@
 import logging
-from lsst.meas.algorithms import KernelPsf
-from lsst.afw.math import FixedKernel
-import lsst.afw.image as afw_image
+# from lsst.meas.algorithms import KernelPsf
+# from lsst.afw.math import FixedKernel
+# import lsst.afw.image as afw_image
 from .lsst_skysub import subtract_sky_mbobs
 from . import util
-from . import vis
 
 from .lsst_configs import get_config
 from . import lsst_measure
@@ -56,16 +55,6 @@ def run_photometry(mbobs, rng, config=None, show=False):
 
     # fix psf until we fix bboxes
     exposures = [obslist[0].coadd_exp for obslist in mbobs]
-    for exp in exposures:
-        import lsst.geom as geom
-        pos = geom.Point2D(50, 50)
-        psf_image = exp.getPsf().computeKernelImage(pos).array
-        psf = KernelPsf(
-            FixedKernel(
-                afw_image.ImageD(psf_image.astype(float))
-            )
-        )
-        exp.setPsf(psf)
 
     mbexp = util.get_mbexp(exposures)
     if config['deblend']:
@@ -111,27 +100,19 @@ def run_photometry(mbobs, rng, config=None, show=False):
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
 
-        if len(exposures) > 1:
-            LOG.info('coadding %s bands' % len(mbobs))
-            exposure = util.coadd_exposures(exposures)
-        else:
-            exposure = exposures[0]
-
-        sources, meas_task = lsst_measure.detect_and_deblend(
-            exposure=exposure,
+        sources, detexp = lsst_measure.detect_and_deblend(
+            mbexp=mbexp,
+            rng=rng,
             thresh=config['detect']['thresh'],
             show=show,
         )
 
-        if show:
-            vis.show_exp(exposure)
-
         res = lsst_measure.measure(
-            exposure=exposure,
+            mbexp=mbexp,
+            detexp=detexp,
             sources=sources,
             fitter=fitter,
             stamp_size=config['stamp_size'],
-            meas_task=meas_task,
         )
 
     if res is not None:
