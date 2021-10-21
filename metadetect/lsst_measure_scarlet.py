@@ -27,14 +27,12 @@ from lsst.meas.extensions.scarlet import (
 )
 import lsst.geom as geom
 
-from lsst.pex.exceptions import InvalidParameterError, LengthError
+from lsst.pex.exceptions import LengthError
 from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
 from . import procflags
-from .lsst_measure import (
-    get_output_struct, get_ormask, MissingDataError,
-)
+from .lsst_measure import get_output_struct, get_ormask, extract_psf_image
 from .fitting import fit_mbobs_wavg, get_wavg_output_struct
 import logging
 
@@ -807,8 +805,7 @@ def extract_obs(exp, source):
         LOG.info('all zero weight')
         return None
 
-    maskobj = exp.mask
-    bmask = maskobj.array
+    bmask = exp.mask.array
 
     fp = source.getFootprint()
     peak = fp.getPeaks()[0]
@@ -822,7 +819,7 @@ def extract_obs(exp, source):
         orig_cen=peak_location,
     )
 
-    psf_im = _extract_psf_image(exposure=exp, orig_cen=peak_location)
+    psf_im = extract_psf_image(exposure=exp, orig_cen=peak_location)
 
     # fake the psf pixel noise
     psf_err = psf_im.max()*0.0001
@@ -837,10 +834,7 @@ def extract_obs(exp, source):
     # get from the mask object
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
-    meta = {
-        'maskobj': maskobj,
-        'orig_cen': peak_location,
-    }
+    meta = {'orig_cen': peak_location}
 
     psf_obs = ngmix.Observation(
         psf_im,
@@ -943,28 +937,6 @@ def _extract_weight(exp):
               'none that passed cuts')
 
     return weight
-
-
-def _extract_psf_image(exposure, orig_cen):
-    """
-    get the psf associated with this image.
-
-    coadded psfs from DM are generally not square, but the coadd in cells code
-    makes them so.  We will assert they are square and odd dimensions
-    """
-    try:
-        psfobj = exposure.getPsf()
-        psfim = psfobj.computeKernelImage(orig_cen).array
-    except InvalidParameterError:
-        raise MissingDataError("could not reconstruct PSF")
-
-    psfim = np.array(psfim, dtype='f4', copy=False)
-
-    shape = psfim.shape
-    assert shape[0] == shape[1], 'require square psf images'
-    assert shape[0] % 2 != 0, 'require odd psf images'
-
-    return psfim
 
 
 def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
