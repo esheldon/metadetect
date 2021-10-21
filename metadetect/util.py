@@ -172,14 +172,12 @@ class ContextNoiseReplacer(object):
         """
         Insert a source
         """
-        print(f'inserting {source_id}')
         self.replacer.insertSource(source_id)
 
     def removeSource(self, source_id):
         """
         Remove a source
         """
-        print(f'removing {source_id}')
         self.replacer.removeSource(source_id)
 
     def end(self):
