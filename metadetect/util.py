@@ -78,25 +78,6 @@ def trim_odd_image(im):
     return new_im
 
 
-def get_ored_bits(maskobj, bitnames):
-    """
-    get or of bits
-
-    Parameters
-    ----------
-    maskobj: lsst mask obj
-        Must have method getPlaneBitMask
-    bitnames: list of strings
-        list of bitmask names
-    """
-    bits = 0
-    for ibit, bitname in enumerate(bitnames):
-        bitval = maskobj.getPlaneBitMask(bitname)
-        bits |= bitval
-
-    return bits
-
-
 class ContextNoiseReplacer(object):
     """
     noise replacer that works as a context manager
