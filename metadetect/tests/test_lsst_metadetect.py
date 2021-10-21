@@ -112,6 +112,9 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     assert gname in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        # 6x6 grid
+        assert res[shear].size == 36
+
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
@@ -159,6 +162,9 @@ def test_lsst_metadetect_fullcoadd_smoke():
     assert gname in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        # 6x6 grid
+        assert res[shear].size == 36
+
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
@@ -203,12 +209,15 @@ def test_lsst_metadetect_deblend_smoke(deblender):
     assert gname in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        # 6x6 grid
+        assert res[shear].size == 36
+
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
 
-@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
-def test_lsst_metadetect_deblend_multiband(deblender):
+@pytest.mark.parametrize('deblender', [None, 'scarlet', 'shredder'])
+def test_lsst_metadetect_multiband(deblender, show=False):
     rng = np.random.RandomState(seed=99)
 
     bands = ('g', 'r', 'i')
@@ -233,22 +242,26 @@ def test_lsst_metadetect_deblend_multiband(deblender):
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-    config = {
-        'meas_type': 'pgauss',
-        'deblend': True,
-        'deblender': deblender,
-    }
+    config = {'meas_type': 'pgauss'}
+    if deblender is not None:
+        config['deblend'] = True
+        config['deblender'] = deblender
 
     res = lsst_metadetect.run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
+        show=show,
     )
+
 
     name = 'pgauss_band_flux'
 
     assert name in res['noshear'].dtype.names
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        # 6x6 grid
+        assert res[shear].size == 36
+
         assert len(res[shear][name].shape) == 2
         assert len(res[shear][name][0]) == nband
 
@@ -295,6 +308,10 @@ def test_lsst_zero_weights(show=False):
             for shear_type, tres in resdict.items():
                 assert np.any(tres['flags'] & procflags.ZERO_WEIGHTS != 0)
                 assert np.any(tres['psf_flags'] & procflags.NO_ATTEMPT != 0)
+        else:
+            for shear_type, tres in resdict.items():
+                # 6x6 grid
+                assert tres.size == 36
 
         nobj.append(resdict['noshear'].size)
 
@@ -396,7 +413,7 @@ def test_lsst_metadetect_mfrac_ormask():
 
 
 if __name__ == '__main__':
-    test_lsst_zero_weights(show=True)
+    test_lsst_metadetect_multiband(deblender=None, show=True)
     # test_lsst_metadetect_smoke(
     #     # meas_type='wmom',
     #     # subtract_sky=False,
