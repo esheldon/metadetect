@@ -142,9 +142,10 @@ def detect_deblend_and_measure(
 
     exposures = [obslist[0].exposure for obslist in mbobs]
 
+    mbexp = util.get_mbexp(exposures)
+
     if config['deblend']:
         LOG.info('measuring with scarlet deblended stamps')
-        mbexp = util.get_mbexp(exposures)
 
         if config['deblender'] == 'scarlet':
             sources, detexp = lsst_measure_scarlet.detect_and_deblend(
@@ -193,24 +194,18 @@ def detect_deblend_and_measure(
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
 
-        if len(exposures) > 1:
-            LOG.info('coadding %s bands' % len(mbobs))
-            exposure = util.coadd_exposures(exposures)
-        else:
-            exposure = exposures[0]
-
-        sources, meas_task = lsst_measure.detect_and_deblend(
-            exposure=exposure,
+        sources, detexp = lsst_measure.detect_and_deblend(
+            mbexp=mbexp,
+            rng=rng,
             thresh=config['detect']['thresh'],
             show=show,
         )
-
         results = lsst_measure.measure(
-            exposure=exposure,
+            mbexp=mbexp,
+            detexp=detexp,
             sources=sources,
             fitter=fitter,
             stamp_size=config['stamp_size'],
-            meas_task=meas_task,
         )
 
     return results
