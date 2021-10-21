@@ -20,6 +20,7 @@ from . import util
 from . import vis
 from . import procflags
 from .defaults import DEFAULT_THRESH
+from .fitting import fit_mbobs_wavg, get_wavg_output_struct
 
 
 def detect_and_deblend(exposure, thresh=DEFAULT_THRESH, show=False):
@@ -169,22 +170,28 @@ def measure(
         if False:
             vis.show_exp(subim)
 
-        obs = _extract_obs(exp=subim, source=source)
-        if obs is None:
+        # TODO work multiband
+        mbobs = _extract_mbobs(exp=subim, source=source)
+        if mbobs is None:
+            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
             # all zero weights for the image this occurs when we have zeros in
             # the weight plane near the edge but the image is non-zero. These
             # are always junk
-            psf_res = {'flags': procflags.NO_ATTEMPT}
-            object_res = {'flags': procflags.ZERO_WEIGHTS}
-            stamp_size = -1
+            this_res['flags'] = procflags.ZERO_WEIGHTS
+            stamp_size = -9999
         else:
-            psf_res = measure_one(obs=obs.psf, fitter=fitter)
-            object_res = measure_one(obs=obs, fitter=fitter)
-            stamp_size = obs.image.shape[0]
+            # TODO do something with bmask_flags?
+            this_res = fit_mbobs_wavg(
+                mbobs=mbobs,
+                fitter=fitter,
+                bmask_flags=0,
+                nonshear_mbobs=None,
+            )
+            stamp_size = mbobs[0][0].image.shape[0]
 
         res = get_output(
-            wcs=exposure.getWcs(), fitter=fitter, source=source, res=object_res,
-            psf_res=psf_res, ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
+            wcs=exposure.getWcs(), fitter=fitter, source=source, res=this_res,
+            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -234,11 +241,6 @@ def measure_one(obs, fitter):
         res['flux'] = flux_res['flux']
         res['flux_err'] = flux_res['flux_err']
 
-        # gm.set_flux(res['flux'])
-        # im = gm.make_image(obs.image.shape, jacobian=obs.jacobian)
-        # from espy import images
-        # images.compare_images(obs.image, im)
-
     return res
 
 
@@ -285,6 +287,34 @@ def get_ormask(source, exposure):
     return maskval
 
 
+def _extract_mbobs(exp, source):
+    """
+    convert an image object into an ngmix.MultiBandObservation, including a psf
+    observation.  TODO work multiband for real, see
+    lsst_measure_scarlet.extract_mbobs
+
+    parameters
+    ----------
+    imobj: lsst.afw.image.ExposureF
+        The exposure
+    source: lsst.afw.table.SourceRecord
+        The source record
+
+    returns
+    --------
+    mbobs: ngmix.MultiBandObsList
+        The MultiBandObsList unless all the weight are zero, in which
+        case None is returned
+    """
+
+    obs = _extract_obs(exp, source)
+    obslist = ngmix.ObsList()
+    obslist.append(obs)
+    mbobs = ngmix.MultiBandObsList()
+    mbobs.append(obslist)
+    return mbobs
+
+
 def _extract_obs(exp, source):
     """
     convert an image object into an ngmix.Observation, including
@@ -292,10 +322,10 @@ def _extract_obs(exp, source):
 
     parameters
     ----------
-    imobj: an image object
-        TODO I don't actually know what class this is
-    source: an object sourceord
-        TODO I don't actually know what class this is
+    imobj: lsst.afw.image.ExposureF
+        The exposure
+    source: lsst.afw.table.SourceRecord
+        The source record
 
     returns
     --------
@@ -598,12 +628,9 @@ def _extract_jacobian(exp, source):
     return jacob
 
 
-def _get_dtype(kind, nband):
+def get_output_dtype():
 
-    n = util.Namer(front=kind)
     dt = [
-        ('flags', 'i4'),
-
         ('stamp_size', 'i4'),
         ('row0', 'i4'),  # bbox row start
         ('col0', 'i4'),  # bbox col start
@@ -620,63 +647,111 @@ def _get_dtype(kind, nband):
         ('psfrec_g', 'f8', 2),
         ('psfrec_T', 'f8'),
 
-        ('psf_flags', 'i4'),
-        ('psf_g', 'f8', 2),
-        ('psf_T', 'f8'),
-
         ('ormask', 'i4'),
         ('mfrac', 'f4'),
-
-        (n('flags'), 'i4'),
-        (n('s2n'), 'f8'),
-        (n('g'), 'f8', 2),
-        (n('g_cov'), 'f8', (2, 2)),
-        (n('T'), 'f8'),
-        (n('T_err'), 'f8'),
-        (n('T_ratio'), 'f8'),
-        # (n('flux'), 'f8'),
-        # (n('flux_err'), 'f8'),
     ]
-
-    if nband > 1:
-        dt += [
-            (n('band_flux'), 'f8', nband),
-            (n('band_flux_err'), 'f8', nband),
-        ]
-    else:
-        dt += [
-            (n('band_flux'), 'f8'),
-            (n('band_flux_err'), 'f8'),
-        ]
 
     return dt
 
 
-def get_output_struct(kind, nband=1):
-    n = util.Namer(front=kind)
-    dt = _get_dtype(kind, nband=nband)
+def get_output_struct(res):
+    """
+    get the output struct
 
-    output = np.zeros(1, dtype=dt)
+    Parameters
+    ----------
+    res: ndarray
+        The result from running metadetect.fitting.fit_mbobs_wavg
 
-    output['flags'] = procflags.NO_ATTEMPT
-    output['psf_flags'] = procflags.NO_ATTEMPT
+    Returns
+    -------
+    ndarray
+        Has the fields from res, with new fields added, see get_output_dtype
+    """
+    dt = get_output_dtype()
+    output = eu.numpy_util.add_fields(res, dt)
 
-    output[n('s2n')] = np.nan
-    output[n('g')] = np.nan
-    output[n('T')] = np.nan
-    output[n('T_err')] = np.nan
-    output[n('g_cov')] = np.nan
-    output[n('T_ratio')] = np.nan
-    output[n('band_flux')] = np.nan
-    output[n('band_flux_err')] = np.nan
+    for subdt in dt:
+        name = subdt[0]
+        dtype = subdt[1]
 
-    output['psf_g'] = np.nan
-    output['psf_T'] = np.nan
+        if 'flags' in name:
+            output[name] = procflags.NO_ATTEMPT
+        elif name == 'ormask':
+            output[name] = 0
+        elif dtype[0] == 'i':
+            output[name] = -9999
+        else:
+            output[name] = np.nan
 
     return output
 
 
-def get_output(wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
+def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
+    """
+    get the output structure, copying in results
+
+    The following fields are not set:
+        row_noshear, col_noshear
+        psfrec_flags, psfrec_g, psfrec_T
+        mfrac
+
+    Parameters
+    ----------
+    wcs: a stack wcs
+        The wcs with which to determine the ra, dec
+    fitter: e.g. ngmix.prepsfmom.PGaussMom
+        The measurement object
+    res: ndarray
+        The result from running metadetect.fitting.fit_mbobs_wavg
+    ormask: int
+        The ormask value at the location of this object
+    stamp_size: int
+        The stamp size used for the measurement
+    exp_bbox: lsst.geom.Box2I
+        The bounding box used for measurement
+
+    Returns
+    -------
+    ndarray
+        Has the fields from res, with new fields added, see get_output_dtype
+    """
+
+    output = get_output_struct(res)
+
+    orig_cen = source.getCentroid()
+
+    skypos = wcs.pixelToSky(orig_cen)
+
+    peak = source.getFootprint().getPeaks()[0]
+    peak_loc = peak.getI()
+
+    if np.isnan(orig_cen.getY()):
+        orig_cen = peak.getCentroid()
+        cen_offset = geom.Point2D(np.nan, np.nan)
+    else:
+        cen_offset = geom.Point2D(
+            orig_cen.getX() - peak_loc.getX(),
+            orig_cen.getY() - peak_loc.getY(),
+        )
+
+    output['stamp_size'] = stamp_size
+    output['row0'] = exp_bbox.getBeginY()
+    output['col0'] = exp_bbox.getBeginX()
+    output['row'] = orig_cen.getY()
+    output['col'] = orig_cen.getX()
+    output['row_diff'] = cen_offset.getY()
+    output['col_diff'] = cen_offset.getX()
+
+    output['ra'] = skypos.getRa().asDegrees()
+    output['dec'] = skypos.getDec().asDegrees()
+
+    output['ormask'] = ormask
+
+    return output
+
+
+def get_output_old(wcs, fitter, source, res, psf_res, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 

@@ -10,7 +10,6 @@ import logging
 import ngmix
 import metadetect
 from metadetect import procflags
-# from .. import procflags
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -62,8 +61,10 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
     return sim_data
 
 
-@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
-@pytest.mark.parametrize('subtract_sky', [None, False, True])
+# @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
+# @pytest.mark.parametrize('subtract_sky', [None, False, True])
+@pytest.mark.parametrize('meas_type', [None])
+@pytest.mark.parametrize('subtract_sky', [None])
 def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     rng = np.random.RandomState(seed=116)
 
@@ -118,6 +119,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
         assert len(res[shear][flux_name].shape) == 1
 
 
+'''
 @pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
 def test_lsst_metadetect_deblend_smoke(deblender):
     rng = np.random.RandomState(seed=99)
@@ -346,9 +348,16 @@ def test_lsst_metadetect_mfrac_ormask():
 
         total_time = time.time()-tm0
         print("time per:", total_time)
+'''
 
 
 if __name__ == '__main__':
+    test_lsst_metadetect_smoke(
+        # meas_type='wmom',
+        # subtract_sky=False,
+        meas_type=None,
+        subtract_sky=None,
+    )
     # test_lsst_metadetect_prepsf_stars('gap')
     # test_lsst_zero_weights()
-    test_lsst_metadetect_deblend_multiband('scarlet')
+    # test_lsst_metadetect_deblend_multiband('scarlet')

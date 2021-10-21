@@ -33,11 +33,9 @@ from . import util
 from .defaults import DEFAULT_THRESH
 from . import procflags
 from .lsst_measure import (
-    get_output_struct, get_meas_type, get_ormask,
-    MissingDataError,
-    # measure_one,
+    get_output_struct, get_ormask, MissingDataError,
 )
-from .mbobs_measure import measure_mbobs
+from .fitting import fit_mbobs_wavg, get_wavg_output_struct
 import logging
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -282,8 +280,8 @@ def _process_source(
 
             if mbobs is None or obs is None:
                 LOG.info('skipping object with all zero weights')
-                object_res = {'flags': procflags.ZERO_WEIGHTS}
-                psf_res = {'flags': procflags.NO_ATTEMPT}
+                this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+                this_res['flags'] = procflags.ZERO_WEIGHTS
             else:
                 try:
 
@@ -296,31 +294,32 @@ def _process_source(
                     for _obslist in mbobs:
                         _obslist[0].jacobian = obs.jacobian
 
-                    object_res, psf_res = measure_mbobs(
+                    # TODO do something with bmask_flags?
+                    this_res = fit_mbobs_wavg(
                         mbobs=mbobs,
                         fitter=fitter,
+                        bmask_flags=0,
                         nonshear_mbobs=None,
                     )
 
                 except CentroidFail as err:
                     LOG.info(str(err))
-                    object_res = {'flags': procflags.CENTROID_FAIL}
-                    psf_res = {'flags': procflags.NO_ATTEMPT}
+                    this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+                    this_res['flags'] = procflags.CENTROID_FAIL
 
         except LengthError as e:
             # bounding box did not fit. TODO keep output with flag set
             LOG.info(e)
 
             # note the context manager properly handles a return
-            object_res = {'flags': procflags.EDGE_HIT}
-            psf_res = {'flags': procflags.NO_ATTEMPT}
+            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res['flags'] = procflags.EDGE_HIT
 
             mbobs = None
 
         res = get_output_scarlet(
-            mbobs=mbobs, wcs=wcs, fitter=fitter, source=source, res=object_res,
-            psf_res=psf_res, ormask=ormask, stamp_size=stamp_size,
-            exp_bbox=exp_bbox,
+            mbobs=mbobs, wcs=wcs, fitter=fitter, source=source, res=this_res,
+            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
     return res
@@ -1021,10 +1020,9 @@ def get_output_scarlet(
     else:
         nband = 1
 
-    meas_type = get_meas_type(fitter)
-    output = get_output_struct(meas_type, nband=nband)
+    output = get_output_struct(fitter.kind, nband=nband)
 
-    n = util.Namer(front=meas_type)
+    n = util.Namer(front=fitter.kind)
 
     output['psf_flags'] = psf_res['flags']
     output[n('flags')] = res['flags']
