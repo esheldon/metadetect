@@ -39,7 +39,7 @@ from .lsst_measure_scarlet import (
     # extract_obs,
     extract_mbobs,
 )
-from .mbobs_measure import measure_mbobs
+from .fitting import fit_mbobs_wavg, get_wavg_output_struct
 import logging
 
 LOG = logging.getLogger('lsst_measure_shredder')
@@ -325,17 +325,21 @@ def _process_parent(
 
     if parent_mbobs is None:
         LOG.info('skipping object with all zero weights')
-        object_res = {'flags': procflags.ZERO_WEIGHTS}
-        psf_res = {'flags': procflags.NO_ATTEMPT}
+        this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+        this_res['flags'] = procflags.ZERO_WEIGHTS
     else:
+        # TODO do something with bmask_flags?
         # TODO implement nonshear_mbobs
-        object_res, psf_res = measure_mbobs(
-            mbobs=parent_mbobs, fitter=fitter, nonshear_mbobs=None,
+        this_res = fit_mbobs_wavg(
+            mbobs=parent_mbobs,
+            fitter=fitter,
+            bmask_flags=0,
+            nonshear_mbobs=None,
         )
 
     return get_output(
         wcs=wcs, fitter=fitter,
-        source=source, res=object_res, psf_res=psf_res,
+        source=source, res=this_res,
         ormask=ormask,
         stamp_size=stamp_size,
         exp_bbox=exp_bbox,
@@ -372,16 +376,17 @@ def _process_blend(
         shredder.shred(guess)
 
     if shredder is None or shredder.result['flags'] != 0:
+        this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
         if shredder is None:
-            object_res = {'flags': procflags.PSF_FAILURE}
-            psf_res = {'flags': procflags.PSF_FAILURE}
+            this_res['flags'] = procflags.PSF_FAILURE
+            this_res['psf_flags'] = procflags.PSF_FAILURE
         else:
-            object_res = {'flags': procflags.DEBLEND_FAIL}
-            psf_res = {'flags': procflags.NO_ATTEMPT}
+            this_res['flags'] = procflags.DEBLEND_FAIL
+            this_res['psf_flags'] = procflags.NO_ATTEMPT
 
         results = [
             get_output(wcs=wcs, fitter=fitter,
-                       source=source, res=object_res, psf_res=psf_res,
+                       source=source, res=this_res,
                        ormask=ormasks[source.getId()],
                        stamp_size=stamp_size,
                        exp_bbox=exp_bbox)
@@ -404,21 +409,18 @@ def _process_blend(
                 #         index=ichild, stamp_size=stamp_size,
                 #     )
 
-                # coadd_stamp_mbobs = make_coadd_obs(stamp_mbobs)
-                #
-                # psf_res = measure_one(obs=coadd_stamp_mbobs.psf, fitter=fitter)
-                # object_res = measure_one(obs=coadd_stamp_mbobs, fitter=fitter)
-
+                # TODO do something with bmask_flags?
                 # TODO implement nonshear_mbobs
-                object_res, psf_res = measure_mbobs(
+                this_res = fit_mbobs_wavg(
                     mbobs=stamp_mbobs,
                     fitter=fitter,
+                    bmask_flags=0,
                     nonshear_mbobs=None,
                 )
 
                 res = get_output(
                     wcs=wcs, fitter=fitter, source=child,
-                    res=object_res, psf_res=psf_res,
+                    res=this_res,
                     ormask=ormasks[child.getId()],
                     stamp_size=stamp_size, exp_bbox=exp_bbox,
                 )
