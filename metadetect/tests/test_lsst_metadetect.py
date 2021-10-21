@@ -253,7 +253,6 @@ def test_lsst_metadetect_multiband(deblender, show=False):
         show=show,
     )
 
-
     name = 'pgauss_band_flux'
 
     assert name in res['noshear'].dtype.names
