@@ -178,7 +178,6 @@ def measure(
             # the weight plane near the edge but the image is non-zero. These
             # are always junk
             this_res['flags'] = procflags.ZERO_WEIGHTS
-            stamp_size = -9999
         else:
             # TODO do something with bmask_flags?
             this_res = fit_mbobs_wavg(
@@ -187,7 +186,6 @@ def measure(
                 bmask_flags=0,
                 nonshear_mbobs=None,
             )
-            stamp_size = mbobs[0][0].image.shape[0]
 
         res = get_output(
             wcs=exposure.getWcs(), fitter=fitter, source=source, res=this_res,
@@ -308,10 +306,15 @@ def _extract_mbobs(exp, source):
     """
 
     obs = _extract_obs(exp, source)
-    obslist = ngmix.ObsList()
-    obslist.append(obs)
-    mbobs = ngmix.MultiBandObsList()
-    mbobs.append(obslist)
+
+    if obs is not None:
+        obslist = ngmix.ObsList()
+        obslist.append(obs)
+        mbobs = ngmix.MultiBandObsList()
+        mbobs.append(obslist)
+    else:
+        mbobs = None
+
     return mbobs
 
 
@@ -477,14 +480,14 @@ def _get_padded_sub_image(exposure, bbox):
     """
     extract a sub-image, padded out when it is not contained
     """
-    region = exposure.getBBox()
+    exp_bbox = exposure.getBBox()
 
-    if region.contains(bbox):
+    if exp_bbox.contains(bbox):
         return exposure.Factory(exposure, bbox, afw_image.PARENT, True)
 
     result = exposure.Factory(bbox)
     bbox2 = geom.Box2I(bbox)
-    bbox2.clip(region)
+    bbox2.clip(exp_bbox)
 
     if isinstance(exposure, afw_image.Exposure):
         result.setPsf(exposure.getPsf().clone())
