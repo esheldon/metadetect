@@ -28,6 +28,10 @@ coadd = pytest.importorskip(
     'descwl_coadd.coadd',
     reason='LSST codes need the descwl_coadd module for testing',
 )
+coadd_nowarp = pytest.importorskip(
+    'descwl_coadd.coadd_nowarp',
+    reason='LSST codes need the descwl_coadd module for testing',
+)
 
 
 def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
@@ -61,10 +65,8 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
     return sim_data
 
 
-# @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
-# @pytest.mark.parametrize('subtract_sky', [None, False, True])
-@pytest.mark.parametrize('meas_type', [None])
-@pytest.mark.parametrize('subtract_sky', [None])
+@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
+@pytest.mark.parametrize('subtract_sky', [None, False, True])
 def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     rng = np.random.RandomState(seed=116)
 
@@ -72,13 +74,11 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
 
     print()
 
-    coadd_obs = coadd.make_coadd_obs(
-        exps=sim_data['band_data']['i'],
-        coadd_wcs=sim_data['coadd_wcs'],
-        coadd_bbox=sim_data['coadd_bbox'],
+    coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+        exp=sim_data['band_data']['i'][0],
         psf_dims=sim_data['psf_dims'],
-        remove_poisson=False,
         rng=rng,
+        remove_poisson=False,
     )
 
     # to avoid flagged edges
@@ -119,13 +119,12 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
         assert len(res[shear][flux_name].shape) == 1
 
 
-'''
-@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
-def test_lsst_metadetect_deblend_smoke(deblender):
-    rng = np.random.RandomState(seed=99)
+def test_lsst_metadetect_fullcoadd_smoke():
+    rng = np.random.RandomState(seed=116)
 
-    sim_data = make_lsst_sim(99, mag=23)
+    sim_data = make_lsst_sim(116)
 
+    print()
     coadd_obs = coadd.make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
@@ -144,7 +143,52 @@ def test_lsst_metadetect_deblend_smoke(deblender):
     coadd_mbobs.append(obslist)
 
     config = {
-        'meas_type': 'gap',
+        'meas_type': 'wmom',
+        'subtract_sky': True,
+    }
+
+    res = lsst_metadetect.run_metadetect(
+        mbobs=coadd_mbobs, rng=rng,
+        config=config,
+    )
+
+    front = 'wmom'
+
+    gname = f'{front}_g'
+    flux_name = f'{front}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        # one band
+        assert len(res[shear][flux_name].shape) == 1
+
+
+@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
+def test_lsst_metadetect_deblend_smoke(deblender):
+    rng = np.random.RandomState(seed=99)
+
+    sim_data = make_lsst_sim(99, mag=23)
+
+    coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+        exp=sim_data['band_data']['i'][0],
+        psf_dims=sim_data['psf_dims'],
+        rng=rng,
+        remove_poisson=False,
+    )
+
+    # to avoid flagged edges
+    coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+    coadd_mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    obslist.append(coadd_obs)
+    coadd_mbobs.append(obslist)
+
+    config = {
+        'meas_type': 'pgauss',
         'deblend': True,
         'deblender': deblender,
     }
@@ -154,7 +198,7 @@ def test_lsst_metadetect_deblend_smoke(deblender):
         config=config,
     )
 
-    gname = 'gap_g'
+    gname = 'pgauss_g'
 
     assert gname in res['noshear'].dtype.names
 
@@ -175,14 +219,13 @@ def test_lsst_metadetect_deblend_multiband(deblender):
     coadd_mbobs = ngmix.MultiBandObsList()
 
     for band, exps in sim_data['band_data'].items():
-        coadd_obs = coadd.make_coadd_obs(
-            exps=exps,
-            coadd_wcs=sim_data['coadd_wcs'],
-            coadd_bbox=sim_data['coadd_bbox'],
+        coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+            exp=exps[0],
             psf_dims=sim_data['psf_dims'],
-            remove_poisson=False,
             rng=rng,
+            remove_poisson=False,
         )
+
         # to avoid flagged edges
         coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
 
@@ -191,7 +234,7 @@ def test_lsst_metadetect_deblend_multiband(deblender):
         coadd_mbobs.append(obslist)
 
     config = {
-        'meas_type': 'gap',
+        'meas_type': 'pgauss',
         'deblend': True,
         'deblender': deblender,
     }
@@ -201,7 +244,7 @@ def test_lsst_metadetect_deblend_multiband(deblender):
         config=config,
     )
 
-    name = 'gap_band_flux'
+    name = 'pgauss_band_flux'
 
     assert name in res['noshear'].dtype.names
 
@@ -210,11 +253,12 @@ def test_lsst_metadetect_deblend_multiband(deblender):
         assert len(res[shear][name][0]) == nband
 
 
-def test_lsst_zero_weights():
+def test_lsst_zero_weights(show=False):
     nobj = []
+    seed = 55
     for do_zero in [False, True]:
-        rng = np.random.RandomState(55)
-        sim_data = make_lsst_sim(55, mag=23)
+        rng = np.random.RandomState(seed)
+        sim_data = make_lsst_sim(seed, mag=23)
 
         coadd_obs = coadd.make_coadd_obs(
             exps=sim_data['band_data']['i'],
@@ -230,6 +274,13 @@ def test_lsst_zero_weights():
                 coadd_obs.weight[50:100, 50:100] = 0.0
             coadd_obs.coadd_exp.variance.array[50:100, 50:100] = np.inf
 
+            if show:
+                import matplotlib.pyplot as mplt
+                fig, axs = mplt.subplots(ncols=2)
+                axs[0].imshow(coadd_obs.image)
+                axs[1].imshow(coadd_obs.weight)
+                mplt.show()
+
         coadd_mbobs = ngmix.MultiBandObsList()
         obslist = ngmix.ObsList()
         obslist.append(coadd_obs)
@@ -242,12 +293,8 @@ def test_lsst_zero_weights():
         if do_zero:
 
             for shear_type, tres in resdict.items():
-                assert np.any(
-                    tres['flags'] == (
-                        procflags.OBJ_FAILURE | procflags.ZERO_WEIGHTS
-                    )
-                )
-                assert np.any(tres['psf_flags'] == procflags.NO_ATTEMPT)
+                assert np.any(tres['flags'] & procflags.ZERO_WEIGHTS != 0)
+                assert np.any(tres['psf_flags'] & procflags.NO_ATTEMPT != 0)
 
         nobj.append(resdict['noshear'].size)
 
@@ -296,13 +343,11 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
     assert wlowT.size > 0
 
     # TODO need to name these flags in ngmix
-    assert np.all(data[n('flags')][wlowT] == 0x8)
+    assert np.all(data[n('flags')][wlowT] == ngmix.flags.NONPOS_SIZE)
 
-    for field in ['s2n', 'g', 'T_ratio']:
-        assert np.all(np.isnan(data[n(field)][wlowT]))
-
+    assert np.all(np.isnan(data[n('g')][wlowT]))
     for field in data.dtype.names:
-        assert np.all(np.isfinite(data[field][wgood]))
+        assert np.all(np.isfinite(data[field][wgood])), field
 
 
 def test_lsst_metadetect_mfrac_ormask():
@@ -348,16 +393,15 @@ def test_lsst_metadetect_mfrac_ormask():
 
         total_time = time.time()-tm0
         print("time per:", total_time)
-'''
 
 
 if __name__ == '__main__':
-    test_lsst_metadetect_smoke(
-        # meas_type='wmom',
-        # subtract_sky=False,
-        meas_type=None,
-        subtract_sky=None,
-    )
-    # test_lsst_metadetect_prepsf_stars('gap')
-    # test_lsst_zero_weights()
+    test_lsst_zero_weights(show=True)
+    # test_lsst_metadetect_smoke(
+    #     # meas_type='wmom',
+    #     # subtract_sky=False,
+    #     meas_type=None,
+    #     subtract_sky=None,
+    # )
+    # test_lsst_metadetect_prepsf_stars('pgauss')
     # test_lsst_metadetect_deblend_multiband('scarlet')
