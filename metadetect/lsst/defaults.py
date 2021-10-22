@@ -16,22 +16,16 @@ DEFAULT_STAMP_SIZES = {
     'pgauss': 64,  # TODO would smaller be OK since does not ring?
 }
 
+# threshold for detection
 DEFAULT_THRESH = 5.0
+# refind the center in lsst.measure.measure
+DEFAULT_FIND_CEN = False
+
+# deblending settings
 DEFAULT_DEBLEND = False
 DEFAULT_DEBLENDER = 'scarlet'
-DEFAULT_SUBTRACT_SKY = False
-DEFAULT_PSF_CONFIG = {
-    'model': 'am',
-    'ntry': 4,
-}
-DEFAULT_METACAL_CONFIG = {
-    "use_noise_image": True,
-    "psf": "fitgauss",
-}
-DEFAULT_DETECT_CONFIG = {
-    'thresh': DEFAULT_THRESH,
-}
 
+# config for shredder deblender
 DEFAULT_SHREDDER_CONFIG = {
     'psf_ngauss': 3,
     'init_model': 'exp',
@@ -40,6 +34,26 @@ DEFAULT_SHREDDER_CONFIG = {
     'flux_miniter': 20,
     'flux_maxiter': 500,
     'tol': 0.001,
+}
+
+# whether to find and subtract the sky, happens before metacal
+DEFAULT_SUBTRACT_SKY = False
+
+# config for fitting the original psfs
+DEFAULT_PSF_CONFIG = {
+    'model': 'am',
+    'ntry': 4,
+}
+
+# Control of the metacal process
+DEFAULT_METACAL_CONFIG = {
+    "use_noise_image": True,
+    "psf": "fitgauss",
+}
+
+# detection config, this may expand
+DEFAULT_DETECT_CONFIG = {
+    'thresh': DEFAULT_THRESH,
 }
 
 # the weight subconfig and the stamp_size defaults we be filled in
@@ -53,6 +67,7 @@ DEFAULT_MDET_CONFIG = {
     'shredder_config': None,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
+    'find_cen': DEFAULT_FIND_CEN,
     'weight': None,
     'stamp_size': None,
 }
