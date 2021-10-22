@@ -16,6 +16,10 @@ LOG = logging.getLogger('lsst_photometry')
 
 def run_photometry(mbobs, rng, config=None, show=False):
     """
+    Run photometry on the input data
+
+    Parameters
+    ----------
     mbobs: ngmix.MultiBandObsList
         The observations to process
     rng: np.random.RandomState
@@ -28,10 +32,7 @@ def run_photometry(mbobs, rng, config=None, show=False):
 
     Returns
     -------
-    result dict
-        This is keyed by shear string 'noshear', '1p', ... or None if there was
-        a problem doing the metacal steps; this only happens if the setting
-        metacal_psf is set to 'fitgauss' and the fitting fails
+    ndarray of results with measuremens
     """
 
     config = get_config(config)
@@ -110,6 +111,8 @@ def run_photometry(mbobs, rng, config=None, show=False):
             sources=sources,
             fitter=fitter,
             stamp_size=config['stamp_size'],
+            find_cen=config['find_cen'],
+            rng=rng,  # needed if find_cen is True
         )
 
     if res is not None:
