@@ -7,27 +7,14 @@ import pytest
 
 import logging
 import ngmix
+from metadetect.lsst import photometry as lsst_phot
+import descwl_shear_sims
+from descwl_coadd.coadd import make_coadd_obs
+from descwl_coadd.coadd_nowarp import make_coadd_obs_nowarp
 
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
-)
-
-lsst_phot = pytest.importorskip(
-    'metadetect.lsst.photometry',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
-)
-coadd = pytest.importorskip(
-    'descwl_coadd.coadd',
-    reason='LSST codes need the descwl_coadd module for testing',
-)
-coadd_nowarp = pytest.importorskip(
-    'descwl_coadd.coadd_nowarp',
-    reason='LSST codes need the descwl_coadd module for testing',
 )
 
 
@@ -39,7 +26,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
     if bands is None:
         bands = ['i']
 
-    galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
+    galaxy_catalog = descwl_shear_sims.galaxies.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=20,
@@ -48,9 +35,9 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
         hlr=hlr,
     )
 
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    sim_data = sim.make_sim(
+    sim_data = descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,
@@ -71,14 +58,14 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     sim_data = make_lsst_sim(116)
 
     if nowarp:
-        coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+        coadd_obs = make_coadd_obs_nowarp(
             exp=sim_data['band_data']['i'][0],
             psf_dims=sim_data['psf_dims'],
             rng=rng,
             remove_poisson=False,
         )
     else:
-        coadd_obs = coadd.make_coadd_obs(
+        coadd_obs = make_coadd_obs(
             exps=sim_data['band_data']['i'],
             coadd_wcs=sim_data['coadd_wcs'],
             coadd_bbox=sim_data['coadd_bbox'],
@@ -139,7 +126,7 @@ def test_lsst_photometry_deblend_multiband(deblender):
     coadd_mbobs = ngmix.MultiBandObsList()
 
     for band, exps in sim_data['band_data'].items():
-        coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+        coadd_obs = make_coadd_obs_nowarp(
             exp=exps[0],
             psf_dims=sim_data['psf_dims'],
             rng=rng,

@@ -1,16 +1,9 @@
 import sys
 import numpy as np
-import pytest
 import logging
 
-util = pytest.importorskip(
-    'metadetect.lsst.util',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
-)
+from metadetect.lsst import util
+import descwl_shear_sims
 
 logging.basicConfig(stream=sys.stdout, level=logging.WARN)
 
@@ -27,7 +20,7 @@ def make_lsst_sim(rng):
 
     bands = ['r', 'i', 'z']
 
-    galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
+    galaxy_catalog = descwl_shear_sims.galaxies.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=buff,
@@ -36,9 +29,9 @@ def make_lsst_sim(rng):
         hlr=0.5,
     )
 
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    sim_data = sim.make_sim(
+    sim_data = descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,

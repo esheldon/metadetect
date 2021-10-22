@@ -4,23 +4,13 @@ import numpy as np
 import pytest
 import tqdm
 import logging
+import metadetect.lsst.skysub as lsst_skysub
+import metadetect.lsst.measure as lsst_measure
+import descwl_shear_sims
 
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.WARN,
-)
-
-lsst_skysub_mod = pytest.importorskip(
-    'metadetect.lsst.skysub',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-lsst_meas_mod = pytest.importorskip(
-    'metadetect.lsst.measure',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
 )
 
 
@@ -34,7 +24,7 @@ def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
     buff = 20
 
     if gal_type == 'fixed':
-        galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
+        galaxy_catalog = descwl_shear_sims.galaxies.FixedGalaxyCatalog(
             rng=rng,
             coadd_dim=coadd_dim,
             buff=buff,
@@ -43,7 +33,7 @@ def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
             hlr=0.5,
         )
     elif gal_type == 'wldeblend':
-        galaxy_catalog = sim.galaxies.WLDeblendGalaxyCatalog(
+        galaxy_catalog = descwl_shear_sims.galaxies.WLDeblendGalaxyCatalog(
             rng=rng,
             coadd_dim=coadd_dim,
             buff=buff,
@@ -52,7 +42,7 @@ def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
         raise ValueError('bad gal type: %s' % gal_type)
 
     if star_density > 0:
-        stars = sim.stars.StarCatalog(
+        stars = descwl_shear_sims.stars.StarCatalog(
             rng=rng,
             coadd_dim=coadd_dim,
             buff=buff,
@@ -61,9 +51,9 @@ def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
     else:
         stars = None
 
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    sim_data = sim.make_sim(
+    sim_data = descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         star_catalog=stars,
@@ -136,7 +126,7 @@ def test_skysub_smoke():
     exp.image.array[:, :] = rng.normal(scale=noise, size=dims, loc=skyval)
     exp.variance.array[:, :] = noise**2
 
-    lsst_skysub_mod.determine_and_subtract_sky(exp)
+    lsst_skysub.determine_and_subtract_sky(exp)
 
     meta = exp.getMetadata()
     assert 'BGMEAN' in meta
@@ -163,7 +153,7 @@ def test_skysub_pure_noise():
         exp.image.array[:, :] = rng.normal(scale=noise, size=dims, loc=skyval)
         exp.variance.array[:, :] = noise**2
 
-        lsst_skysub_mod.determine_and_subtract_sky(exp)
+        lsst_skysub.determine_and_subtract_sky(exp)
 
         meta = exp.getMetadata()
 
@@ -179,7 +169,7 @@ def test_skysub_sim_smoke():
     sim = make_lsst_sim(rng, gal_type='fixed', sky_n_sigma=3)
 
     exp = sim['band_data']['i'][0]
-    lsst_skysub_mod.determine_and_subtract_sky(exp)
+    lsst_skysub.determine_and_subtract_sky(exp)
 
     meta = exp.getMetadata()
     assert 'BGMEAN' in meta
@@ -210,7 +200,7 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
         if False:
             show_image(exp)
 
-        lsst_skysub_mod.iterate_detection_and_skysub(
+        lsst_skysub.iterate_detection_and_skysub(
             exposure=exp, thresh=5,
         )
         meta = exp.getMetadata()
@@ -262,7 +252,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
             show_image(exp)
 
         if True:
-            lsst_skysub_mod.iterate_detection_and_skysub(
+            lsst_skysub.iterate_detection_and_skysub(
                 exposure=exp, thresh=5,
             )
             meta = exp.getMetadata()
@@ -270,22 +260,22 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
         else:
             # this one is for debugging; we do the iterations ourselves so we
             # can display the result
-            _, _ = lsst_meas_mod.detect_and_deblend(
+            _, _ = lsst_measure.detect_and_deblend(
                 exposure=exp, thresh=5,
             )
             if False:
                 show_mask(exp)
 
-            lsst_skysub_mod.determine_and_subtract_sky(exp)
+            lsst_skysub.determine_and_subtract_sky(exp)
             sky_meas = exp.getMetadata()['BGMEAN']
 
-            _, _ = lsst_meas_mod.detect_and_deblend(
+            _, _ = lsst_measure.detect_and_deblend(
                 exposure=exp, thresh=5,
             )
             if False:
                 show_mask(exp)
 
-            lsst_skysub_mod.determine_and_subtract_sky(exp)
+            lsst_skysub.determine_and_subtract_sky(exp)
 
             meta = exp.getMetadata()
             sky_meas += meta['BGMEAN']

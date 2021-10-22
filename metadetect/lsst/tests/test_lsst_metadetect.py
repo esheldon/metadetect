@@ -10,27 +10,14 @@ import logging
 import ngmix
 import metadetect
 from metadetect import procflags
+from metadetect.lsst.metadetect import run_metadetect
+import descwl_shear_sims
+from descwl_coadd.coadd import make_coadd_obs
+from descwl_coadd.coadd_nowarp import make_coadd_obs_nowarp
 
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
-)
-
-lsst_metadetect = pytest.importorskip(
-    'metadetect.lsst.metadetect',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
-)
-coadd = pytest.importorskip(
-    'descwl_coadd.coadd',
-    reason='LSST codes need the descwl_coadd module for testing',
-)
-coadd_nowarp = pytest.importorskip(
-    'descwl_coadd.coadd_nowarp',
-    reason='LSST codes need the descwl_coadd module for testing',
 )
 
 
@@ -42,7 +29,7 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
     if bands is None:
         bands = ['i']
 
-    galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
+    galaxy_catalog = descwl_shear_sims.galaxies.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=20,
@@ -51,9 +38,9 @@ def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
         hlr=hlr,
     )
 
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    sim_data = sim.make_sim(
+    sim_data = descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,
@@ -74,7 +61,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
 
     print()
 
-    coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+    coadd_obs = make_coadd_obs_nowarp(
         exp=sim_data['band_data']['i'][0],
         psf_dims=sim_data['psf_dims'],
         rng=rng,
@@ -97,7 +84,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
-    res = lsst_metadetect.run_metadetect(
+    res = run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
@@ -128,7 +115,7 @@ def test_lsst_metadetect_fullcoadd_smoke():
     sim_data = make_lsst_sim(116)
 
     print()
-    coadd_obs = coadd.make_coadd_obs(
+    coadd_obs = make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
         coadd_bbox=sim_data['coadd_bbox'],
@@ -150,7 +137,7 @@ def test_lsst_metadetect_fullcoadd_smoke():
         'subtract_sky': True,
     }
 
-    res = lsst_metadetect.run_metadetect(
+    res = run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
@@ -178,7 +165,7 @@ def test_lsst_metadetect_deblend_smoke(deblender):
 
     sim_data = make_lsst_sim(99, mag=23)
 
-    coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+    coadd_obs = make_coadd_obs_nowarp(
         exp=sim_data['band_data']['i'][0],
         psf_dims=sim_data['psf_dims'],
         rng=rng,
@@ -199,7 +186,7 @@ def test_lsst_metadetect_deblend_smoke(deblender):
         'deblender': deblender,
     }
 
-    res = lsst_metadetect.run_metadetect(
+    res = run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
@@ -228,7 +215,7 @@ def test_lsst_metadetect_multiband(deblender, show=False):
     coadd_mbobs = ngmix.MultiBandObsList()
 
     for band, exps in sim_data['band_data'].items():
-        coadd_obs = coadd_nowarp.make_coadd_obs_nowarp(
+        coadd_obs = make_coadd_obs_nowarp(
             exp=exps[0],
             psf_dims=sim_data['psf_dims'],
             rng=rng,
@@ -247,7 +234,7 @@ def test_lsst_metadetect_multiband(deblender, show=False):
         config['deblend'] = True
         config['deblender'] = deblender
 
-    res = lsst_metadetect.run_metadetect(
+    res = run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
         show=show,
@@ -272,7 +259,7 @@ def test_lsst_zero_weights(show=False):
         rng = np.random.RandomState(seed)
         sim_data = make_lsst_sim(seed, mag=23)
 
-        coadd_obs = coadd.make_coadd_obs(
+        coadd_obs = make_coadd_obs(
             exps=sim_data['band_data']['i'],
             coadd_wcs=sim_data['coadd_wcs'],
             coadd_bbox=sim_data['coadd_bbox'],
@@ -298,7 +285,7 @@ def test_lsst_zero_weights(show=False):
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        resdict = lsst_metadetect.run_metadetect(
+        resdict = run_metadetect(
             mbobs=coadd_mbobs, rng=rng, config=None,
         )
 
@@ -324,7 +311,7 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
 
     sim_data = make_lsst_sim(seed, hlr=1.0e-4, mag=23)
 
-    coadd_obs = coadd.make_coadd_obs(
+    coadd_obs = make_coadd_obs(
         exps=sim_data['band_data']['i'],
         coadd_wcs=sim_data['coadd_wcs'],
         coadd_bbox=sim_data['coadd_bbox'],
@@ -343,7 +330,7 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
 
     config = {'meas_type': meas_type}
 
-    res = lsst_metadetect.run_metadetect(
+    res = run_metadetect(
         mbobs=coadd_mbobs, rng=rng,
         config=config,
     )
@@ -376,7 +363,7 @@ def test_lsst_metadetect_mfrac_ormask():
         sim_data = make_lsst_sim(116)
 
         print("")
-        coadd_obs = coadd.make_coadd_obs(
+        coadd_obs = make_coadd_obs(
             exps=sim_data['band_data']['i'],
             coadd_wcs=sim_data['coadd_wcs'],
             coadd_bbox=sim_data['coadd_bbox'],
@@ -394,7 +381,7 @@ def test_lsst_metadetect_mfrac_ormask():
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        res = lsst_metadetect.run_metadetect(
+        res = run_metadetect(
             mbobs=coadd_mbobs, rng=rng,
         )
 
