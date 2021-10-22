@@ -159,6 +159,53 @@ def test_lsst_metadetect_fullcoadd_smoke():
         assert len(res[shear][flux_name].shape) == 1
 
 
+def test_lsst_metadetect_find_cen():
+
+    for itrial in (1, 2):
+
+        if itrial == 1:
+            find_cen = False
+        else:
+            find_cen = True
+
+        rng = np.random.RandomState(seed=91)
+        sim_data = make_lsst_sim(45, mag=23)
+
+        coadd_obs = make_coadd_obs_nowarp(
+            exp=sim_data['band_data']['i'][0],
+            psf_dims=sim_data['psf_dims'],
+            rng=rng,
+            remove_poisson=False,
+        )
+
+        # to avoid flagged edges
+        coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
+
+        coadd_mbobs = ngmix.MultiBandObsList()
+        obslist = ngmix.ObsList()
+        obslist.append(coadd_obs)
+        coadd_mbobs.append(obslist)
+
+        config = {
+            'meas_type': 'pgauss',
+            'find_cen': find_cen,
+        }
+
+        this_res = run_metadetect(
+            mbobs=coadd_mbobs, rng=rng,
+            config=config,
+        )
+
+        if itrial == 1:
+            old_res = this_res
+        else:
+
+            for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+                assert np.any(
+                    this_res[shear]['pgauss_g'] != old_res[shear]['pgauss_g']
+                )
+
+
 @pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
 def test_lsst_metadetect_deblend_smoke(deblender):
     rng = np.random.RandomState(seed=99)
