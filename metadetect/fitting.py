@@ -302,14 +302,10 @@ def _combine_fit_results_wavg(
         len(all_res), len(all_psf_res), len(all_is_shear_band),
         len(all_wgts), len(all_flags)
     ]
+
     n = Namer(front=model)
-    data = np.zeros(
-        1,
-        dtype=_make_combine_fit_results_wavg_dtype(tot_nband, model),
-    )
-    for name in data.dtype.names:
-        if "flags" not in name:
-            data[name] = np.nan
+
+    data = get_wavg_output_struct(tot_nband, model)
 
     if (
         nband == 0
@@ -433,19 +429,50 @@ def _combine_fit_results_wavg(
     return data
 
 
+def get_wavg_output_struct(nband, model):
+    """
+    make an output struct with default values set
+
+    flags and psf_flags are set to NO_ATTEMPT.  The float
+    fields are set to np.nan
+
+    Parameters
+    ----------
+    nband: int
+        Number of bands
+    model: str
+        The model or "kind" of fitter
+
+    Returns
+    -------
+    ndarray with fields
+    """
+    dt = _make_combine_fit_results_wavg_dtype(nband=nband, model=model)
+    data = np.zeros(1, dtype=dt)
+
+    data['flags'] = procflags.NO_ATTEMPT
+    data['psf_flags'] = procflags.NO_ATTEMPT
+
+    for name in data.dtype.names:
+        if "flags" not in name:
+            # all are float except flags
+            data[name] = np.nan
+    return data
+
+
 def _make_combine_fit_results_wavg_dtype(nband, model):
     n = Namer(front=model)
     dt = [
         ("flags", 'i4'),
-        (n("flags"), 'i4'),
-        (n("s2n"), "f8"),
-        (n("T"), "f8"),
-        (n("T_err"), "f8"),
-        (n("g"), "f8", 2),
-        (n("g_cov"), "f8", (2, 2)),
+        ('psf_flags', 'i4'),
         ('psf_g', 'f8', 2),
         ('psf_T', 'f8'),
-        ('psf_flags', 'i4'),
+        (n("flags"), 'i4'),
+        (n("s2n"), "f8"),
+        (n("g"), "f8", 2),
+        (n("g_cov"), "f8", (2, 2)),
+        (n("T"), "f8"),
+        (n("T_err"), "f8"),
         (n("T_ratio"), "f8"),
     ]
     if nband > 1:

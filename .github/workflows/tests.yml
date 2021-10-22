@@ -49,5 +49,6 @@ jobs:
       - name: test
         shell: bash -l {0}
         run: |
-          pytest -vvs --cov=metadetect --cov-report term-missing metadetect
+          # don't run metadetect/lsst/tests
+          pytest -vvs --cov=metadetect --cov-report term-missing metadetect/tests
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]

@@ -1,17 +1,11 @@
 import sys
-# import os
 import numpy as np
-import pytest
-# import tqdm
 import logging
-from metadetect import util
+
+from metadetect.lsst import util
+import descwl_shear_sims
 
 logging.basicConfig(stream=sys.stdout, level=logging.WARN)
-
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
-)
 
 
 def make_lsst_sim(rng):
@@ -26,7 +20,7 @@ def make_lsst_sim(rng):
 
     bands = ['r', 'i', 'z']
 
-    galaxy_catalog = sim.galaxies.FixedGalaxyCatalog(
+    galaxy_catalog = descwl_shear_sims.galaxies.FixedGalaxyCatalog(
         rng=rng,
         coadd_dim=coadd_dim,
         buff=buff,
@@ -35,9 +29,9 @@ def make_lsst_sim(rng):
         hlr=0.5,
     )
 
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    sim_data = sim.make_sim(
+    sim_data = descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,
@@ -114,7 +108,6 @@ def detect_and_deblend(mbexp):
 
 def test_noise_replacer():
     import lsst.afw.image as afw_image
-    from metadetect.util import ContextNoiseReplacer
     seed = 981
     rng = np.random.RandomState(seed)
 
@@ -126,7 +119,7 @@ def test_noise_replacer():
 
     exposure = mbexp.singles[0]
     exp_copy = afw_image.ExposureF(exposure, deep=True)
-    with ContextNoiseReplacer(exposure, sources, rng) as replacer:
+    with util.ContextNoiseReplacer(exposure, sources, rng) as replacer:
 
         assert np.any(exp_copy.image.array != exposure.image.array)
 
@@ -142,8 +135,7 @@ def test_noise_replacer():
 
 def test_multiband_noise_replacer(show=False):
     import lsst.afw.image as afw_image
-    from metadetect.util import MultibandNoiseReplacer
-    from metadetect import vis
+    from metadetect.lsst import vis
 
     seed = 981
     rng = np.random.RandomState(seed)
@@ -160,7 +152,7 @@ def test_multiband_noise_replacer(show=False):
 
     bands = list(sim['band_data'].keys())
 
-    with MultibandNoiseReplacer(mbexp, sources, rng) as replacer:
+    with util.MultibandNoiseReplacer(mbexp, sources, rng) as replacer:
         if show:
             vis.compare_mbexp(mbexp_copy, replacer.mbexp)
 

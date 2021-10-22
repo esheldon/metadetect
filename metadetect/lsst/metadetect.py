@@ -22,20 +22,23 @@ import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
+
 from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
-from .lsst_skysub import subtract_sky_mbobs
-from . import shearpos
-from .mfrac import measure_mfrac
-from . import procflags
-from . import util
-from . import fitting
 
-from .defaults import DEFAULT_THRESH, DEFAULT_DEBLEND
-from .lsst_configs import get_config
-from . import lsst_measure
-from . import lsst_measure_scarlet
+from ..mfrac import measure_mfrac
+from .. import fitting
+from .. import shearpos
+from .. import procflags
+
+from .skysub import subtract_sky_mbobs
+from . import util
+
+from .configs import get_config
+from . import measure
+from . import measure_scarlet
+from . import measure_shredder
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -44,7 +47,6 @@ def run_metadetect(
     mbobs, rng, config=None, show=False,
 ):
     """
-        subtract_sky, etc.
     mbobs: ngmix.MultiBandObsList
         The observations to process
     rng: np.random.RandomState
@@ -91,9 +93,7 @@ def run_metadetect(
             res = detect_deblend_and_measure(
                 mbobs=mbobs,
                 fitter=fitter,
-                stamp_size=config['stamp_size'],
-                thresh=config['detect']['thresh'],
-                deblend=config['deblend'],
+                config=config,
                 rng=rng,
                 show=show,
             )
@@ -113,10 +113,8 @@ def run_metadetect(
 def detect_deblend_and_measure(
     mbobs,
     fitter,
-    stamp_size,
+    config,
     rng,
-    thresh=DEFAULT_THRESH,
-    deblend=DEFAULT_DEBLEND,
     show=False,
 ):
     """
@@ -140,29 +138,58 @@ def detect_deblend_and_measure(
         If True, use deblended the postage stamps for each measurement using
         the scarlet deblender.  If not True, the SDSS deblender code is used
         but only to find the sub-peaks in the footprint, and bands are coadded
+    deblender: str
+        Deblender to use, scarlet or shredder
     show: bool, optional
         If set to True, show images during processing
     """
 
     exposures = [obslist[0].exposure for obslist in mbobs]
 
-    if deblend:
-        LOG.info('measuring with scarlet deblended stamps')
-        mbexp = util.get_mbexp(exposures)
+    mbexp = util.get_mbexp(exposures)
 
-        sources, detexp = lsst_measure_scarlet.detect_and_deblend(
-            mbexp=mbexp,
-            thresh=thresh,
-        )
-        results = lsst_measure_scarlet.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=stamp_size,
-            rng=rng,
-            show=show,
-        )
+    if config['deblend']:
+        LOG.info('measuring with scarlet deblended stamps')
+
+        if config['deblender'] == 'scarlet':
+            sources, detexp = measure_scarlet.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=config['detect']['thresh'],
+                show=show,
+            )
+            results = measure_scarlet.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
+                rng=rng,
+                show=show,
+            )
+        else:
+
+            shredder_config = config['shredder_config']
+
+            sources, detexp, Tvals = measure_shredder.detect_and_deblend(
+                mbexp=mbexp,
+                thresh=config['detect']['thresh'],
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
+                rng=rng,
+                show=show,
+            )
+            results = measure_shredder.measure(
+                mbexp=mbexp,
+                detexp=detexp,
+                sources=sources,
+                fitter=fitter,
+                stamp_size=config['stamp_size'],
+                Tvals=Tvals,
+                shredder_config=shredder_config,
+                rng=rng,
+                show=show,
+            )
+
     else:
 
         LOG.info('measuring with blended stamps')
@@ -170,23 +197,20 @@ def detect_deblend_and_measure(
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
 
-        if len(exposures) > 1:
-            LOG.info('coadding %s bands' % len(mbobs))
-            exposure = util.coadd_exposures(exposures)
-        else:
-            exposure = exposures[0]
-
-        sources, meas_task = lsst_measure.detect_and_deblend(
-            exposure=exposure,
-            thresh=thresh,
+        sources, detexp = measure.detect_and_deblend(
+            mbexp=mbexp,
+            rng=rng,
+            thresh=config['detect']['thresh'],
+            show=show,
         )
-
-        results = lsst_measure.measure(
-            exposure=exposure,
+        results = measure.measure(
+            mbexp=mbexp,
+            detexp=detexp,
             sources=sources,
             fitter=fitter,
-            stamp_size=stamp_size,
-            meas_task=meas_task,
+            stamp_size=config['stamp_size'],
+            find_cen=config['find_cen'],
+            rng=rng,  # needed if find_cen is True
         )
 
     return results
@@ -217,7 +241,7 @@ def add_mfrac(config, mfrac, res, obs):
             mfrac=mfrac,
             x=res['col_noshear'],
             y=res['row_noshear'],
-            box_sizes=res['box_size'],
+            box_sizes=res['stamp_size'],
             obs=obs,
             fwhm=config.get('mfrac_fwhm', None),
         )

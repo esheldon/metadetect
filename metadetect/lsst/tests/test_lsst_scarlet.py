@@ -1,20 +1,10 @@
 import galsim
-import pytest
 import numpy as np
-from .. import util
 
-lsst_measure_scarlet = pytest.importorskip(
-    'metadetect.lsst_measure_scarlet',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-lsst_metadetect = pytest.importorskip(
-    'metadetect.lsst_metadetect',
-    reason='LSST codes need the Rubin Obs. science pipelines',
-)
-sim = pytest.importorskip(
-    'descwl_shear_sims',
-    reason='LSST codes need the descwl_shear_sims module for testing',
-)
+from metadetect.lsst import util
+import metadetect.lsst.measure_scarlet as lsst_measure_scarlet
+import metadetect.lsst.metadetect as lsst_metadetect
+import descwl_shear_sims
 
 
 def get_obj(rng):
@@ -48,7 +38,7 @@ def get_sim_data(rng, gal_type, layout):
     # bands = ['r', 'i', 'z']
     bands = ['g', 'r', 'i']
 
-    galaxy_catalog = sim.galaxies.make_galaxy_catalog(
+    galaxy_catalog = descwl_shear_sims.galaxies.make_galaxy_catalog(
         rng=rng,
         gal_type=gal_type,
         layout=layout,
@@ -56,9 +46,9 @@ def get_sim_data(rng, gal_type, layout):
         buff=50,
         gal_config=gal_config,
     )
-    psf = sim.psfs.make_fixed_psf(psf_type='gauss')
+    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
 
-    return sim.make_sim(
+    return descwl_shear_sims.make_sim(
         rng=rng,
         galaxy_catalog=galaxy_catalog,
         coadd_dim=coadd_dim,
