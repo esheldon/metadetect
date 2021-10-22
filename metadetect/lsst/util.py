@@ -1,5 +1,6 @@
 import logging
 from contextlib import contextmanager, ExitStack
+import ngmix
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -408,7 +409,8 @@ def coadd_exposures(exposures):
     fac = 1.0/wsum
 
     coadd_exp.image.array[:, :] *= fac
-    # psf_im *= fac
+
+    # the psf is always normalized
     psf_im *= 1.0/psf_im.sum()
 
     coadd_exp.variance.array[:, :] = np.inf
@@ -421,6 +423,75 @@ def coadd_exposures(exposures):
     coadd_exp.setWcs(exposures[0].getWcs())
 
     return coadd_exp
+
+
+def coadd_mbobs(mbobs):
+    """
+    coadd a set of exposures, assuming they share the same wcs
+
+    Parameters
+    ----------
+    exposures: [lsst.afw.image.Exposure]
+        List of exposures to coadd
+
+    Returns
+    --------
+    lsst.afw.image.ExposureF
+    """
+
+    wsum = 0.0
+
+    meta = {}
+    for i, obslist in enumerate(mbobs):
+        obs = obslist[0]
+        meta.update(obs.meta)
+
+        shape = obs.image.shape
+
+        if i == 0:
+            coadd_image = np.zeros(shape, dtype='f4')
+            coadd_weight = np.zeros(shape, dtype='f4')
+
+            coadd_psf = np.zeros(obs.psf.image.shape)
+
+        w = np.where(obs.weight > 0)
+        this_weight = np.median(obs.weight[w])
+
+        coadd_image[:, :] += obs.image * this_weight
+        coadd_weight[:, :] += obs.weight
+        coadd_psf[:, :] += obs.psf.image * this_weight
+
+        wsum += this_weight
+
+    fac = 1.0/wsum
+
+    coadd_image[:, :] *= fac
+
+    # the psf is always normalized
+    coadd_psf *= 1.0/coadd_psf.sum()
+
+    # use the jacobians from the last obs
+    jac = obs.jacobian
+    psf_jac = obs.psf.jacobian
+
+    fake_noise = coadd_psf.max() / 1.e6
+    psf_weight = np.zeros(coadd_psf.shape)
+    psf_weight += (1.0/fake_noise**2)
+
+    psf_obs = ngmix.Observation(
+        image=coadd_psf,
+        weight=psf_weight,
+        jacobian=psf_jac,
+    )
+    output_obs = ngmix.Observation(
+        image=coadd_image,
+        weight=coadd_weight,
+        jacobian=jac,
+        psf=psf_obs,
+        meta=meta,
+    )
+
+    return output_obs
 
 
 def trim_odd_image(im):
