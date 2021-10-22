@@ -142,6 +142,8 @@ def measure(
     sources,
     fitter,
     stamp_size,
+    find_cen=False,
+    rng=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -162,6 +164,14 @@ def measure(
         For calculating moments
     stamp_size: int
         Size for postage stamps
+    find_cen: bool, optional
+        If set to True, find the center in the coadded stamp
+    rng: np.RandomState, optional
+        Needed if find_cen is True
+
+    Returns
+    -------
+    ndarray with results or None
     """
 
     if len(sources) == 0:
@@ -186,6 +196,13 @@ def measure(
             mbobs = _get_stamp_mbobs(
                 mbexp=mbexp, source=source, stamp_size=stamp_size,
             )
+            if find_cen:
+                coadd_obs = util.coadd_mbobs(mbobs)
+                find_and_set_center(obs=coadd_obs, rng=rng)
+
+                for _obslist in mbobs:
+                    _obslist[0].jacobian = coadd_obs.jacobian
+
             # TODO do something with bmask_flags?
             # TODO implement nonshear_mbobs
             this_res = fit_mbobs_wavg(
@@ -195,11 +212,17 @@ def measure(
                 nonshear_mbobs=None,
             )
         except LengthError as err:
+            # This is raised when a bbox hits an edge
             LOG.info('%s', err)
             flags = procflags.EDGE_HIT
         except AllZeroWeight as err:
+            # failure creating some observation due to zero weights
             LOG.info('%s', err)
             flags = procflags.ZERO_WEIGHTS
+        except CentroidFail as err:
+            # failure in the center finding
+            LOG.info(str(err))
+            flags = procflags.CENTROID_FAIL
 
         if flags != 0:
             this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
@@ -218,6 +241,46 @@ def measure(
         results = None
 
     return results
+
+
+def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
+    """
+    Attempt to find the centroid and update the jacobian.  Update
+    'orig_cen' in the metadata with the difference. Add entry
+    "orig_cen_offset" as an Extend2D
+
+    If the centroiding fails, raise CentroidFail
+    """
+
+    obs.meta['orig_cen_offset'] = geom.Extent2D(x=np.nan, y=np.nan)
+
+    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
+    if res['flags'] != 0:
+        raise CentroidFail('failed to find centroid')
+
+    jac = obs.jacobian
+
+    # this is an offset in arcsec
+    voff, uoff = res['cen']
+
+    # current center within stamp, in pixels
+    rowcen, colcen = jac.get_cen()
+
+    # new center within stamp, in pixels
+    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
+
+    # difference, which we will use to update the center in the original image
+    rowdiff = new_row - rowcen
+    coldiff = new_col - colcen
+
+    diff = geom.Extent2D(x=coldiff, y=rowdiff)
+
+    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
+    obs.meta['orig_cen_offset'] = diff
+
+    # update jacobian center within the stamp
+    with obs.writeable():
+        obs.jacobian.set_cen(row=new_row, col=new_col)
 
 
 def get_ormasks(sources, exposure):
@@ -312,6 +375,8 @@ def extract_obs(exp, source):
     # this is sort of monkey patching, but I'm not sure of
     # a better solution
 
+    meta = {'orig_cen': orig_cen}
+
     psf_obs = ngmix.Observation(
         psf_im,
         weight=psf_wt,
@@ -323,6 +388,7 @@ def extract_obs(exp, source):
         bmask=bmask,
         jacobian=jacob,
         psf=psf_obs,
+        meta=meta,
     )
 
     return obs
@@ -709,6 +775,19 @@ class MissingDataError(Exception):
 
 
 class AllZeroWeight(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class CentroidFail(Exception):
     """
     Some number was out of range
     """
