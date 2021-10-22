@@ -279,7 +279,7 @@ def extract_obs(exp, source):
     --------
     obs: ngmix.Observation
         The Observation unless all the weight are zero, in which
-        case None is returned
+        case AllZeroWeight is raised
     """
 
     im = exp.image.array
@@ -524,10 +524,10 @@ def _extract_jacobian(exp, source):
     extract an ngmix.Jacobian from the image object
     and object record
 
-    exp: an image object
-        TODO I don't actually know what class this is
-    source: an object record
-        TODO I don't actually know what class this is
+    exp: lsst.afw.image.ExposureF
+        An exposure object
+    source: lsst.afw.table.SourceRecord
+        The source record created during detection
 
     returns
     --------
