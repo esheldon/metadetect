@@ -28,7 +28,7 @@ from lsst.pex.exceptions import LengthError
 
 from ..procflags import (
     EDGE_HIT, ZERO_WEIGHTS, NO_ATTEMPT,
-    PSF_FAILURE, DEBLEND_FAIL,
+    PSF_FAILURE, DEBLEND_FAILURE,
 )
 from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
 
@@ -384,7 +384,7 @@ def _process_blend(
             this_res['flags'] = PSF_FAILURE
             this_res['psf_flags'] = PSF_FAILURE
         else:
-            this_res['flags'] = DEBLEND_FAIL
+            this_res['flags'] = DEBLEND_FAILURE
             this_res['psf_flags'] = NO_ATTEMPT
 
         results = [

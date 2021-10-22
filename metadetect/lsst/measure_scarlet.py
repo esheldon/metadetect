@@ -32,7 +32,7 @@ import lsst.geom as geom
 from lsst.pex.exceptions import LengthError
 
 from ..procflags import (
-    EDGE_HIT, ZERO_WEIGHTS, CENTROID_FAIL,
+    EDGE_HIT, ZERO_WEIGHTS, CENTROID_FAILURE,
 )
 from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
 
@@ -311,7 +311,7 @@ def _process_source(
         except CentroidFail as err:
             # failure in the center finding
             LOG.info(str(err))
-            flags = CENTROID_FAIL
+            flags = CENTROID_FAILURE
 
         if flags != 0:
             this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
