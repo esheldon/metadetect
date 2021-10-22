@@ -285,6 +285,7 @@ def measure(
                     results += these_results
 
                 except LengthError as err:
+                    # This is raised when a bbox hits an edge
                     LOG.info('failed to get bbox: %s', err)
                     # note the context manager properly handles a return
                     object_res = {'flags': procflags.BBOX_HITS_EDGE}
@@ -818,8 +819,7 @@ def get_shredder_guess(
 
     guess_pars = []
 
-    psf_T = shredder.mbobs[0][0].psf.gmix.get_T()
-    Tmin = 0.5 * psf_T
+    Tmin = 0.5 * Tpsf
     for i, source in enumerate(sources):
 
         Tguess = Tpsf*ur(low=1.0, high=1.4)
