@@ -26,7 +26,10 @@ import lsst.geom as geom
 
 from lsst.pex.exceptions import LengthError
 
-from .. import procflags
+from ..procflags import (
+    EDGE_HIT, ZERO_WEIGHTS, NO_ATTEMPT,
+    PSF_FAILURE, DEBLEND_FAIL,
+)
 from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
 
 from . import vis
@@ -288,8 +291,8 @@ def measure(
                     # This is raised when a bbox hits an edge
                     LOG.info('failed to get bbox: %s', err)
                     # note the context manager properly handles a return
-                    object_res = {'flags': procflags.BBOX_HITS_EDGE}
-                    psf_res = {'flags': procflags.NO_ATTEMPT}
+                    object_res = {'flags': EDGE_HIT}
+                    psf_res = {'flags': NO_ATTEMPT}
 
                     if nchild == 0:
                         tosend = [parent]
@@ -326,7 +329,7 @@ def _process_parent(
     if parent_mbobs is None:
         LOG.info('skipping object with all zero weights')
         this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
-        this_res['flags'] = procflags.ZERO_WEIGHTS
+        this_res['flags'] = ZERO_WEIGHTS
     else:
         # TODO do something with bmask_flags?
         # TODO implement nonshear_mbobs
@@ -378,11 +381,11 @@ def _process_blend(
     if shredder is None or shredder.result['flags'] != 0:
         this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
         if shredder is None:
-            this_res['flags'] = procflags.PSF_FAILURE
-            this_res['psf_flags'] = procflags.PSF_FAILURE
+            this_res['flags'] = PSF_FAILURE
+            this_res['psf_flags'] = PSF_FAILURE
         else:
-            this_res['flags'] = procflags.DEBLEND_FAIL
-            this_res['psf_flags'] = procflags.NO_ATTEMPT
+            this_res['flags'] = DEBLEND_FAIL
+            this_res['psf_flags'] = NO_ATTEMPT
 
         results = [
             get_output(wcs=wcs, fitter=fitter,
