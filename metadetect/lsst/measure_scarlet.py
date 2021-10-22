@@ -39,6 +39,7 @@ from . import util
 from .defaults import DEFAULT_THRESH
 from .measure import (
     get_output_struct, get_ormask, extract_psf_image, AllZeroWeight,
+    find_and_set_center, CentroidFail,
 )
 
 LOG = logging.getLogger('lsst_measure_scarlet')
@@ -296,14 +297,17 @@ def _process_source(
             )
 
         except LengthError as err:
+            # This is raised when a bbox hits an edge
             LOG.info('%s', err)
             flags = procflags.EDGE_HIT
             mbobs = None
         except AllZeroWeight as err:
+            # failure creating some observation due to zero weights
             LOG.info('%s', err)
             flags = procflags.ZERO_WEIGHTS
             mbobs = None
         except CentroidFail as err:
+            # failure in the center finding
             LOG.info(str(err))
             flags = procflags.CENTROID_FAIL
 
@@ -929,46 +933,6 @@ def _extract_weight(exp):
     return weight
 
 
-def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
-    """
-    Attempt to find the centroid and update the jacobian.  Update
-    'orig_cen' in the metadata with the difference. Add entry
-    "orig_cen_offset" as an Extend2D
-
-    If the centroiding fails, raise CentroidFail
-    """
-
-    obs.meta['orig_cen_offset'] = geom.Extent2D(x=np.nan, y=np.nan)
-
-    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
-    if res['flags'] != 0:
-        raise CentroidFail('failed to find centroid')
-
-    jac = obs.jacobian
-
-    # this is an offset in arcsec
-    voff, uoff = res['cen']
-
-    # current center within stamp, in pixels
-    rowcen, colcen = jac.get_cen()
-
-    # new center within stamp, in pixels
-    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
-
-    # difference, which we will use to update the center in the original image
-    rowdiff = new_row - rowcen
-    coldiff = new_col - colcen
-
-    diff = geom.Extent2D(x=coldiff, y=rowdiff)
-
-    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
-    obs.meta['orig_cen_offset'] = diff
-
-    # update jacobian center within the stamp
-    with obs.writeable():
-        obs.jacobian.set_cen(row=new_row, col=new_col)
-
-
 def get_output_scarlet(
     mbobs, wcs, fitter, source, res, ormask, stamp_size, exp_bbox,
 ):
@@ -1005,16 +969,3 @@ def get_output_scarlet(
     output['ormask'] = ormask
 
     return output
-
-
-class CentroidFail(Exception):
-    """
-    Some number was out of range
-    """
-
-    def __init__(self, value):
-        super().__init__(value)
-        self.value = value
-
-    def __str__(self):
-        return repr(self.value)
