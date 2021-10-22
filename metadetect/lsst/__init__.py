@@ -1,5 +1,4 @@
 # flake8: noqa
-x = 3
 
 # from . import configs
 # from . import measure
