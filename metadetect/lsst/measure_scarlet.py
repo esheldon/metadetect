@@ -37,7 +37,9 @@ from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
 from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
-from .measure import get_output_struct, get_ormask, extract_psf_image
+from .measure import (
+    get_output_struct, get_ormask, extract_psf_image, AllZeroWeight,
+)
 
 LOG = logging.getLogger('lsst_measure_scarlet')
 
@@ -253,6 +255,7 @@ def _process_source(
                 subtractor.mbexp, mess=f'source {source_id} added'
             )
 
+        flags = 0
         try:
             stamp_mbexp = subtractor.get_stamp(
                 source_id, stamp_size=stamp_size,
@@ -272,52 +275,41 @@ def _process_source(
                     labels=['original', 'deblended', 'model']
                 )
 
-            # TODO make codes work with MultibandExposure rather than on a
-            # coadd of the bands
-
             coadded_stamp_exp = util.coadd_exposures(stamp_mbexp.singles)
+
             obs = extract_obs(exp=coadded_stamp_exp, source=source)
             mbobs = extract_mbobs(mbexp=stamp_mbexp, source=source)
 
-            if mbobs is None or obs is None:
-                LOG.info('skipping object with all zero weights')
-                this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
-                this_res['flags'] = procflags.ZERO_WEIGHTS
-            else:
-                try:
+            find_and_set_center(obs=obs, rng=rng)
+            mbobs.meta.update(obs.meta)
 
-                    # this updates the jacobian center as well as the
-                    # meta['orig_cen'] pixel location in the original image
+            for _obslist in mbobs:
+                _obslist[0].jacobian = obs.jacobian
 
-                    find_and_set_center(obs=obs, rng=rng)
-                    mbobs.meta.update(obs.meta)
+            # TODO do something with bmask_flags?
+            # TODO implement nonshear_mbobs
+            this_res = fit_mbobs_wavg(
+                mbobs=mbobs,
+                fitter=fitter,
+                bmask_flags=0,
+                nonshear_mbobs=None,
+            )
 
-                    for _obslist in mbobs:
-                        _obslist[0].jacobian = obs.jacobian
-
-                    # TODO do something with bmask_flags?
-                    # TODO implement nonshear_mbobs
-                    this_res = fit_mbobs_wavg(
-                        mbobs=mbobs,
-                        fitter=fitter,
-                        bmask_flags=0,
-                        nonshear_mbobs=None,
-                    )
-
-                except CentroidFail as err:
-                    LOG.info(str(err))
-                    this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
-                    this_res['flags'] = procflags.CENTROID_FAIL
-
-        except LengthError as e:
-            # bounding box did not fit. TODO keep output with flag set
-            LOG.info(e)
-
-            # note the context manager properly handles a return
-            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
-            this_res['flags'] = procflags.EDGE_HIT
-
+        except LengthError as err:
+            LOG.info('%s', err)
+            flags = procflags.EDGE_HIT
             mbobs = None
+        except AllZeroWeight as err:
+            LOG.info('%s', err)
+            flags = procflags.ZERO_WEIGHTS
+            mbobs = None
+        except CentroidFail as err:
+            LOG.info(str(err))
+            flags = procflags.CENTROID_FAIL
+
+        if flags != 0:
+            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res['flags'] = flags
 
         res = get_output_scarlet(
             mbobs=mbobs, wcs=wcs, fitter=fitter, source=source, res=this_res,
@@ -760,17 +752,13 @@ def extract_mbobs(mbexp, source):
     returns
     --------
     mbobs: ngmix.MultiBandObsList
-        The observations, unless all the weight are zero for any band, in which
-        case None is returned
+        The observations, unless any obs have all the weight zero, in which
+        case AllZeroWeight is raised
     """
 
     mbobs = ngmix.MultiBandObsList()
     for exp in mbexp.singles:
         obs = extract_obs(exp, source)
-
-        if obs is None:
-            # we require all bands, so if any are a problem we bail
-            return None
 
         obslist = ngmix.ObsList()
         obslist.append(obs)
@@ -798,15 +786,14 @@ def extract_obs(exp, source):
     --------
     obs: ngmix.Observation
         The Observation unless all the weight are zero, in which
-        case None is returned
+        case AllZeroWeight is raised
     """
 
     im = exp.image.array
 
     wt = _extract_weight(exp)
     if np.all(wt <= 0):
-        LOG.info('all zero weight')
-        return None
+        raise AllZeroWeight('all weights <= 0')
 
     bmask = exp.mask.array
 
