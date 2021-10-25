@@ -131,6 +131,8 @@ def detect_and_deblend(
 
                 with replacer.sourceInserted(source_id):
                     meas_task.callMeasure(source, detexp)
+                    import IPython
+                    IPython.embed()
 
     else:
         sources = []
@@ -231,7 +233,7 @@ def measure(
             this_res['flags'] = flags
 
         res = get_output(
-            wcs=wcs, fitter=fitter, source=source, res=this_res,
+            wcs=wcs, source=source, res=this_res,
             ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
@@ -699,7 +701,7 @@ def get_output_struct(res):
     return output
 
 
-def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
+def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -712,8 +714,6 @@ def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
     ----------
     wcs: a stack wcs
         The wcs with which to determine the ra, dec
-    fitter: e.g. ngmix.prepsfmom.PGaussMom
-        The measurement object
     res: ndarray
         The result from running metadetect.fitting.fit_mbobs_wavg
     ormask: int
