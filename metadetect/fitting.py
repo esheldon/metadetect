@@ -403,6 +403,9 @@ def _combine_fit_results_wavg(
         if psf_flags == 0:
             data[n('T_ratio')] = data[n('T')] / data['psf_T']
 
+        if (np.any(np.abs(momres["e"])) > 1 or np.sum(momres["e"]**2) > 1):
+            mdet_flags |= procflags.SHEAR_RANGE_ERROR
+
     if psf_flags != 0:
         mdet_flags |= procflags.PSF_FAILURE
 

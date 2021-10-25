@@ -3,8 +3,9 @@ import copy
 import ngmix.flags
 from ngmix.flags import NO_ATTEMPT  # noqa
 
-# these flags start at 20 always
+# these flags start at 19 always
 # this allows us to combine them with the flags in ngmix
+SHEAR_RANGE_ERROR = 2**19
 EDGE_HIT = 2**20
 PSF_FAILURE = 2**21
 OBJ_FAILURE = 2**22
@@ -16,8 +17,10 @@ MISSING_BAND = 2**27
 INCONSISTENT_BANDS = 2**28
 CENTROID_FAILURE = 2**29
 DEBLEND_FAILURE = 2**30
+# DO NOT use 2**31 or higher
 
 NAME_MAP = copy.deepcopy(ngmix.flags.NAME_MAP)
+NAME_MAP[SHEAR_RANGE_ERROR] = "shear is out of range (abs(g) > 1 or abs(g_1,2) > 1)"
 NAME_MAP[EDGE_HIT] = "bbox hit edge"
 NAME_MAP[PSF_FAILURE] = "PSF fit failed"
 NAME_MAP[OBJ_FAILURE] = "object fit failed"
