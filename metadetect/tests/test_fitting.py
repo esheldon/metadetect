@@ -905,3 +905,15 @@ def test_fitting_combine_fit_results_wavg_flagging(
     ), purpose
     if data["psf_flags"][0] != 0:
         assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
+
+
+def test_symmetrize_obs_weights_all_zero():
+    assert False
+
+
+def test_symmetrize_obs_weights_none():
+    assert False
+
+
+def test_symmetrize_obs_weights():
+    assert False
