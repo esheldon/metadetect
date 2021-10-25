@@ -393,7 +393,7 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
     assert wlowT.size > 0
 
     # TODO need to name these flags in ngmix
-    assert np.all(data[n('flags')][wlowT] == ngmix.flags.NONPOS_SIZE)
+    assert np.all((data[n('flags')][wlowT] & ngmix.flags.NONPOS_SIZE) != 0)
 
     assert np.all(np.isnan(data[n('g')][wlowT]))
     for field in data.dtype.names:
