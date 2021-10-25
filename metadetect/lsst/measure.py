@@ -131,8 +131,6 @@ def detect_and_deblend(
 
                 with replacer.sourceInserted(source_id):
                     meas_task.callMeasure(source, detexp)
-                    import IPython
-                    IPython.embed()
 
     else:
         sources = []
@@ -610,7 +608,7 @@ def _extract_jacobian(exp, source):
     orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
     if np.isnan(orig_cen.getY()):
-        print('falling back on integer location')
+        LOG.info('falling back on integer location')
         # fall back to integer pixel location
         peak = source.getFootprint().getPeaks()[0]
         orig_cen_i = peak.getI()

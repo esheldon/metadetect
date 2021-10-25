@@ -7,7 +7,9 @@ move; this will take some coding
 """
 import logging
 import numpy as np
+import esutil as eu
 import ngmix
+from ngmix.gexceptions import BootPSFFailure, BootGalFailure
 
 import lsst.afw.table as afw_table
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
@@ -17,19 +19,19 @@ from lsst.meas.base import (
     SingleFrameMeasurementTask,
 )
 
-from . import util
+# from . import util
 from .util import ContextNoiseReplacer
 from . import vis
 from .defaults import DEFAULT_THRESH
 from ..fitting import get_wavg_output_struct
 from .measure import AllZeroWeight, get_ormask, get_output
-from ..procflags import ZERO_WEIGHTS
+from ..procflags import ZERO_WEIGHTS, DEBLEND_FAILURE, PSF_FAILURE
 
 LOG = logging.getLogger('lsst_measure')
 
 
 def measure(
-    mbexp,
+    exp,
     rng,
     thresh=DEFAULT_THRESH,
     show=False,
@@ -55,12 +57,7 @@ def measure(
         The sources and the measurement task
     """
 
-    assert len(mbexp.singles) == 1, 'one band for now'
-
-    if len(mbexp.singles) > 1:
-        detexp = util.coadd_exposures(mbexp.singles)
-    else:
-        detexp = mbexp.singles[0]
+    detexp = exp
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -115,88 +112,90 @@ def measure(
     result = detection_task.run(table, detexp)
 
     if show:
-        vis.show_exp(detexp)
+        vis.show_exp(detexp, mess='image')
 
     if result is not None:
-        res = []
+        results = []
 
         sources = result.sources
         deblend_task.run(detexp, sources)
 
         with ContextNoiseReplacer(detexp, sources, rng) as replacer:
 
+            # process all sources including parents
             for source in sources:
-
-                if source.get('deblend_nChild') != 0:
-                    continue
-
                 source_id = source.getId()
 
                 with replacer.sourceInserted(source_id):
                     meas_task.callMeasure(source, detexp)
-                    import IPython
-                    IPython.embed()
 
             # now run through and put in parents
             parents = sources.getChildren(0)
-            LOG.debug('found %d parents', len(parents))
+            LOG.info('found %d parents', len(parents))
             for parent in parents:
+                parent_id = parent.getId()
 
-                with replacer.sourceInserted(parent.getId()):
-                    tres = process_blend(rng, detexp, parent)
-                    res += tres
+                if parent.get('deblend_nChild') != 0:
+                    children = sources.getChildren(parent_id)
+                    LOG.info(f'processing {len(children)} blended objects')
+                else:
+                    children = [parent]
+                    LOG.info('processing parent')
+
+                with replacer.sourceInserted(parent_id):
+                    if show:
+                        vis.show_exp(detexp, mess=f'{parent_id} replaced')
+
+                    tres = process_blend(rng, detexp, parent, children)
+                    results += tres
 
     else:
-        res = None
+        results = None
 
-    return res
+    if len(results) > 0:
+        results = eu.numpy_util.combine_arrlist(results)
+    else:
+        results = None
+
+    return results
 
 
-def process_blend(rng, exp, parent, ntry=2):
+def process_blend(rng, exp, parent, children, ntry=2):
     from ngmix.gmix.gmix_nb import gmix_get_e1e2T
     from ngmix.gmix.gmix_nb import get_model_s2n_sum
 
-    exp_bbox = exp.getBBox()
-    wcs = exp.getWcs()
-
-    if parent.get('deblend_nChild') != 0:
-        sources = parent.getChildren()
-    else:
-        sources = [parent]
-
     try:
         obs = extract_obs_for_em(exp, parent)
-    except AllZeroWeight as err:
-        # failure creating some observation due to zero weights
-        LOG.info('%s', err)
-        return _make_multi_output(len(sources), flags=ZERO_WEIGHTS)
 
-    # fit the psf
-    psf_res = fit_psf(rng, obs)
-    if psf_res['flags'] != 0:
-        return _make_multi_output(len(sources), psf_flags=psf_res['flags'])
+        # fit the psf
+        psf_res = fit_psf(rng, obs)
+        if psf_res['flags'] != 0:
+            raise BootPSFFailure('failed to fit psf')
 
-    # run em
-    for i in range(ntry):
-        guess = get_guess_em(rng=rng, obs=obs, sources=sources)
+        # run em
+        for itry in range(ntry):
+            guess = get_guess_em(
+                rng=rng, exp=exp, obs=obs, sources=children,
+            )
 
-        res = ngmix.em.run_em(obs=obs, guess=guess)
-        if res['flags'] == 0:
-            break
+            em_res = ngmix.em.run_em(
+                obs=obs, guess=guess, tol=0.0001,
+                maxiter=1000,
+            )
+            if em_res['flags'] == 0:
+                break
 
-    # fill in results
-    if res['flags'] != 0:
-        return _make_multi_output(
-            len(sources), flags=res['flags'], psf_flags=psf_res['flags'],
-        )
-    else:
-        gm = res.get_gmix()
+        # fill in results
+        if em_res['flags'] != 0:
+            raise BootGalFailure('failed to fit blend: %s' % em_res['message'])
+
+        gm = em_res.get_gmix()
         gmdata = gm.get_data()
         reslist = []
-        for source in sources:
+        for isource, source in enumerate(children):
             res = _make_output(flags=0, psf_flags=0)
 
-            this_gmdata = gmdata[i:i+1]
+            this_gmdata = gmdata[isource:isource+1]
             e1, e2, T = gmix_get_e1e2T(this_gmdata)
             T_ratio = T/psf_res['T']
 
@@ -208,24 +207,28 @@ def process_blend(rng, exp, parent, ntry=2):
                 s2n = 0
 
             res['psf_g'] = psf_res['e']
-            res['psf_T'] = psf_res['psf_T']
-            res['g'] = (e1, e2)
-            res['T'] = T
-            res['s2n'] = s2n
-            res['T_ratio'] = T_ratio
+            res['psf_T'] = psf_res['T']
+            res['em_g'] = (e1, e2)
+            res['em_T'] = T
+            res['em_s2n'] = s2n
+            res['em_T_ratio'] = T_ratio
 
-            ormask = get_ormask(source=source, exposure=exp)
-
-            res = get_output(
-                wcs=wcs,
-                source=source,
-                ormask=ormask,
-                stamp_size=-1,
-                exp_bbox=exp_bbox,
-            )
             reslist.append(res)
 
-    return reslist
+    except AllZeroWeight as err:
+        # failure creating some observation due to zero weights
+        LOG.info('%s', err)
+        reslist = _make_multi_output(len(children), flags=ZERO_WEIGHTS)
+    except BootPSFFailure as err:
+        # failure to fit psf
+        LOG.info('%s', err)
+        reslist = _make_multi_output(len(children), psf_flags=PSF_FAILURE)
+    except BootGalFailure as err:
+        # deblend fit failed
+        LOG.info('%s', err)
+        reslist = _make_multi_output(len(children), psf_flags=0, flags=DEBLEND_FAILURE)
+
+    return _make_combined_output(sources=children, reslist=reslist, exp=exp)
 
 
 def extract_obs_for_em(exp, parent):
@@ -261,7 +264,7 @@ def extract_obs_for_em(exp, parent):
         exp=exp,
         source=parent,
     )
-    jacob.set_cen(0, 0)
+    jacob.set_cen(row=0, col=0)
 
     orig_cen = parent.getCentroid()
 
@@ -313,6 +316,28 @@ def fit_psf(rng, obs, ntry=4):
     return res
 
 
+def _make_combined_output(sources, reslist, exp):
+
+    exp_bbox = exp.getBBox()
+    wcs = exp.getWcs()
+
+    final_reslist = []
+    for source, res in zip(sources, reslist):
+        ormask = get_ormask(source=source, exposure=exp)
+
+        res = get_output(
+            wcs=wcs,
+            source=source,
+            res=res,
+            ormask=ormask,
+            stamp_size=-9999,
+            exp_bbox=exp_bbox,
+        )
+        final_reslist.append(res)
+
+    return final_reslist
+
+
 def _make_output(flags=None, psf_flags=None):
     res = get_wavg_output_struct(nband=1, model='em')
     if flags is not None:
@@ -330,6 +355,7 @@ def _make_multi_output(num, flags=None, psf_flags=None):
 
 def get_guess_em(
     rng,
+    exp,
     obs,
     sources,
     minflux=0.01,
@@ -354,6 +380,8 @@ def get_guess_em(
     ngmix.GMix
     """
 
+    corner = exp.getBBox().getMin()
+
     ur = rng.uniform
     jacobian = obs.jacobian
 
@@ -363,32 +391,40 @@ def get_guess_em(
 
     for source in sources:
         # TODO proper guess for T
-        Tguess = Tmin * ur(low=0.95, high=1.05)
+        Tguess = Tmin * ur(low=1, high=1.05)
 
         cen = source.getCentroid()
-        row = cen.getY()
-        col = cen.getX()
+        row_guess = cen.getY() - corner.y
+        col_guess = cen.getX() - corner.x
+
+        row_guess = row_guess + ur(low=-0.1, high=0.1)
+        col_guess = col_guess + ur(low=-0.1, high=0.1)
+
+        # peak = source.getFootprint().getPeaks()[0]
+        # cen = peak.getF()
+        # row = cen.getY()
+        # col = cen.getX()
 
         if source.getPsfFluxFlag():
-            flux = -9999
+            flux_guess = -9999
         else:
-            flux = source.getPsfInstFlux()
+            flux_guess = source.getPsfInstFlux()
 
-        if flux < minflux:
-            print('flux %g less than minflux %g' % (flux, minflux))
-            flux = minflux * ur(low=0.95, high=1.05)
+        if flux_guess < minflux:
+            LOG.info('flux %g less than minflux %g', flux_guess, minflux)
+            flux_guess = minflux * ur(low=1.0, high=1.05)
 
-        v, u = jacobian.get_vu(row, col)
+        v_guess, u_guess = jacobian.get_vu(row_guess, col_guess)
 
-        g1, g2 = ur(low=-0.01, high=0.01, size=2)
+        g1_guess, g2_guess = ur(low=-0.01, high=0.01, size=2)
 
         pars = [
-            v,
-            u,
-            g1,
-            g2,
+            v_guess,
+            u_guess,
+            g1_guess,
+            g2_guess,
             Tguess,
-            flux,
+            flux_guess,
         ]
         gm = ngmix.GMixModel(pars, 'gauss')
 
