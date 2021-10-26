@@ -167,15 +167,15 @@ class MEDSifier(object):
         Dict holding sep extract parameters
     meds_config: dict, optional
         Dict holding MEDS parameters
-    maskflags: int
+    nodet_flags: int
         Integer representing bits to mask for detection.  The results for all
         bands are ored together if combining multiple bands into a detection
         coadd.  Default 0
     """
-    def __init__(self, mbobs, sx_config, meds_config, maskflags=0):
+    def __init__(self, mbobs, sx_config, meds_config, nodet_flags=0):
         self.mbobs = mbobs
         self.nband = len(mbobs)
-        self.maskflags = maskflags
+        self.nodet_flags = nodet_flags
 
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
 
@@ -237,7 +237,7 @@ class MEDSifier(object):
             obs = obslist[0]
             detim += obs.image*weights[i]
             if obs.has_bmask():
-                mask |= (obs.bmask & self.maskflags != 0)
+                mask |= (obs.bmask & self.nodet_flags != 0)
 
         self.detim = detim
         self.detnoise = detnoise

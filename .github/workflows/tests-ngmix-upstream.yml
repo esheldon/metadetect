@@ -51,6 +51,7 @@ jobs:
         shell: bash -l {0}
         run: |
           # don't run metadetect/lsst/tests
-          pytest -vvs metadetect/tests
+          pytest -v -n 4 metadetect/tests
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[ksigma-1000000.0-7-50]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[pgauss-1000000.0-7-50]

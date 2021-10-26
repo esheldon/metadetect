@@ -76,7 +76,7 @@ TEST_METADETECT_CONFIG = {
     # check for an edge hit
     'bmask_flags': 2**30,
 
-    'maskflags': 2**0,
+    'nodet_flags': 2**0,
 }
 
 
