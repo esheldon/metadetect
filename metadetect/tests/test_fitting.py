@@ -6,7 +6,11 @@ from ngmix.gaussmom import GaussMom
 import ngmix
 
 from .sim import make_mbobs_sim
-from ..fitting import fit_mbobs_wavg, _combine_fit_results_wavg
+from ..fitting import (
+    fit_mbobs_wavg,
+    _combine_fit_results_wavg,
+    symmetrize_obs_weights,
+)
 from .. import procflags
 
 
@@ -907,13 +911,59 @@ def test_fitting_combine_fit_results_wavg_flagging(
         assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
 
 
-def test_symmetrize_obs_weights_all_zero():
-    assert False
+def test_fitting_symmetrize_obs_weights_all_zero():
+    obs = ngmix.Observation(
+        image=np.zeros((13, 13)),
+        weight=np.zeros((13, 13)),
+        ignore_zero_weight=False,
+    )
+    sym_obs = symmetrize_obs_weights(obs)
+    assert sym_obs is not obs
+    assert sym_obs.ignore_zero_weight is False
+    assert np.all(sym_obs.weight == 0)
+
+    wgt = np.zeros((13, 13))
+    wgt[:, :2] = 1
+    obs = ngmix.Observation(
+        image=np.zeros((13, 13)),
+        weight=wgt,
+    )
+    sym_obs = symmetrize_obs_weights(obs)
+    assert sym_obs is not obs
+    assert sym_obs.ignore_zero_weight is False
+    assert np.all(sym_obs.weight == 0)
+    assert not np.array_equal(sym_obs.weight, obs.weight)
 
 
-def test_symmetrize_obs_weights_none():
-    assert False
+def test_fitting_symmetrize_obs_weights_none():
+    obs = ngmix.Observation(
+        image=np.zeros((13, 13)),
+        weight=np.ones((13, 13)),
+    )
+    sym_obs = symmetrize_obs_weights(obs)
+    assert sym_obs is not obs
+    assert sym_obs.ignore_zero_weight is True
+    assert np.all(sym_obs.weight == 1)
+    assert np.array_equal(sym_obs.weight, obs.weight)
 
 
-def test_symmetrize_obs_weights():
-    assert False
+def test_fitting_symmetrize_obs_weights():
+    wgt = np.array([
+        [1, 1, 0],
+        [1, 1, 1],
+        [1, 1, 1],
+    ])
+    obs = ngmix.Observation(
+        image=np.zeros((3, 3)),
+        weight=wgt,
+    )
+    sym_obs = symmetrize_obs_weights(obs)
+    assert sym_obs is not obs
+    assert sym_obs.ignore_zero_weight is True
+    assert not np.array_equal(sym_obs.weight, obs.weight)
+    sym_wgt = np.array([
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 1, 0],
+    ])
+    assert np.array_equal(sym_obs.weight, sym_wgt)

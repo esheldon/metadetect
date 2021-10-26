@@ -508,7 +508,7 @@ def symmetrize_obs_weights(obs):
     sym_obs = obs.copy()
     if np.any(obs.weight <= 0):
         new_wgt = obs.weight.copy()
-        for k in range(3):
+        for k in [1, 2, 3]:
             msk = np.rot90(obs.weight, k=k) <= 0
             new_wgt[msk] = 0
 
