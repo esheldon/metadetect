@@ -225,6 +225,8 @@ def _fit_obs(
     res = {}
     flags = 0
 
+    obs = symmetrize_obs_weights(obs)
+
     if not np.any(obs.weight > 0):
         flags |= procflags.ZERO_WEIGHTS
 
@@ -488,3 +490,31 @@ def _make_combine_fit_results_wavg_dtype(nband, model):
             (n("band_flux_err"), "f8"),
         ]
     return dt
+
+
+def symmetrize_obs_weights(obs):
+    """Applies 4-fold symmetry to zero weight pixels in an observation.
+
+    Parameters
+    ----------
+    obs : ngmix.Observation
+        The observation to symmetrize.
+
+    Returns
+    -------
+    sym_obs : ngmix.Observation
+        A copy of the input observation with a symmetrized weight map.
+    """
+    sym_obs = obs.copy()
+    if np.any(obs.weight <= 0):
+        new_wgt = obs.weight.copy()
+        for k in [1, 2, 3]:
+            msk = np.rot90(obs.weight, k=k) <= 0
+            new_wgt[msk] = 0
+
+        with sym_obs.writeable():
+            if not np.any(new_wgt > 0):
+                sym_obs.ignore_zero_weight = False
+            sym_obs.weight[:, :] = new_wgt
+
+    return sym_obs
