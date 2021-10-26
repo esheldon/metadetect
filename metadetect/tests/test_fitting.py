@@ -347,7 +347,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 1,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 1,
@@ -366,7 +366,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -385,7 +385,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 2,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 1,
@@ -404,7 +404,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 2,
@@ -423,7 +423,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
@@ -442,7 +442,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
@@ -461,7 +461,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
@@ -480,7 +480,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -499,13 +499,13 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 1,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] + [{
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -524,7 +524,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -543,7 +543,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -562,7 +562,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -581,7 +581,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -600,14 +600,14 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3 + [
                 {
                     "flux_flags": 1,
                     "flux": 1,
                     "flux_err": 1,
-                    "mom": np.ones(6),
+                    "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                     "mom_cov": np.diag(np.ones(6))
                 }
             ],
@@ -627,7 +627,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3 + [None],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -646,12 +646,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux_flags": 0,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -670,12 +670,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux_flags": 0,
                 "flux": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -694,12 +694,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }],
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -723,7 +723,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -742,12 +742,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.diag(np.ones(6))
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1])
             }] + [{
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 3,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
@@ -766,7 +766,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
@@ -789,7 +789,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
@@ -812,7 +812,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
@@ -835,7 +835,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
@@ -858,7 +858,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.ones(6),
+                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
                 "mom_cov": np.diag(np.ones(6))
             }] * 5,
             all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 5,
@@ -870,7 +870,25 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["ZERO_WEIGHTS", "PSF_FAILURE"],
         [],
     ),
-
+    (
+        "shear out of bounds",
+        dict(
+            all_res=[{
+                "flux_flags": 0,
+                "flux": 1,
+                "flux_err": 1,
+                "mom": np.array([0, 0, 1, 1, 1, 1]),
+                "mom_cov": np.diag(np.ones(6))
+            }] * 4,
+            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_is_shear_band=[True, True, False, False],
+            all_wgts=[1, 1, 1, 1],
+            all_flags=[0, 0, 0, 0],
+        ),
+        [],
+        ["SHEAR_RANGE_ERROR"],
+        [],
+    ),
 ])
 def test_fitting_combine_fit_results_wavg_flagging(
     purpose, kwargs, psf_flags, model_flags, flux_flags
