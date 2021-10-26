@@ -406,7 +406,7 @@ def _combine_fit_results_wavg(
         if psf_flags == 0:
             data[n('T_ratio')] = data[n('T')] / data['psf_T']
 
-        if (np.any(np.abs(momres["e"])) > MAX_G or np.sum(momres["e"]**2) > MAX_G):
+        if (np.any(np.abs(momres["e"]) > MAX_G) or np.sum(momres["e"]**2) > MAX_G):
             mdet_flags |= procflags.SHEAR_RANGE_ERROR
 
     if psf_flags != 0:
