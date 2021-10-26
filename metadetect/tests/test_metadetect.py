@@ -80,7 +80,7 @@ TEST_METADETECT_CONFIG = {
     # check for an edge hit
     "bmask_flags": 2**30,
 
-    "maskflags": 2**0,
+    "nodet_flags": 2**0,
 }
 
 
@@ -163,13 +163,13 @@ def test_detect_masking(ntrial=1, show=False):
         mbobs = sim.get_mbobs()
         for obslist in mbobs:
             for obs in obslist:
-                obs.bmask = obs.bmask | config["maskflags"]
+                obs.bmask = obs.bmask | config["nodet_flags"]
 
         mer = detect.MEDSifier(
             mbobs=mbobs,
             sx_config=config["sx"],
             meds_config=config["meds"],
-            maskflags=config["maskflags"],
+            nodet_flags=config["nodet_flags"],
         )
         assert mer.cat.size == 0
 
@@ -319,9 +319,9 @@ def test_metadetect_zero_weight_some(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
-def test_metadetect_maskflags_all(model):
+def test_metadetect_nodet_flags_all(model):
     """
-    test full metadetection w/ all bmask all maskflags
+    test full metadetection w/ all bmask all nodet_flags
     """
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
@@ -345,9 +345,9 @@ def test_metadetect_maskflags_all(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
-def test_metadetect_bmask_some(model):
+def test_metadetect_nodet_flags_some(model):
     """
-    test full metadetection w/ some bmask all maskflags
+    test full metadetection w/ some bmask nodet_flags
     """
     ntrial = 1
     rng = np.random.RandomState(seed=53341)

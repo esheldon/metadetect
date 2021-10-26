@@ -48,4 +48,4 @@ jobs:
         shell: bash -l {0}
         run: |
           # we run metadetect/tests and metadetect/lsst/tests
-          pytest -vvs --cov=metadetect --cov-report term-missing metadetect
+          pytest -vvs -n 4 --cov=metadetect --cov-report term-missing metadetect

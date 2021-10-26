@@ -51,4 +51,4 @@ jobs:
         shell: bash -l {0}
         run: |
           # we run metadetect/tests and metadetect/lsst/tests
-          pytest -vvs metadetect
+          pytest -vvs -n 4 metadetect

@@ -132,7 +132,7 @@ class Metadetect(dict):
             'sx setting must be present in config'
         assert 'meds' in self, \
             'meds setting must be present in config'
-        self['maskflags'] = self.get('maskflags', 0)
+        self['nodet_flags'] = self.get('nodet_flags', 0)
 
     def _set_ormask_and_bmask(self):
         """
@@ -220,7 +220,7 @@ class Metadetect(dict):
                 if np.all(obs.weight == 0):
                     any_all_zero_weight = True
 
-                if np.all((obs.bmask & self['maskflags']) != 0):
+                if np.all((obs.bmask & self['nodet_flags']) != 0):
                     any_all_masked = True
 
         if not np.any(self.mfrac < 1) or any_all_zero_weight or any_all_masked:
@@ -442,7 +442,7 @@ class Metadetect(dict):
             mbobs=mbobs,
             sx_config=self['sx'],
             meds_config=self['meds'],
-            maskflags=self['maskflags'],
+            nodet_flags=self['nodet_flags'],
         )
 
     def _get_all_metacal(self, mbobs):
