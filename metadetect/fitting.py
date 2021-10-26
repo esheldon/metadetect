@@ -11,6 +11,9 @@ from . import procflags
 
 logger = logging.getLogger(__name__)
 
+# float precision just below 1
+MAX_G = 1.0 - 1e-7
+
 
 def get_coellip_ngauss(name):
     ngauss = int(name[7:])
@@ -403,7 +406,7 @@ def _combine_fit_results_wavg(
         if psf_flags == 0:
             data[n('T_ratio')] = data[n('T')] / data['psf_T']
 
-        if (np.any(np.abs(momres["e"])) > 1 or np.sum(momres["e"]**2) > 1):
+        if (np.any(np.abs(momres["e"])) > MAX_G or np.sum(momres["e"]**2) > MAX_G):
             mdet_flags |= procflags.SHEAR_RANGE_ERROR
 
     if psf_flags != 0:
