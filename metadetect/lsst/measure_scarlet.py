@@ -250,6 +250,7 @@ def _process_source(
 
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
+    nband = len(subtractor.filters)
 
     with subtractor.add_source(source_id):
 
@@ -314,7 +315,7 @@ def _process_source(
             flags = CENTROID_FAILURE
 
         if flags != 0:
-            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res = get_wavg_output_struct(nband=nband, model=fitter.kind)
             this_res['flags'] = flags
 
         res = get_output_scarlet(
