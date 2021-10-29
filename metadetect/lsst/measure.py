@@ -1,4 +1,5 @@
 import logging
+import warnings
 import numpy as np
 import esutil as eu
 import ngmix
@@ -25,6 +26,8 @@ from . import util
 from .util import ContextNoiseReplacer
 from . import vis
 from .defaults import DEFAULT_THRESH
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure')
 
@@ -100,9 +103,10 @@ def detect_and_deblend(
 
     detection_task = SourceDetectionTask(config=detection_config)
 
-    # this must occur directly before any tasks are run because schema is
-    # modified in place by tasks, and the constructor does a check that
-    # fails if we construct it separately
+    # these tasks must use the same schema and all be constructed before any
+    # other tasks using the same schema are run because schema is modified in
+    # place by tasks, and the constructor does a check that fails if we do this
+    # afterward
 
     deblend_task = SourceDeblendTask(
         config=SourceDeblendConfig(),

@@ -11,6 +11,7 @@ feature requests for DM
 """
 from contextlib import contextmanager
 import logging
+import warnings
 import ngmix
 import esutil as eu
 import numpy as np
@@ -43,6 +44,8 @@ from .measure import (
     get_output_struct, get_ormask, extract_psf_image, AllZeroWeight,
     find_and_set_center, CentroidFail,
 )
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure_scarlet')
 

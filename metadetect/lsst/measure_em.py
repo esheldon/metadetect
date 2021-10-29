@@ -6,6 +6,7 @@ consider letting the center of each object in the shredder
 move; this will take some coding
 """
 import logging
+import warnings
 import numpy as np
 import esutil as eu
 import ngmix
@@ -26,6 +27,8 @@ from .defaults import DEFAULT_THRESH
 from ..fitting import get_wavg_output_struct
 from .measure import AllZeroWeight, get_ormask, get_output
 from ..procflags import ZERO_WEIGHTS, DEBLEND_FAILURE, PSF_FAILURE
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure')
 

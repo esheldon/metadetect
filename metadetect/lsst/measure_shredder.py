@@ -10,6 +10,7 @@ feature requests for DM
     - clone() copy psfs
 """
 import logging
+import warnings
 import ngmix
 import numpy as np
 import esutil as eu
@@ -43,6 +44,8 @@ from .measure import (
     extract_obs,
 )
 from .measure_scarlet import extract_mbobs
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure_shredder')
 
