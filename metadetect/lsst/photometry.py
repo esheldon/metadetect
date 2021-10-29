@@ -1,4 +1,5 @@
 import logging
+import warnings
 from .skysub import subtract_sky_mbobs
 from . import util
 
@@ -10,6 +11,8 @@ from .metadetect import (
     fit_original_psfs, get_mfrac, get_fitter, get_ormask_and_bmask,
     add_original_psf, add_ormask, add_mfrac,
 )
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_photometry')
 
