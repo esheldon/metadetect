@@ -58,14 +58,14 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     sim_data = make_lsst_sim(116)
 
     if nowarp:
-        coadd_obs = make_coadd_obs_nowarp(
+        coadd_obs, exp_info = make_coadd_obs_nowarp(
             exp=sim_data['band_data']['i'][0],
             psf_dims=sim_data['psf_dims'],
             rng=rng,
             remove_poisson=False,
         )
     else:
-        coadd_obs = make_coadd_obs(
+        coadd_obs, exp_info = make_coadd_obs(
             exps=sim_data['band_data']['i'],
             coadd_wcs=sim_data['coadd_wcs'],
             coadd_bbox=sim_data['coadd_bbox'],
@@ -126,7 +126,7 @@ def test_lsst_photometry_deblend_multiband(deblender):
     coadd_mbobs = ngmix.MultiBandObsList()
 
     for band, exps in sim_data['band_data'].items():
-        coadd_obs = make_coadd_obs_nowarp(
+        coadd_obs, exp_info = make_coadd_obs_nowarp(
             exp=exps[0],
             psf_dims=sim_data['psf_dims'],
             rng=rng,
