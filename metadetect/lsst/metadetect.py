@@ -39,6 +39,7 @@ from .configs import get_config
 from . import measure
 from . import measure_scarlet
 from . import measure_shredder
+from . import measure_em
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -146,12 +147,11 @@ def detect_deblend_and_measure(
 
     exposures = [obslist[0].exposure for obslist in mbobs]
 
-    mbexp = util.get_mbexp(exposures)
-
     if config['deblend']:
-        LOG.info('measuring with scarlet deblended stamps')
 
         if config['deblender'] == 'scarlet':
+            LOG.info('measuring with deblended stamps')
+            mbexp = util.get_mbexp(exposures)
             sources, detexp = measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
@@ -166,8 +166,20 @@ def detect_deblend_and_measure(
                 rng=rng,
                 show=show,
             )
+        elif config['deblender'] == 'em':
+            LOG.info('measuring with em')
+            assert len(exposures) == 1, 'one band for now'
+            assert fitter is None, 'no fitter for em'
+            results = measure_em.measure(
+                exp=exposures[0],
+                rng=rng,
+                thresh=config['detect']['thresh'],
+                show=show,
+            )
         else:
+            LOG.info('measuring with the Shredder')
 
+            mbexp = util.get_mbexp(exposures)
             shredder_config = config['shredder_config']
 
             sources, detexp, Tvals = measure_shredder.detect_and_deblend(
@@ -193,6 +205,8 @@ def detect_deblend_and_measure(
     else:
 
         LOG.info('measuring with blended stamps')
+
+        mbexp = util.get_mbexp(exposures)
 
         for obslist in mbobs:
             assert len(obslist) == 1, 'no multiepoch'
@@ -289,6 +303,8 @@ def get_fitter(config, rng=None):
             ntry=2,
         )
 
+    elif meas_type == 'em':
+        fitter = None
     else:
         fwhm = config['weight']['fwhm']
         if meas_type == 'wmom':

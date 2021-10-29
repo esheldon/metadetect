@@ -10,6 +10,7 @@ feature requests for DM
     - clone() copy psfs
 """
 import logging
+import warnings
 import ngmix
 import numpy as np
 import esutil as eu
@@ -43,6 +44,8 @@ from .measure import (
     extract_obs,
 )
 from .measure_scarlet import extract_mbobs
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure_shredder')
 
@@ -301,7 +304,7 @@ def measure(
 
                     # fill out the now labeled failures
                     results += [
-                        get_output(wcs=wcs, fitter=fitter,
+                        get_output(wcs=wcs,
                                    source=source, res=object_res, psf_res=psf_res,
                                    ormask=ormasks[source.getId()],
                                    stamp_size=stamp_size,
@@ -341,7 +344,7 @@ def _process_parent(
         )
 
     return get_output(
-        wcs=wcs, fitter=fitter,
+        wcs=wcs,
         source=source, res=this_res,
         ormask=ormask,
         stamp_size=stamp_size,
@@ -388,7 +391,7 @@ def _process_blend(
             this_res['psf_flags'] = NO_ATTEMPT
 
         results = [
-            get_output(wcs=wcs, fitter=fitter,
+            get_output(wcs=wcs,
                        source=source, res=this_res,
                        ormask=ormasks[source.getId()],
                        stamp_size=stamp_size,
@@ -422,7 +425,7 @@ def _process_blend(
                 )
 
                 res = get_output(
-                    wcs=wcs, fitter=fitter, source=child,
+                    wcs=wcs, source=child,
                     res=this_res,
                     ormask=ormasks[child.getId()],
                     stamp_size=stamp_size, exp_bbox=exp_bbox,

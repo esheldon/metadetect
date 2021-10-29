@@ -11,6 +11,7 @@ feature requests for DM
 """
 from contextlib import contextmanager
 import logging
+import warnings
 import ngmix
 import esutil as eu
 import numpy as np
@@ -43,6 +44,8 @@ from .measure import (
     get_output_struct, get_ormask, extract_psf_image, AllZeroWeight,
     find_and_set_center, CentroidFail,
 )
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure_scarlet')
 
@@ -250,6 +253,7 @@ def _process_source(
 
     ormask = get_ormask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
+    nband = len(subtractor.filters)
 
     with subtractor.add_source(source_id):
 
@@ -314,7 +318,7 @@ def _process_source(
             flags = CENTROID_FAILURE
 
         if flags != 0:
-            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res = get_wavg_output_struct(nband=nband, model=fitter.kind)
             this_res['flags'] = flags
 
         res = get_output_scarlet(

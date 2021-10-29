@@ -1,4 +1,5 @@
 import logging
+import warnings
 import numpy as np
 import esutil as eu
 import ngmix
@@ -25,6 +26,8 @@ from . import util
 from .util import ContextNoiseReplacer
 from . import vis
 from .defaults import DEFAULT_THRESH
+
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 LOG = logging.getLogger('lsst_measure')
 
@@ -100,9 +103,10 @@ def detect_and_deblend(
 
     detection_task = SourceDetectionTask(config=detection_config)
 
-    # this must occur directly before any tasks are run because schema is
-    # modified in place by tasks, and the constructor does a check that
-    # fails if we construct it separately
+    # these tasks must use the same schema and all be constructed before any
+    # other tasks using the same schema are run because schema is modified in
+    # place by tasks, and the constructor does a check that fails if we do this
+    # afterward
 
     deblend_task = SourceDeblendTask(
         config=SourceDeblendConfig(),
@@ -231,7 +235,7 @@ def measure(
             this_res['flags'] = flags
 
         res = get_output(
-            wcs=wcs, fitter=fitter, source=source, res=this_res,
+            wcs=wcs, source=source, res=this_res,
             ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
@@ -608,7 +612,7 @@ def _extract_jacobian(exp, source):
     orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
     if np.isnan(orig_cen.getY()):
-        print('falling back on integer location')
+        LOG.info('falling back on integer location')
         # fall back to integer pixel location
         peak = source.getFootprint().getPeaks()[0]
         orig_cen_i = peak.getI()
@@ -699,7 +703,7 @@ def get_output_struct(res):
     return output
 
 
-def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
+def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -712,8 +716,6 @@ def get_output(wcs, fitter, source, res, ormask, stamp_size, exp_bbox):
     ----------
     wcs: a stack wcs
         The wcs with which to determine the ra, dec
-    fitter: e.g. ngmix.prepsfmom.PGaussMom
-        The measurement object
     res: ndarray
         The result from running metadetect.fitting.fit_mbobs_wavg
     ormask: int

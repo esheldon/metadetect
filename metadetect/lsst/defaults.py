@@ -5,6 +5,7 @@ DEFAULT_WEIGHT_FWHMS = {
     'wmom': 1.2,
     'ksigma': 2.0,
     'pgauss': 2.0,
+    'em': -1,  # not using moments currently
 }
 
 DEFAULT_STAMP_SIZES = {
@@ -14,6 +15,7 @@ DEFAULT_STAMP_SIZES = {
     'ksigma': 64,
     'am': 64,
     'pgauss': 64,  # TODO would smaller be OK since does not ring?
+    'em': -1,  # no stamps used currently
 }
 
 # threshold for detection

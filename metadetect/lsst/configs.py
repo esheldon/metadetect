@@ -56,7 +56,7 @@ def _fill_config(config):
         if 'weight' not in config or config['weight'] is None:
             config['weight'] = get_default_weight_config(meas_type)
 
-    assert config['deblender'] in ['scarlet', 'shredder'], (
+    assert config['deblender'] in ['scarlet', 'shredder', 'em'], (
         'bad deblender "%s", should be scarlet or shredder' % config['deblender']
     )
 
