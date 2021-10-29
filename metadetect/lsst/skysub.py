@@ -9,7 +9,7 @@ from lsst.meas.algorithms import (
 from .defaults import DEFAULT_THRESH
 
 BP_TO_SKIP = [
-    "BAD", "EDGE", "DETECTED", "DETECTED_NEGATIVE", "NO_DATA", "BRIGHT",
+    "BAD", "EDGE", "DETECTED", "DETECTED_NEGATIVE", "NO_DATA",
 ]
 
 
@@ -23,8 +23,13 @@ def determine_and_subtract_sky(exp):
     exp: Exposure
         The exposure to be processed
     """
+    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
+        bp_to_skip = BP_TO_SKIP + ['BRIGHT']
+    else:
+        bp_to_skip = BP_TO_SKIP
+
     back_config = SubtractBackgroundConfig(
-        ignoredPixelMask=BP_TO_SKIP,
+        ignoredPixelMask=bp_to_skip,
     )
     back_task = SubtractBackgroundTask(config=back_config)
 
