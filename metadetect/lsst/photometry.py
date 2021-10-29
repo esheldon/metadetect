@@ -9,7 +9,7 @@ from . import measure_scarlet
 from . import measure_shredder
 from .metadetect import (
     fit_original_psfs, get_mfrac, get_fitter, get_ormask_and_bmask,
-    add_original_psf, add_ormask, add_mfrac,
+    add_original_psf, add_mfrac,
 )
 
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -121,7 +121,6 @@ def run_photometry(mbobs, rng, config=None, show=False):
     if res is not None:
         obs = mbobs[0][0]
         add_mfrac(config, mfrac, res, obs)
-        add_ormask(ormask, res)
         add_original_psf(psf_stats, res)
 
     return res

@@ -103,7 +103,6 @@ def run_metadetect(
                 obs = mbobs[0][0]
                 add_noshear_pos(config, res, shear_str, obs)
                 add_mfrac(config, mfrac, res, obs)
-                add_ormask(ormask, res)
                 add_original_psf(psf_stats, res)
 
             result[shear_str] = res
@@ -261,19 +260,6 @@ def add_mfrac(config, mfrac, res, obs):
         )
     else:
         res['mfrac'] = 0
-
-
-def add_ormask(ormask, res):
-    """
-    copy in ormask values using the row, col positions
-    """
-    for i in range(res.size):
-        row_diff = res['row'][i] - res['row0'][i]
-        col_diff = res['col'][i] - res['col0'][i]
-        local_row = int(np.floor(row_diff + 0.5))
-        local_col = int(np.floor(col_diff + 0.5))
-
-        res['ormask'][i] = ormask[local_row, local_col]
 
 
 def add_original_psf(psf_stats, res):

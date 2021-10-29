@@ -404,9 +404,10 @@ def test_lsst_metadetect_mfrac_ormask():
 
     tm0 = time.time()
     ntrial = 1
+    flag = 2**31
 
     for trial in range(ntrial):
-        sim_data = make_lsst_sim(116)
+        sim_data = make_lsst_sim(rng.randint(0, 2**30))
 
         print("")
         coadd_obs, exp_info = make_coadd_obs(
@@ -420,25 +421,28 @@ def test_lsst_metadetect_mfrac_ormask():
         coadd_obs.mfrac = rng.uniform(
             size=coadd_obs.image.shape, low=0.2, high=0.8
         )
-        coadd_obs.ormask = np.ones(coadd_obs.image.shape, dtype='i4')
+
+        ormask = np.zeros(coadd_obs.image.shape, dtype='i4')
+        ormask[30:150, 30:150] = flag
+        coadd_obs.ormask = ormask
+        # TODO make setting ormask in a CoaddObs also set exp ormask to keep
+        # data consistency
+        coadd_obs.coadd_exp.mask.array[:, :] = ormask
 
         coadd_mbobs = ngmix.MultiBandObsList()
         obslist = ngmix.ObsList()
         obslist.append(coadd_obs)
         coadd_mbobs.append(obslist)
 
-        res = run_metadetect(
-            mbobs=coadd_mbobs, rng=rng,
-        )
+        res = run_metadetect(mbobs=coadd_mbobs, rng=rng)
 
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.any(res[shear]["flags"] == 0)
-            print(res[shear]["mfrac"].min(), res[shear]["mfrac"].max())
-            assert np.all(
+            assert np.any(
                 (res[shear]["mfrac"] > 0.40)
                 & (res[shear]["mfrac"] < 0.60)
             )
-            assert np.all(res[shear]["ormask"] == 1)
+            assert np.any(res[shear]["ormask"] & flag != 0)
 
         total_time = time.time()-tm0
         print("time per:", total_time)
