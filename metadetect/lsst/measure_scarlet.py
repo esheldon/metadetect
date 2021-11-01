@@ -71,6 +71,7 @@ def detect_and_deblend(
         Sources is an lsst.afw.table.SourceCatalog
         detexp is lsst.afw.image.ExposureF
     """
+    import scarlet
 
     if len(mbexp.singles) > 1:
         detexp = util.coadd_exposures(mbexp.singles)
@@ -144,6 +145,11 @@ def detect_and_deblend(
     else:
         # sources = []
         sources = None
+
+    # clear the Scarlet cache.  This will happen automatically
+    # in a future release of Scarlet.
+
+    scarlet.cache.Cache._cache = {}
 
     return sources, detexp
 
