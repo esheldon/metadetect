@@ -331,8 +331,6 @@ def get_ormask(source, exposure):
     """
     peak = source.getFootprint().getPeaks()[0]
     orig_cen = peak.getI()
-    import IPython
-    IPython.embed()
     maskval = exposure.mask[orig_cen]
     return maskval
 
