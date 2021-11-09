@@ -538,37 +538,111 @@ def trim_odd_image(im):
     return new_im
 
 
-def exp2obs(exp, mask='ormask'):
+def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
+    """
+    copy ngmix.Observation data into an Exposure. The pixel data are copied,
+    and the weight is converted to variance.
+
+    If a complex WCS or PSF is needed, it is better to send an existing one.
+    The wcs will not be altered by this code.
+
+    The psf image can be optionally copied in as a KernelPsf
+
+    Parameters
+    ----------
+    obs: ngmix.Observation
+        The observation data
+    exp: lsst.afw.image.ExposureF, optional
+        Optional exposure into which the data are to copied.  Note the psf is
+        not copied unless copy_psf is set to True.  The wcs is not modified.
+    copy_psf: bool, optional
+        If set to True, the psf is copied in as a KernelPsf(FixedKernel)
+
+    Returns
+    -------
+    exp: lsst.afw.image.ExposureF
+        Either a reference to the input exposure, or a new one if it was
+        created internally.
+    """
+    from lsst.meas.algorithms import KernelPsf
+    from lsst.afw.math import FixedKernel
+    import lsst.afw.image as afw_image
+
+    if exp is None:
+        ny, nx = obs.image.shape
+        exp = afw_image.ExposureF(nx, ny)
+
+    exp.image.array[:, :] = obs.image
+
+    exp.variance.array[:, :] = np.inf
+
+    if copy_mask_from == 'bmask':
+        mask = obs.bmask
+    elif copy_mask_from == 'ormask':
+        mask = obs.ormask
+    else:
+        raise RuntimeError(
+            f"copy_mask_from '{copy_mask_from}' should be 'bmask' or 'ormask'"
+        )
+    exp.mask.array[:, :] = mask
+
+    w = np.where(obs.weight > 0)
+    exp.variance.array[w] = 1.0/obs.weight[w]
+
+    if copy_psf:
+        psf_image = obs.psf.image
+        stack_psf = KernelPsf(
+            FixedKernel(
+                afw_image.ImageD(psf_image.astype(float))
+            )
+        )
+        exp.setPsf(stack_psf)
+
+    return exp
+
+
+def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     """
     convert an exposure to an observation.
 
     The origin for the jacobian is set to the image center. The
     psf image is reconstructed at the center of the image.
 
+    In .meta we store the original exposure so we can reverse the process
+    and go back to an exposure, copying in any changs to the image data
+
     Parameters
     ----------
     exp: lsst.afw.image.ExposureF
         The exposure
-    mask: str
+    copy_mask_to: str
         If set to 'ormask', the exposure mask is copied to the
         ormask and bmask is set to zero.
+    store_exp: bool, optional
+        If set to True, store the original exposure in .meta['exposure']
 
     Returns
     -------
     ngmix.Observation
     """
     import lsst.geom as geom
-    dims = exp.image.array.shape
-
-    row, col = (np.array(dims)-1)/2
-    cen = geom.Point2D(x=col, y=row)
 
     wcs = exp.getWcs()
+
+    cen_integer, _ = get_integer_center(
+        wcs=wcs,
+        bbox=exp.getBBox(),
+    )
+    cen = geom.Point2D(cen_integer)
+
     dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
     matrix = dm_jac.getLinear().getMatrix()
+
+    dims = exp.image.array.shape
+    jrow, jcol = (np.array(dims)-1)/2
     jac = ngmix.Jacobian(
-        x=col,
-        y=row,
+        x=jcol,
+        y=jrow,
         dudx=matrix[1, 1],
         dudy=-matrix[1, 0],
         dvdx=matrix[0, 1],
@@ -596,12 +670,20 @@ def exp2obs(exp, mask='ormask'):
         jacobian=psf_jac,
     )
 
-    if mask == 'ormask':
+    if copy_mask_to == 'ormask':
         ormask = exp.mask.array
         bmask = ormask * 0
-    else:
+    elif copy_mask_to == 'bmask':
         bmask = exp.mask.array
         ormask = bmask * 0
+    else:
+        raise RuntimeError(
+            f"copy_mask_to '{copy_mask_to}' should be 'bmask' or 'ormask'"
+        )
+
+    meta = {}
+    if store_exp:
+        meta['exposure'] = exp
 
     return ngmix.Observation(
         image=exp.image.array,
@@ -610,7 +692,34 @@ def exp2obs(exp, mask='ormask'):
         ormask=ormask,
         jacobian=jac,
         psf=psf_obs,
+        meta=meta,
     )
+
+
+def get_integer_center(wcs, bbox):
+    """
+    get the pixel and sky center of the coadd within the bbox
+    The pixel center is forced to be integer
+
+    Parameters
+    -----------
+    wcs: DM wcs
+        The wcs for the exposure
+    bbox: geom.Box2I
+        The bounding box for the exposure, possibly within a larger wcs system
+
+    Returns
+    -------
+    pixcen, skycen:
+        pixcen as Point2I, skycen as SpherePoint
+    """
+    from lsst.geom import Point2D, Point2I
+
+    # force integer location
+    pixcen = Point2I(bbox.getCenter())
+    skycen = wcs.pixelToSky(Point2D(pixcen))
+
+    return pixcen, skycen
 
 
 def get_stats_mask(exp):
