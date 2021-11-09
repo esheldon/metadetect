@@ -74,6 +74,7 @@ def test_apply_apodize_masks(show=False):
         for band, exps in sim_data['band_data'].items():
             exp = exps[0]
             obs = exp2obs(exp)
+
             noiseval = np.sqrt(1/obs.weight[0, 0])
             noise_image = rng.normal(scale=noiseval, size=dims)
             obs.noise = noise_image

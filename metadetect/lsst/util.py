@@ -538,7 +538,7 @@ def trim_odd_image(im):
     return new_im
 
 
-def exp2obs(exp):
+def exp2obs(exp, mask='ormask'):
     """
     convert an exposure to an observation.
 
@@ -549,6 +549,9 @@ def exp2obs(exp):
     ----------
     exp: lsst.afw.image.ExposureF
         The exposure
+    mask: str
+        If set to 'ormask', the exposure mask is copied to the
+        ormask and bmask is set to zero.
 
     Returns
     -------
@@ -593,10 +596,18 @@ def exp2obs(exp):
         jacobian=psf_jac,
     )
 
+    if mask == 'ormask':
+        ormask = exp.mask.array
+        bmask = ormask * 0
+    else:
+        bmask = exp.mask.array
+        ormask = bmask * 0
+
     return ngmix.Observation(
         image=exp.image.array,
         weight=weight,
-        bmask=exp.mask.array,
+        bmask=bmask,
+        ormask=ormask,
         jacobian=jac,
         psf=psf_obs,
     )
