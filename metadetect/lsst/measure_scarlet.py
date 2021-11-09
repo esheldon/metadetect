@@ -115,6 +115,9 @@ def detect_and_deblend(
     # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
 
+    # these will be ignored when finding the image standard deviation
+    detection_config.statsMask = util.get_stats_mask(detexp)
+
     detection_task = SourceDetectionTask(config=detection_config)
 
     # configure the scarlet deblender

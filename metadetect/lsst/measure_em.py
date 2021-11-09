@@ -20,7 +20,7 @@ from lsst.meas.base import (
     SingleFrameMeasurementTask,
 )
 
-# from . import util
+from . import util
 from .util import ContextNoiseReplacer
 from . import vis
 from .defaults import DEFAULT_THRESH
@@ -98,6 +98,9 @@ def measure(
     # the variance
     # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
+
+    # these will be ignored when finding the image standard deviation
+    detection_config.statsMask = util.get_stats_mask(detexp)
 
     detection_task = SourceDetectionTask(config=detection_config)
 

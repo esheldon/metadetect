@@ -48,6 +48,12 @@ def run_metadetect(
     mbobs, rng, config=None, show=False,
 ):
     """
+    Run metadetection on the input MultiBandObsList
+
+    Note that bright object masking must be applied outside of this function.
+
+    Parameters
+    ----------
     mbobs: ngmix.MultiBandObsList
         The observations to process
     rng: np.random.RandomState

@@ -600,3 +600,31 @@ def exp2obs(exp):
         jacobian=jac,
         psf=psf_obs,
     )
+
+
+def get_stats_mask(exp):
+    """
+    Get a stats mask for use in getting image statistics.  If BRIGHT
+    is found in the mask plane it is added to the usual
+
+    ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    A list of mask planes
+    """
+
+    # these will be ignored when finding the image standard deviation
+    # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
+
+    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
+
+    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
+        stats_mask += ['BRIGHT']
+
+    return stats_mask
