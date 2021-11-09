@@ -608,8 +608,9 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     The origin for the jacobian is set to the image center. The
     psf image is reconstructed at the center of the image.
 
-    In .meta we store the original exposure so we can reverse the process
-    and go back to an exposure, copying in any changs to the image data
+    Optionall, the original exposure can be stored in .meta so we can reverse
+    the process and go back to an exposure, copying in any changes to the image
+    data
 
     Parameters
     ----------
