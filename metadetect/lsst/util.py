@@ -629,6 +629,7 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
 
     wcs = exp.getWcs()
 
+    # this is to be consistent with the coadd code
     cen_integer, _ = get_integer_center(
         wcs=wcs,
         bbox=exp.getBBox(),
