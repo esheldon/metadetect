@@ -536,3 +536,67 @@ def trim_odd_image(im):
         new_im = im
 
     return new_im
+
+
+def exp2obs(exp):
+    """
+    convert an exposure to an observation.
+
+    The origin for the jacobian is set to the image center. The
+    psf image is reconstructed at the center of the image.
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    ngmix.Observation
+    """
+    import lsst.geom as geom
+    dims = exp.image.array.shape
+
+    row, col = (np.array(dims)-1)/2
+    cen = geom.Point2D(x=col, y=row)
+
+    wcs = exp.getWcs()
+    dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
+    matrix = dm_jac.getLinear().getMatrix()
+    jac = ngmix.Jacobian(
+        x=col,
+        y=row,
+        dudx=matrix[1, 1],
+        dudy=-matrix[1, 0],
+        dvdx=matrix[0, 1],
+        dvdy=-matrix[0, 0],
+    )
+
+    weight = np.zeros(dims)
+    w = np.where(exp.variance.array > 0)
+    weight[w] = 1.0/exp.variance.array[w]
+
+    psf_obj = exp.getPsf()
+    psf_image = psf_obj.computeKernelImage(cen).array
+
+    psf_cen = (np.array(psf_image.shape)-1.0)/2.0
+
+    psf_jac = jac.copy()
+    psf_jac.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    psf_err = psf_image.max()*0.0001
+    psf_weight = psf_image*0 + 1.0/psf_err**2
+
+    psf_obs = ngmix.Observation(
+        image=psf_image,
+        weight=psf_weight,
+        jacobian=psf_jac,
+    )
+
+    return ngmix.Observation(
+        image=exp.image.array,
+        weight=weight,
+        bmask=exp.mask.array,
+        jacobian=jac,
+        psf=psf_obs,
+    )
