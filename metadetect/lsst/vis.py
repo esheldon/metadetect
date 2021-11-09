@@ -262,3 +262,34 @@ def show_mbexp_demo(mbexp):
             axs[ist, iq].set_title(f'Stretch {stretch}, Q {q}')
 
     mplt.show()
+
+
+def show_multi_mbobs(mbobs):
+    """
+    Show images from a ngmix.MultiBandObsList
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The data
+    """
+    import matplotlib.pyplot as mplt
+
+    nband = len(mbobs)
+
+    types = ['image', 'weight', 'bmask']
+    ntypes = len(types)
+    fig, axs = mplt.subplots(nrows=ntypes, ncols=nband)
+
+    for iband, obslist in enumerate(mbobs):
+
+        obs = obslist[0]
+
+        for itype, type in enumerate(types):
+
+            im = getattr(obs, type)
+
+            axs[iband, itype].imshow(im)
+            axs[iband, itype].set_title(f'band {iband} {type}')
+
+    mplt.show()

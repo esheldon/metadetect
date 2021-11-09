@@ -2,9 +2,10 @@ EXPAND_RAD = 16  # confirm with Matt
 AP_RAD = 1
 
 
-def apply_apodized_masks(mbobs, masks):
+def apply_apodized_masks(mbobs, masks, wcs):
     """
-    Apply bright object masks with apodization and expansion
+    Apply bright object masks with apodization and expansion.  The .image,
+    .noise and .bmask for each observation are modified in place
 
     Parameters
     ----------
@@ -12,6 +13,8 @@ def apply_apodized_masks(mbobs, masks):
         The data to mask.  The .bmask are modified in place
     masks: structured array
         Array with fields ra, dec, radius_pixels
+    wcs: A stack wcs object
+        For converting ra, dec to x, y
     """
     import lsst.afw.image as afw_image
     from ..masking import apply_foreground_masking_corrections
@@ -20,8 +23,6 @@ def apply_apodized_masks(mbobs, masks):
     afw_image.Mask.addMaskPlane('BRIGHT_EXPANDED')
     bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
     bright_expanded = afw_image.Mask.getPlaneBitMask('BRIGHT_EXPANDED')
-
-    wcs = mbobs[0][0].exposure.getWcs()
 
     xm, ym = wcs.skyToPixelArray(
         ra=masks['ra'], dec=masks['dec'], degrees=True,
