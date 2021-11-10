@@ -536,3 +536,224 @@ def trim_odd_image(im):
         new_im = im
 
     return new_im
+
+
+def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
+    """
+    copy ngmix.Observation data into an Exposure. The pixel data are copied,
+    and the weight is converted to variance.
+
+    If a complex WCS or PSF is needed, it is better to send an existing one.
+    The wcs will not be altered by this code.
+
+    The psf image can be optionally copied in as a KernelPsf
+
+    Parameters
+    ----------
+    obs: ngmix.Observation
+        The observation data
+    exp: lsst.afw.image.ExposureF, optional
+        Optional exposure into which the data are to copied.  Note the psf is
+        not copied unless copy_psf is set to True.  The wcs is not modified.
+    copy_mask_from: bool, optional
+        Copy from this mask into the exp mask.
+    copy_psf: bool, optional
+        If set to True, the psf is copied in as a KernelPsf(FixedKernel)
+
+    Returns
+    -------
+    exp: lsst.afw.image.ExposureF
+        Either a reference to the input exposure, or a new one if it was
+        created internally.
+    """
+    from lsst.meas.algorithms import KernelPsf
+    from lsst.afw.math import FixedKernel
+    import lsst.afw.image as afw_image
+
+    if exp is None:
+        ny, nx = obs.image.shape
+        exp = afw_image.ExposureF(nx, ny)
+
+    exp.image.array[:, :] = obs.image
+
+    exp.variance.array[:, :] = np.inf
+
+    if copy_mask_from == 'bmask':
+        mask = obs.bmask
+    elif copy_mask_from == 'ormask':
+        mask = obs.ormask
+    else:
+        raise RuntimeError(
+            f"copy_mask_from '{copy_mask_from}' should be 'bmask' or 'ormask'"
+        )
+    exp.mask.array[:, :] = mask
+
+    w = np.where(obs.weight > 0)
+    exp.variance.array[w] = 1.0/obs.weight[w]
+
+    if copy_psf:
+        psf_image = obs.psf.image
+        stack_psf = KernelPsf(
+            FixedKernel(
+                afw_image.ImageD(psf_image.astype(float))
+            )
+        )
+        exp.setPsf(stack_psf)
+
+    return exp
+
+
+def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
+    """
+    convert an exposure to an observation.
+
+    The origin for the jacobian is set to the image center. The
+    psf image is reconstructed at the center of the image.
+
+    Optionally, the original exposure can be stored in .meta so we can reverse
+    the process and go back to an exposure, copying in any changes to the image
+    data
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.ExposureF
+        The exposure
+    copy_mask_to: str
+        Copy from the exp.mask into this attribute of the Observation.  For
+        example, if set to 'ormask', the exposure mask is copied to the
+        obs.ormask and obs.bmask is set to zero.
+    store_exp: bool, optional
+        If set to True, store the original exposure in .meta['exposure']
+
+    Returns
+    -------
+    ngmix.Observation
+    """
+    import lsst.geom as geom
+
+    wcs = exp.getWcs()
+    bbox = exp.getBBox()
+
+    # this is to be consistent with the coadd code
+    cen_integer, _ = get_integer_center(
+        wcs=wcs,
+        bbox=bbox,
+    )
+    cen = geom.Point2D(cen_integer)
+
+    dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
+    matrix = dm_jac.getLinear().getMatrix()
+
+    jx = cen.x - bbox.beginX
+    jy = cen.y - bbox.beginY
+    jac = ngmix.Jacobian(
+        x=jx,
+        y=jy,
+        dudx=matrix[1, 1],
+        dudy=-matrix[1, 0],
+        dvdx=matrix[0, 1],
+        dvdy=-matrix[0, 0],
+    )
+
+    dims = exp.image.array.shape
+    weight = np.zeros(dims)
+    w = np.where(exp.variance.array > 0)
+    weight[w] = 1.0/exp.variance.array[w]
+
+    psf_obj = exp.getPsf()
+    psf_image = psf_obj.computeKernelImage(cen).array
+
+    assert psf_image.shape[0] == psf_image.shape[1], 'psf is not square'
+    assert psf_image.shape[0] % 2 != 0, 'psf dims are not odd'
+    psf_cen = (np.array(psf_image.shape)-1.0)/2.0
+
+    psf_jac = jac.copy()
+    psf_jac.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    psf_err = psf_image.max()*0.0001
+    psf_weight = psf_image*0 + 1.0/psf_err**2
+
+    psf_obs = ngmix.Observation(
+        image=psf_image,
+        weight=psf_weight,
+        jacobian=psf_jac,
+    )
+
+    if copy_mask_to == 'ormask':
+        ormask = exp.mask.array
+        bmask = ormask * 0
+    elif copy_mask_to == 'bmask':
+        bmask = exp.mask.array
+        ormask = bmask * 0
+    else:
+        raise RuntimeError(
+            f"copy_mask_to '{copy_mask_to}' should be 'bmask' or 'ormask'"
+        )
+
+    meta = {}
+    if store_exp:
+        meta['exposure'] = exp
+
+    return ngmix.Observation(
+        image=exp.image.array,
+        weight=weight,
+        bmask=bmask,
+        ormask=ormask,
+        jacobian=jac,
+        psf=psf_obs,
+        meta=meta,
+    )
+
+
+def get_integer_center(wcs, bbox):
+    """
+    get the pixel and sky center of the coadd within the bbox
+    The pixel center is forced to be integer
+
+    Parameters
+    -----------
+    wcs: DM wcs
+        The wcs for the exposure
+    bbox: geom.Box2I
+        The bounding box for the exposure, possibly within a larger wcs system
+
+    Returns
+    -------
+    pixcen, skycen:
+        pixcen as Point2I, skycen as SpherePoint
+    """
+    from lsst.geom import Point2D, Point2I
+
+    # force integer location
+    pixcen = Point2I(bbox.getCenter())
+    skycen = wcs.pixelToSky(Point2D(pixcen))
+
+    return pixcen, skycen
+
+
+def get_stats_mask(exp):
+    """
+    Get a stats mask for use in getting image statistics.  If BRIGHT
+    is found in the mask plane it is added to the usual
+
+    ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    A list of mask planes
+    """
+
+    # these will be ignored when finding the image standard deviation
+    # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
+
+    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
+
+    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
+        stats_mask += ['BRIGHT']
+
+    return stats_mask
