@@ -1,5 +1,5 @@
-EXPAND_RAD = 16  # confirm with Matt
-AP_RAD = 1
+EXPAND_RAD = 16
+AP_RAD = 1.5
 
 
 def apply_apodized_masks(mbobs, masks, wcs):

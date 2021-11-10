@@ -82,7 +82,7 @@ def test_apply_apodize_masks(show=False):
             obslist.append(obs)
             mbobs.append(obslist)
 
-            noise_images.append(noise_image)
+            noise_images.append(noise_image.copy())
 
         metadetect.lsst.masking.apply_apodized_masks(
             mbobs=mbobs, masks=masks, wcs=wcs,
@@ -113,12 +113,20 @@ def test_apply_apodize_masks(show=False):
                 assert np.all(obs.bmask[w] & bright != 0)
                 assert np.all(obs.weight[w] == 0.0)
                 assert np.all(obs.image[w] != exp.image.array[w])
-                assert np.all(obs.noise[w] == noise_image[w])
+                assert np.all(obs.noise[w] != noise_image[w])
 
                 # mask is expanded and bit is set, but data are not modified in
                 # the expanded area
                 w = np.where(r2 < (rr + EXPAND_RAD)**2)
                 assert np.all(obs.bmask[w] & bright_expanded != 0)
+
+                w = np.where(
+                    (obs.bmask & bright == 0) &
+                    (obs.bmask & bright_expanded != 0)
+                )
+                assert np.all(obs.image[w] == exp.image.array[w])
+                assert np.all(obs.noise[w] == noise_image[w])
+                assert np.all(obs.weight[w] != 0)
 
 
 if __name__ == '__main__':

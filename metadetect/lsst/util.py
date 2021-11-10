@@ -555,6 +555,8 @@ def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
     exp: lsst.afw.image.ExposureF, optional
         Optional exposure into which the data are to copied.  Note the psf is
         not copied unless copy_psf is set to True.  The wcs is not modified.
+    copy_mask_from: bool, optional
+        Copy from this mask into the exp mask.
     copy_psf: bool, optional
         If set to True, the psf is copied in as a KernelPsf(FixedKernel)
 
@@ -608,7 +610,7 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     The origin for the jacobian is set to the image center. The
     psf image is reconstructed at the center of the image.
 
-    Optionall, the original exposure can be stored in .meta so we can reverse
+    Optionally, the original exposure can be stored in .meta so we can reverse
     the process and go back to an exposure, copying in any changes to the image
     data
 
@@ -617,8 +619,9 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     exp: lsst.afw.image.ExposureF
         The exposure
     copy_mask_to: str
-        If set to 'ormask', the exposure mask is copied to the
-        ormask and bmask is set to zero.
+        Copy from the exp.mask into this attribute of the Observation.  For
+        example, if set to 'ormask', the exposure mask is copied to the
+        obs.ormask and obs.bmask is set to zero.
     store_exp: bool, optional
         If set to True, store the original exposure in .meta['exposure']
 
@@ -629,28 +632,30 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     import lsst.geom as geom
 
     wcs = exp.getWcs()
+    bbox = exp.getBBox()
 
     # this is to be consistent with the coadd code
     cen_integer, _ = get_integer_center(
         wcs=wcs,
-        bbox=exp.getBBox(),
+        bbox=bbox,
     )
     cen = geom.Point2D(cen_integer)
 
     dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
     matrix = dm_jac.getLinear().getMatrix()
 
-    dims = exp.image.array.shape
-    jrow, jcol = (np.array(dims)-1)/2
+    jx = cen.x - bbox.beginX
+    jy = cen.y - bbox.beginY
     jac = ngmix.Jacobian(
-        x=jcol,
-        y=jrow,
+        x=jx,
+        y=jy,
         dudx=matrix[1, 1],
         dudy=-matrix[1, 0],
         dvdx=matrix[0, 1],
         dvdy=-matrix[0, 0],
     )
 
+    dims = exp.image.array.shape
     weight = np.zeros(dims)
     w = np.where(exp.variance.array > 0)
     weight[w] = 1.0/exp.variance.array[w]
@@ -658,6 +663,8 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     psf_obj = exp.getPsf()
     psf_image = psf_obj.computeKernelImage(cen).array
 
+    assert psf_image.shape[0] == psf_image.shape[1], 'psf is not square'
+    assert psf_image.shape[0] % 2 != 0, 'psf dims are not odd'
     psf_cen = (np.array(psf_image.shape)-1.0)/2.0
 
     psf_jac = jac.copy()
