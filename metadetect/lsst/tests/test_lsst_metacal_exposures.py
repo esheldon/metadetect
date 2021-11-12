@@ -38,11 +38,13 @@ def test(ntrial=10, show=False):
         )
         exp = sim_data['band_data']['i'][0]
         nexp = deepcopy(exp)
+        # copy doesn't copy the psf
         nexp.setPsf(exp.getPsf())
         assert nexp.getWcs() == exp.getWcs()
 
         obs = exp2obs(exp)
         assert np.all(obs.image == exp.image.array)
+        assert np.all(obs.weight == 1/exp.variance.array)
         cen, _ = get_integer_center(exp.getWcs(), exp.getBBox(), as_double=True)
 
         psf_obj = exp.getPsf()
@@ -70,8 +72,6 @@ def test(ntrial=10, show=False):
         nexp.image.array[:, :] = noise * rng.normal(size=exp.image.array.shape)
         assert np.all(exp.image.array != nexp.image.array)
 
-        # nobs = exp2obs(nexp)
-        # obs.noise = nobs.image
         obs.noise = nexp.image.array
 
         types = ('noshear', '1p', '1m', '2p', '2m')
@@ -88,9 +88,13 @@ def test(ntrial=10, show=False):
 
             timage = mdict_obs[key].image
             eimage = mdict_exp[key].image.array
+
+            tweight = mdict_obs[key].weight
+            eweight = 1/mdict_exp[key].variance.array
             if show:
                 compare_images(timage, eimage, label1='obs', label2='exp')
-            assert np.allclose(timage, eimage)
+            assert np.all(timage == eimage)
+            assert np.all(tweight == eweight)
 
 
 def compare_images(im1, im2, label1='im1', label2='im2'):
