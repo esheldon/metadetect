@@ -5,7 +5,7 @@ from .interpolate import interpolate_image_at_mask
 
 def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
     """Apply an apodization mask around the edge of the images in an mbobs to
-    prevemnt FFT artifacts.
+    prevent FFT artifacts.
 
     Parameters
     ----------
