@@ -3,6 +3,55 @@ import numpy as np
 from .interpolate import interpolate_image_at_mask
 
 
+def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
+    """Apply an apodization mask around the edge of the images in an mbobs to
+    prevemnt FFT artifacts.
+
+    Parameters
+    ----------
+    mbobs: ngmix.MultiBandObsList
+        The observations to mask
+    mask_bit_val: int
+        The bit to set in the bit mask for areas that are apodized.
+    ap_rad: float
+        When apodizing, the scale of the kernel. The total kernel goes from 0 to 1
+        over 6*ap_rad.
+    """
+    ap_mask = np.ones_like(mbobs[0][0].image)
+    _build_square_apodization_mask(ap_rad, ap_mask)
+
+    msk = ap_mask < 1
+    if np.any(msk):
+        for obslist in mbobs:
+            for obs in obslist:
+                # the pixels list will be reset upon exiting
+                with obs.writeable():
+                    obs.image *= ap_mask
+                    obs.noise *= ap_mask
+                    obs.bmask[msk] |= mask_bit_val
+                    if hasattr(obs, "mfrac"):
+                        obs.mfrac[msk] = 1.0
+                    if np.all(msk):
+                        obs.ignore_zero_weight = False
+                    obs.weight[msk] = 0.0
+
+
+@njit
+def _build_square_apodization_mask(ap_rad, ap_mask):
+    ap_range = int(6*ap_rad + 0.5)
+
+    ny, nx = ap_mask.shape
+    for y in range(min(ap_range+1, ny)):
+        for x in range(nx):
+            ap_mask[y, x] *= _ap_kern_kern(y, ap_range, ap_rad)
+            ap_mask[ny-1 - y, x] *= _ap_kern_kern(y, ap_range, ap_rad)
+
+    for y in range(ny):
+        for x in range(min(ap_range+1, nx)):
+            ap_mask[y, x] *= _ap_kern_kern(x, ap_range, ap_rad)
+            ap_mask[y, nx - 1 - x] *= _ap_kern_kern(x, ap_range, ap_rad)
+
+
 def apply_foreground_masking_corrections(
     *, mbobs, xm, ym, rm, method, mask_expand_rad,
     mask_bit_val, expand_mask_bit_val, interp_bit_val,
