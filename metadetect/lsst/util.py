@@ -417,12 +417,36 @@ def coadd_exposures(exposures):
     w = np.where(weight > 0)
     coadd_exp.variance.array[w] = 1/weight[w]
 
-    coadd_psf = KernelPsf(FixedKernel(afw_image.ImageD(psf_im)))
+    coadd_psf = get_stack_kernel_psf(psf_im)
     coadd_exp.setPsf(coadd_psf)
 
     coadd_exp.setWcs(exposures[0].getWcs())
 
     return coadd_exp
+
+
+def get_stack_kernel_psf(psf_image):
+    """
+    create a KernelPsf from the input image
+
+    Parameters
+    ----------
+    psf_image: array
+        The array data
+
+    Returns
+    -------
+    lsst.meas.algorithms.KernelPsf
+    """
+    import lsst.afw.image as afw_image
+    from lsst.meas.algorithms import KernelPsf
+    from lsst.afw.math import FixedKernel
+
+    return KernelPsf(
+        FixedKernel(
+            afw_image.ImageD(psf_image.astype(float))
+        )
+    )
 
 
 def coadd_mbobs(mbobs):
@@ -605,10 +629,14 @@ def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
 
 def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     """
-    convert an exposure to an observation.
+    convert an exposure to an observation.  The wcs is linearized
+    and the psf is reconstructed as a kernel image.
 
-    The origin for the jacobian is set to the image center. The
-    psf image is reconstructed at the center of the image.
+    The origin for the jacobian is set to the image center, relative to the
+    bounding box corner. The psf image is reconstructed at the center of the
+    image.
+
+    TODO do we ever need to do computeImage in this code?
 
     Optionally, the original exposure can be stored in .meta so we can reverse
     the process and go back to an exposure, copying in any changes to the image
@@ -629,31 +657,18 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     -------
     ngmix.Observation
     """
-    import lsst.geom as geom
 
     wcs = exp.getWcs()
     bbox = exp.getBBox()
 
     # this is to be consistent with the coadd code
-    cen_integer, _ = get_integer_center(
+    cen, _ = get_integer_center(
         wcs=wcs,
         bbox=bbox,
+        as_double=True,
     )
-    cen = geom.Point2D(cen_integer)
 
-    dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
-    matrix = dm_jac.getLinear().getMatrix()
-
-    jx = cen.x - bbox.beginX
-    jy = cen.y - bbox.beginY
-    jac = ngmix.Jacobian(
-        x=jx,
-        y=jy,
-        dudx=matrix[1, 1],
-        dudy=-matrix[1, 0],
-        dvdx=matrix[0, 1],
-        dvdy=-matrix[0, 0],
-    )
+    jac = get_jacobian(exp=exp, cen=cen)
 
     dims = exp.image.array.shape
     weight = np.zeros(dims)
@@ -705,7 +720,44 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     )
 
 
-def get_integer_center(wcs, bbox):
+def get_jacobian(exp, cen):
+    """
+    get an ngmix jacobian at the specified location
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.Exposure
+        The exposure data
+    cen: lsst.geom.Point2D
+        The position at which to get the jacobian.  It is also used as the
+        center for the ngmix jacobian as relative to the corner of the bounding
+        box.
+
+    Returns
+    -------
+    ngmix.Jacobian
+    """
+    import lsst.geom as geom
+
+    bbox = exp.getBBox()
+    wcs = exp.getWcs()
+
+    dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
+    matrix = dm_jac.getLinear().getMatrix()
+
+    jx = cen.x - bbox.beginX
+    jy = cen.y - bbox.beginY
+    return ngmix.Jacobian(
+        x=jx,
+        y=jy,
+        dudx=matrix[1, 1],
+        dudy=-matrix[1, 0],
+        dvdx=matrix[0, 1],
+        dvdy=-matrix[0, 0],
+    )
+
+
+def get_integer_center(wcs, bbox, as_double=False):
     """
     get the pixel and sky center of the coadd within the bbox
     The pixel center is forced to be integer
@@ -727,6 +779,9 @@ def get_integer_center(wcs, bbox):
     # force integer location
     pixcen = Point2I(bbox.getCenter())
     skycen = wcs.pixelToSky(Point2D(pixcen))
+
+    if as_double:
+        pixcen = Point2D(pixcen)
 
     return pixcen, skycen
 
