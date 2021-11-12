@@ -368,8 +368,6 @@ def coadd_exposures(exposures):
     """
     import lsst.geom as geom
     import lsst.afw.image as afw_image
-    from lsst.meas.algorithms import KernelPsf
-    from lsst.afw.math import FixedKernel
 
     wsum = 0.0
 
