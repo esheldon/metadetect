@@ -20,8 +20,8 @@ def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
     ap_mask = np.ones_like(mbobs[0][0].image)
     _build_square_apodization_mask(ap_rad, ap_mask)
 
-    msk = ap_mask < 1
-    if np.any(msk):
+    msk = np.where(ap_mask < 1)
+    if msk[0].size > 0:
         for obslist in mbobs:
             for obs in obslist:
                 # the pixels list will be reset upon exiting
@@ -31,7 +31,7 @@ def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
                     obs.bmask[msk] |= mask_bit_val
                     if hasattr(obs, "mfrac"):
                         obs.mfrac[msk] = 1.0
-                    if np.all(msk):
+                    if msk[0].size == obs.image.size:
                         obs.ignore_zero_weight = False
                     obs.weight[msk] = 0.0
 
