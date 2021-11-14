@@ -26,8 +26,8 @@ def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
             for obs in obslist:
                 # the pixels list will be reset upon exiting
                 with obs.writeable():
-                    obs.image *= ap_mask
-                    obs.noise *= ap_mask
+                    obs.image[msk] *= ap_mask[msk]
+                    obs.noise[msk] *= ap_mask[msk]
                     obs.bmask[msk] |= mask_bit_val
                     if hasattr(obs, "mfrac"):
                         obs.mfrac[msk] = 1.0
