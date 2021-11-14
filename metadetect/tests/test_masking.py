@@ -11,7 +11,122 @@ from ..masking import (
     _do_mask_foreground,
     make_foreground_bmask,
     apply_foreground_masking_corrections,
+    _build_square_apodization_mask,
+    apply_apodization_corrections,
 )
+
+
+def test_apply_apodization_corrections():
+    nband = 2
+    seed = 10
+    dims = (13, 13)
+
+    mbobs = ngmix.MultiBandObsList()
+    rng = np.random.RandomState(seed=seed)
+    for _ in range(nband):
+        image = rng.uniform(size=dims)
+        noise = rng.uniform(size=dims)
+        obs = ngmix.Observation(
+            image=image,
+            noise=noise,
+            weight=rng.uniform(size=dims),
+            bmask=np.zeros(dims, dtype=np.int32),
+            ormask=np.zeros(dims, dtype=np.int32),
+        )
+        obs.mfrac = rng.uniform(size=dims)
+        obslist = ngmix.ObsList()
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    apply_apodization_corrections(
+        mbobs=mbobs,
+        mask_bit_val=2**3,
+        ap_rad=1,
+    )
+
+    rng = np.random.RandomState(seed=seed)
+    for obslist in mbobs:
+        for obs in obslist:
+            msk = (obs.bmask & 2**3) != 0
+            image = rng.uniform(size=dims)
+            noise = rng.uniform(size=dims)
+            # we need to match these calls to the ones above
+            rng.uniform(size=dims)
+            rng.uniform(size=dims)
+
+            assert np.all(obs.mfrac[msk] == 1)
+            assert np.all(obs.weight[msk] == 0)
+
+            assert np.all(image[msk] != obs.image[msk])
+            assert np.all(image[~msk] == obs.image[~msk])
+            assert np.all(noise[msk] != obs.noise[msk])
+            assert np.all(noise[~msk] == obs.noise[~msk])
+
+
+def test_apply_apodization_corrections_all():
+    nband = 2
+    seed = 10
+    dims = (13, 13)
+    mbobs = ngmix.MultiBandObsList()
+    rng = np.random.RandomState(seed=seed)
+    for _ in range(nband):
+        image = rng.uniform(size=dims)
+        noise = rng.uniform(size=dims)
+        obs = ngmix.Observation(
+            image=image,
+            noise=noise,
+            weight=rng.uniform(size=dims),
+            bmask=np.zeros(dims, dtype=np.int32),
+            ormask=np.zeros(dims, dtype=np.int32),
+        )
+        obs.mfrac = rng.uniform(size=dims)
+        obslist = ngmix.ObsList()
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    apply_apodization_corrections(
+        mbobs=mbobs,
+        mask_bit_val=2**3,
+        ap_rad=4,
+    )
+
+    rng = np.random.RandomState(seed=seed)
+    for obslist in mbobs:
+        for obs in obslist:
+            assert np.all((obs.bmask & 2**3) != 0)
+
+
+@pytest.mark.parametrize("ap_rad", [0.5, 1, 1.2])
+def test_build_square_apodization_mask(ap_rad):
+    dim = 100
+    ap_mask = np.ones((dim, dim))
+    _build_square_apodization_mask(ap_rad, ap_mask)
+
+    ap_range = int(6*ap_rad + 0.5)
+    assert np.all(ap_mask[0:ap_range, :] < 1.0)
+    assert np.all(ap_mask[-ap_range:, :] < 1.0)
+    assert np.all(ap_mask[:, 0:ap_range] < 1.0)
+    assert np.all(ap_mask[:, -ap_range:] < 1.0)
+
+    assert np.all(ap_mask[ap_range, ap_range:-ap_range] == 1.0)
+    assert np.all(ap_mask[-ap_range-1, ap_range:-ap_range] == 1.0)
+    assert np.all(ap_mask[ap_range:-ap_range, ap_range] == 1.0)
+    assert np.all(ap_mask[ap_range:-ap_range, -ap_range-1] == 1.0)
+
+    if False:
+        import matplotlib.pyplot as plt
+        plt.figure()
+        plt.imshow(ap_mask)
+        import pdb
+        pdb.set_trace()
+
+
+def test_build_square_apodization_mask_all():
+    dim = 13
+    ap_mask = np.ones((dim, dim))
+    _build_square_apodization_mask(4, ap_mask)
+
+    assert np.all(ap_mask < 1.0)
 
 
 @pytest.mark.parametrize('row,col,radius_pixels,nrows,ncols,yes', [
