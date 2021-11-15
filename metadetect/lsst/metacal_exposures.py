@@ -5,11 +5,86 @@ import numpy as np
 from ngmix.metacal.metacal import _get_gauss_target_psf
 import galsim
 import lsst.afw.image as afw_image
-from .util import get_integer_center, get_jacobian, get_stack_kernel_psf
+from .util import (
+    get_integer_center, get_jacobian, get_stack_kernel_psf, get_mbexp,
+)
 
 DEFAULT_TYPES = ['noshear', '1p', '1m']
 INTERP = 'lanczos15'
 STEP = 0.01
+
+
+def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None):
+    """
+    Get metacal MultibandExposures with fixed noise
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposure data
+    noise_mbexp: lsst.afw.image.MultibandExposure
+        The exposure data with pure noise
+    types: list, optional
+        The metacal types, e.g. ('noshear', '1p', '1m')
+
+    Returns
+    -------
+    mdict, noise_mdict
+        dicts keyed by type, holding exposures
+    """
+
+    mdict = get_metacal_mbexps(mbexp=mbexp, types=types)
+    noise_mdict = get_metacal_mbexps(mbexp=noise_mbexp, types=types, rot=True)
+    for shear_type in types:
+        for exp, nexp in zip(mdict[shear_type], noise_mdict[shear_type]):
+            exp.image.array[:, :] += nexp.image.array[:, :]
+            exp.variance.array[:, :] *= 2
+
+    return mdict, noise_mdict
+
+
+def get_metacal_mbexps(mbexp, types=None, rot=False):
+    """
+    Get metacal MultibandExposures
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposure data
+    types: list, optional
+        The metacal types, e.g. ('noshear', '1p', '1m')
+    rot: bool, optional
+        If set to True, rotate before shearing, then rotate back.
+
+    Returns
+    -------
+    mdict
+        dict keyed by type, holding exposures
+    """
+
+    if types is None:
+        types = DEFAULT_TYPES
+
+    mdict_with_explists = {}
+    for shear_type in types:
+        mdict_with_explists[shear_type] = []
+
+    for iband, band in enumerate(mbexp.filters):
+        exp = mbexp[band]
+
+        this_mdict = get_metacal_exps(exp, types=types, rot=rot)
+
+        for shear_type in this_mdict:
+            exp = this_mdict[shear_type]
+            mdict_with_explists[shear_type].append(exp)
+
+    # now build the mbexp
+    mdict = {}
+    for shear_type in types:
+        # this properly copies over the wcs and filter label
+        mdict[shear_type] = get_mbexp(mdict_with_explists[shear_type])
+
+    return mdict
 
 
 def get_metacal_exps_fixnoise(exp, noise_exp, types=None):
