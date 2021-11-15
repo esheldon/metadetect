@@ -225,7 +225,18 @@ def _get_metacal_exp(
 
 
 def get_shear_from_type(shear_type):
+    """
+    Convert a shear type string to a galsim Shear
 
+    Parameters
+    ----------
+    shear_type: str
+        One of ('noshear', '1p', '1m', '2p', '1m')
+
+    Returns
+    -------
+    galsim.Shear
+    """
     if shear_type == '1p':
         shear = galsim.Shear(g1=STEP)
     elif shear_type == '1m':
@@ -241,10 +252,40 @@ def get_shear_from_type(shear_type):
 
 
 def get_galsim_jacobian_wcs(exp, cen):
+    """
+    Get a galsim jacobian wcs object from the input exposure's
+    wcs and the input location
+
+    Parameters
+    -----------
+    exp: lsst.afw.image.Exposure*
+        An lsst exposure object
+    cen: lsst.afw.geom.Point2D
+        The point in the image at which to construct the wcs
+
+    Returns
+    -------
+    galsim.JacobianWCS
+    """
     jac = get_jacobian(exp=exp, cen=cen)
     return jac.get_galsim_wcs()
 
 
 def get_psf_kernel_image(exp, cen):
+    """
+    Reconstruct a kernel image for the input exposure at the specified
+    location
+
+    Parameters
+    -----------
+    exp: lsst.afw.image.Exposure*
+        An lsst exposure object
+    cen: lsst.afw.geom.Point2D
+        The point in the image at which to construct the wcs
+
+    Returns
+    -------
+    image as a numpy array
+    """
     psf_obj = exp.getPsf()
     return psf_obj.computeKernelImage(cen).array
