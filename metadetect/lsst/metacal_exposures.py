@@ -228,7 +228,7 @@ def get_shear_from_type(shear_type):
     Parameters
     ----------
     shear_type: str
-        One of ('noshear', '1p', '1m', '2p', '1m')
+        One of ('1p', '1m', '2p', '1m')
 
     Returns
     -------

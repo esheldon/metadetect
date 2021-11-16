@@ -743,6 +743,8 @@ def get_jacobian(exp, cen):
     dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
     matrix = dm_jac.getLinear().getMatrix()
 
+    # ESS reverse engineered this convention mismatch.  No documentation
+    # was found.  Don't change this unless you know what you are doing.
     jx = cen.x - bbox.beginX
     jy = cen.y - bbox.beginY
     return ngmix.Jacobian(
