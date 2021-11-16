@@ -12,7 +12,7 @@ import ngmix
 from ngmix.metacal import get_all_metacal
 
 
-def test(ntrial=10, show=False):
+def test_metacal_exps(ntrial=10, show=False):
     seed = None
     dim = 250
     buff = 50
@@ -100,7 +100,7 @@ def test(ntrial=10, show=False):
             assert np.all(tweight == eweight)
 
 
-def test_mbexp(ntrial=10, show=False):
+def test_metacal_mbexp(ntrial=10, show=False):
     seed = None
     dim = 250
     buff = 50
