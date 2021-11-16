@@ -171,9 +171,6 @@ def get_metacal_exps(exp, types=None, rot=False):
         galsim.Deconvolve(psf_int),
     )
 
-    # TODO we may not need to deconvolve the pixel from the psf
-    # interpolated psf deconvolved from pixel.  This is what
-    # we dilate, shear, etc and reconvolve the image by
     psf_int_nopix = galsim.Convolve([psf_int, pixel_inv])
 
     gauss_psf = _get_gauss_target_psf(psf_int_nopix, flux=psf_flux)
