@@ -198,5 +198,5 @@ def compare_images(im1, im2, label1='im1', label2='im2'):
 
 
 if __name__ == '__main__':
-    # test(show=False)
-    test_mbexp(show=True)
+    # test_metacal_exps(show=False)
+    test_metacal_mbexp(show=True)
