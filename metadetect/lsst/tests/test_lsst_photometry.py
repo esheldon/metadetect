@@ -114,8 +114,7 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     assert len(res[flux_name].shape) == 1
 
 
-@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
-def test_lsst_photometry_deblend_multiband(deblender):
+def test_lsst_photometry_deblend_multiband():
     rng = np.random.RandomState(seed=99)
 
     bands = ('g', 'r', 'i')
@@ -143,7 +142,6 @@ def test_lsst_photometry_deblend_multiband(deblender):
     config = {
         'meas_type': 'pgauss',
         'deblend': True,
-        'deblender': deblender,
     }
 
     res = lsst_phot.run_photometry(
