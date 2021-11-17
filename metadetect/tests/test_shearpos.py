@@ -43,7 +43,7 @@ def test_shear_pos(show=False):
     cols = cols.ravel()
 
     for sstr in shears:
-        srows, scols = shearpos.shear_positions(
+        srows, scols = shearpos.shear_positions_obs(
             rows,
             cols,
             sstr,
@@ -54,7 +54,7 @@ def test_shear_pos(show=False):
         if show:
             _show_pos(rows, cols, srows, scols, title=sstr)
 
-        crows, ccols = shearpos.unshear_positions(
+        crows, ccols = shearpos.unshear_positions_obs(
             srows,
             scols,
             sstr,
@@ -111,7 +111,7 @@ def test_shear_pos_image(show=False):
         gsim_sheared = gsim.copy()
         ii_sheared.drawImage(image=gsim_sheared)
 
-        srow, scol = shearpos.shear_positions(
+        srow, scol = shearpos.shear_positions_obs(
             row,
             col,
             sstr,

@@ -6,7 +6,40 @@ from ngmix.metacal import DEFAULT_STEP
 SKIP_SHEARS = ['noshear', '1p_psf', '1m_psf', '2p_psf', '2m_psf']
 
 
-def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
+def shear_positions_obs(rows, cols, shear_str, obs, step=DEFAULT_STEP):
+    """
+    unshear the input row and column positions
+
+    Parameters
+    ----------
+    rows: array
+        array of row values in sheared coordinates.  Should be pixels
+        in the image, not in a larger system
+    cols: array
+        array of col values in sheared coordinates.  Should be pixels
+        in the image, not in a larger system
+    shear_str: string
+        'noshear', '1p', '1m', '2p', '2m'
+    obs: ngmix.Observation
+        The observation data
+    step: float
+        shear step for metacal, default 0.01
+
+    Returns
+    -------
+    rows_sheared, cols_sheared:
+        rows and cols in the sheared coordinates
+    """
+    jac = obs.jacobian
+    dims = obs.image.shape
+
+    return shear_positions(
+        rows=rows, cols=cols, shear_str=shear_str, jac=jac, dims=dims,
+        step=step,
+    )
+
+
+def shear_positions(rows, cols, shear_str, jac, dims, step=DEFAULT_STEP):
     """
     unshear the input row and column positions
 
@@ -22,6 +55,8 @@ def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+    dims: (nrows, ncols)
+        The shape of the image data
     step: float
         shear step for metacal, default 0.01
 
@@ -39,13 +74,9 @@ def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     # this is the matrix that does shearing in u, v
     a = shear.getMatrix()
 
-    # this is the jacobian that deals with the WCS
-    jac = obs.jacobian
-
     # we need the canonical image center in (u, v) for undoing the
     # shearing
 
-    dims = obs.image.shape
     row_cen = (dims[0] - 1) / 2
     col_cen = (dims[1] - 1) / 2
 
@@ -71,7 +102,39 @@ def shear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     return rows_sheared, cols_sheared
 
 
-def unshear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
+def unshear_positions_obs(rows, cols, shear_str, obs, step=DEFAULT_STEP):
+    """
+    unshear the input row and column positions
+
+    Parameters
+    ----------
+    rows: array
+        array of row values in sheared coordinates
+    cols: array
+        array of col values in sheared coordinates
+    shear_str: string
+        'noshear', '1p', '1m', '2p', '2m'
+    obs: ngmix.Observation
+        The observation data
+    step: float, optional
+        shear step for metacal, default 0.01
+
+    Returns
+    -------
+    rows_unsheared, cols_unsheared:
+        rows and cols in the unsheared coordinates
+    """
+
+    jac = obs.jacobian
+    dims = obs.image.shape
+
+    return unshear_positions(
+        rows=rows, cols=cols, shear_str=shear_str, jac=jac, dims=dims,
+        step=step,
+    )
+
+
+def unshear_positions(rows, cols, shear_str, jac, dims, step=DEFAULT_STEP):
     """
     unshear the input row and column positions
 
@@ -85,6 +148,8 @@ def unshear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
         'noshear', '1p', '1m', '2p', '2m'
     jac: ngmix.Jacobian
         Describes the wcs
+    dims: (nrows, ncols)
+        The shape of the image data
     step: float
         shear step for metacal, default 0.01
 
@@ -102,13 +167,9 @@ def unshear_positions(rows, cols, shear_str, obs, step=DEFAULT_STEP):
     # this is the matrix that undoes shearing in u, v
     ainv = np.linalg.inv(shear.getMatrix())
 
-    # this is the jacobian that deals with the WCS
-    jac = obs.jacobian
-
     # we need the canonical image center in (u, v) for undoing the
     # shearing
 
-    dims = obs.image.shape
     row_cen = (dims[0] - 1) / 2
     col_cen = (dims[1] - 1) / 2
 

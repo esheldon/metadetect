@@ -812,3 +812,56 @@ def get_stats_mask(exp):
         stats_mask += ['BRIGHT']
 
     return stats_mask
+
+
+def extract_multiband_coadd_data(coadd_data_list):
+    """
+    Convert a list of coadd data for a set of bands into MultibandExposure data
+
+    Side Effects
+    ------------
+    The masks are zerod, but the original ormasks are returned in the 'ormask'
+    item.
+
+    Parameters
+    ----------
+    coadd_data_list: list of dict
+        Each should be the output of descwl_coadd.make_coadd for a given band.
+
+    Returns
+    -------
+    data: dict
+        With items mbexp, noise_mbexp, mfrac_mbexp, ormasks
+
+        ormasks is a copy of .mask.array for each exp; the mask.array
+        are zerod for the exposures
+    """
+
+    exps = []
+    noise_exps = []
+    mfrac_exps = []
+    ormasks = []
+    for band, coadd_data in enumerate(coadd_data_list):
+        exp = coadd_data['coadd_exp']
+        noise_exp = coadd_data['coadd_noise_exp']
+        mfrac_exp = coadd_data['coadd_mfrac_exp']
+
+        ormasks.append(exp.mask.array.copy())
+        exp.mask.array[:, :] = 0
+        noise_exp.mask.array[:, :] = 0
+        mfrac_exp.mask.array[:, :] = 0
+
+        exps.append(exp)
+        noise_exps.append(noise_exp)
+        mfrac_exps.append(mfrac_exp)
+
+    mbexp = get_mbexp(exps)
+    noise_mbexp = get_mbexp(noise_exps)
+    mfrac_mbexp = get_mbexp(mfrac_exps)
+
+    return {
+        'mbexp': mbexp,
+        'noise_mbexp': noise_mbexp,
+        'mfrac_mbexp': mfrac_mbexp,
+        'ormasks': ormasks,
+    }

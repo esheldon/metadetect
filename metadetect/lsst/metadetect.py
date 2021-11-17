@@ -27,7 +27,6 @@ from lsst.meas.algorithms import KernelPsf
 from lsst.afw.math import FixedKernel
 import lsst.afw.image as afw_image
 
-from ..mfrac import measure_mfrac
 from .. import fitting
 from .. import shearpos
 from .. import procflags
@@ -39,6 +38,7 @@ from . import measure
 from . import measure_scarlet
 from . import measure_shredder
 from .metacal_exposures import get_metacal_mbexps_fixnoise
+from .util import get_integer_center, get_jacobian
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -91,20 +91,17 @@ def run_metadetect(
     ormask = combine_ormasks(mbexp, ormasks)
     # TODO do proper mfrac
     # wgts = [1.0]*len(mbexp)
-    # mfrac, wgts = get_mfrac_mbexp(mfrac_mbexp)
+    mfrac, wgts = get_mfrac_mbexp(mfrac_mbexp)
 
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
 
-    # TODO we get psf stats for the entire coadd, not location dependent
-    # for each object on original image
-    # psf_stats = fit_original_psfs_mbexp(
-    #     psf_config=config['psf'],
-    #     mbexp=mbexp,
-    #     wgts=wgts,
-    #     rng=rng,
-    # )
-    #
+    psf_stats = fit_original_psfs_mbexp(
+        mbexp=mbexp,
+        wgts=wgts,
+        rng=rng,
+    )
+
     fitter = get_fitter(config, rng=rng)
 
     mdict, noise_mdict = get_metacal_mbexps_fixnoise(
@@ -123,16 +120,18 @@ def run_metadetect(
         )
 
         if res is not None:
-            print('TODO: ADAPT add_noshear_pos TO EXPOSURE DATA')
-            # add_noshear_pos(config, res, shear_str, obs)
+            band = mcal_mbexp.filters[0]
+            exp = mcal_mbexp[band]
+            add_noshear_pos_exp(res=res, shear_str=shear_str, exp=exp)
+
             print('TODO: ADAPT ADD_FRAC TO EXPOSURE DATA')
-            # add_mfrac(config, mfrac, res, obs)
+            add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
             add_ormask(ormask, res)
-            # add_original_psf(psf_stats, res)
+            add_original_psf(psf_stats, res)
 
         result[shear_str] = res
 
-    return None
+    return result
 
 
 def run_metadetect_old(
@@ -198,7 +197,7 @@ def run_metadetect_old(
 
             if res is not None:
                 obs = mbobs[0][0]
-                add_noshear_pos(config, res, shear_str, obs)
+                add_noshear_pos_obs(config, res, shear_str, obs)
                 add_mfrac(config, mfrac, res, obs)
                 add_original_psf(psf_stats, res)
 
@@ -307,11 +306,36 @@ def detect_deblend_and_measure(
     return results
 
 
-def add_noshear_pos(config, res, shear_str, obs):
+def add_noshear_pos_exp(res, shear_str, exp):
     """
     add unsheared positions to the input result array
     """
+
+    dims = exp.image.array.shape
+
+    cen, _ = get_integer_center(
+        wcs=exp.getWcs(),
+        bbox=exp.getBBox(),
+        as_double=True,
+    )
+    jac = get_jacobian(exp=exp, cen=cen)
+
     rows_noshear, cols_noshear = shearpos.unshear_positions(
+        res['row'] - res['row0'],
+        res['col'] - res['col0'],
+        shear_str,
+        jac=jac,
+        dims=dims,
+    )
+    res['row_noshear'] = rows_noshear
+    res['col_noshear'] = cols_noshear
+
+
+def add_noshear_pos_obs(config, res, shear_str, obs):
+    """
+    add unsheared positions to the input result array
+    """
+    rows_noshear, cols_noshear = shearpos.unshear_positions_obs(
         res['row'] - res['row0'],
         res['col'] - res['col0'],
         shear_str,
@@ -321,23 +345,125 @@ def add_noshear_pos(config, res, shear_str, obs):
     res['col_noshear'] = cols_noshear
 
 
-def add_mfrac(config, mfrac, res, obs):
+def add_mfrac(config, mfrac, res, exp):
     """
     calculate and add mfrac to the input result array
     """
     if np.any(mfrac > 0):
+
         # we are using the positions with the metacal shear removed for
         # this.
-        res['mfrac'] = measure_mfrac(
+
+        cen, _ = get_integer_center(
+            wcs=exp.getWcs(),
+            bbox=exp.getBBox(),
+            as_double=True,
+        )
+        jac = get_jacobian(exp=exp, cen=cen)
+
+        res['mfrac'] = measure_weighted_mfrac(
             mfrac=mfrac,
             x=res['col_noshear'],
             y=res['row_noshear'],
-            box_sizes=res['stamp_size'],
-            obs=obs,
+            jac=jac,
             fwhm=config.get('mfrac_fwhm', None),
         )
     else:
         res['mfrac'] = 0
+
+
+def measure_weighted_mfrac(
+    *,
+    mfrac,
+    x,
+    y,
+    jac,
+    fwhm,
+):
+    """
+    Measure a Gaussian-weighted average of an image.
+
+    This function is meant to be used with images that represent the fraction
+    of single-epoch images that are masked in each pixel of a coadd. It
+    computes a Gaussian-weighted average of the image at a list of locations.
+
+    Parameters
+    ----------
+    mfrac : np.ndarray
+        The input image with which to compute the weighted averages.
+    x : np.ndarray
+        The input x/col values for the positions at which to compute the
+        weighted average.
+    y : np.ndarray
+        The input y/row values for the positions at which to compute the
+        weighted average.
+    box_sizes : np.ndarray
+        The size of the stamp to use to measure the weighted average. Should be
+        big enough to hold 2 * `fwhm`.
+    obs : ngmix.Observation
+        An observation that holds the weight maps, WCS Jacobian, etc
+        corresponding to `mfrac`.
+    fwhm : float or None
+        The FWHM of the Gaussian aperture in arcseconds. If None, a default
+        of 1.2 is used.
+
+    Returns
+    -------
+    mfracs : np.ndarray
+        The weighted averages at each input location.
+    """
+
+    if fwhm is None:
+        fwhm = 1.2
+
+    ny, nx = mfrac.shape
+
+    gauss_wgt = ngmix.GMixModel(
+        [0, 0, 0, 0, ngmix.moments.fwhm_to_T(fwhm), 1],
+        'gauss',
+    )
+    sigma = ngmix.moments.fwhm_to_sigma(fwhm)
+    box_rad = int(round(sigma * 5))
+
+    mfracs = []
+    for i in range(x.shape[0]):
+        x = int(np.floor(x[i] + 0.5))
+        y = int(np.floor(y[i] + 0.5))
+
+        xstart = x - box_rad
+        xend = x + box_rad + 1
+        ystart = y - box_rad
+        yend = y + box_rad + 1
+
+        if xstart < 0:
+            xstart = 0
+        if ystart < 0:
+            ystart = 0
+        if xend > nx:
+            xend = nx
+        if yend > ny:
+            yend = ny
+
+        sub_mfrac = mfrac[xstart:xend, ystart:yend]
+        if sub_mfrac.size == 0:
+            mfracs.append(1.0)
+        else:
+            cy, cx = (x[i] - xstart, y[i] - ystart)
+            this_jac = jac.copy()
+            this_jac.set_cen(row=cy, col=cx)
+
+            obs = ngmix.Observation(
+                image=sub_mfrac,
+                jacobian=this_jac,
+            )
+
+            stats = gauss_wgt.get_weighted_sums(obs, maxrad=box_rad)
+
+            # this is the weighted average in the image using the
+            # Gaussian as the weight.
+            mfracs.append(stats["sums"][5] / stats["wsum"])
+
+    return np.array(mfracs)
 
 
 def add_ormask(ormask, res):
@@ -596,42 +722,60 @@ def fit_original_psfs_mbobs(psf_config, mbobs, rng):
     }
 
 
-def fit_original_psfs_mbexp(psf_config, mbexp, rng, wgts):
+def fit_original_psfs_mbexp(mbexp, rng, wgts):
     """
     fit the original psfs at the center of the image and get the mean g1,g2,T
     across all bands
 
     This can fail and flags will be set, but we proceed
     """
+    from .measure import extract_psf_image
 
     assert len(wgts) == len(mbexp)
+    wsum = sum(wgts)
+    if wsum <= 0:
+        raise ValueError(f'got sum(wgts) = {wsum}')
+
+    fitter = ngmix.admom.AdmomFitter(rng=rng)
+    guesser = ngmix.guessers.GMixPSFGuesser(
+        rng=rng, ngauss=1, guess_from_moms=True,
+    )
+    runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4,)
 
     try:
-        # fitting.fit_all_psfs(mbobs=mbobs, psf_conf=psf_config, rng=rng)
-
         g1sum = 0.0
         g2sum = 0.0
         Tsum = 0.0
-        wsum = 0.0
 
-        for iexp, exp in enumerate(mbexp):
-            wt = wgts[iexp]
-            # res = obs.psf.meta['result']
-            res = None  # put measurement here
+        for exp, wgt in zip(mbexp, wgts):
+            cen, _ = get_integer_center(
+                wcs=exp.getWcs(),
+                bbox=exp.getBBox(),
+                as_double=True,
+            )
+            jac = get_jacobian(exp=exp, cen=cen)
+
+            psf_im = extract_psf_image(exp, cen)
+
+            psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+            psf_jacob = jac.copy()
+            psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+            psf_obs = ngmix.Observation(
+                psf_im,
+                jacobian=psf_jacob,
+            )
+            res = runner.go(obs=psf_obs)
+            if res['flags'] != 0:
+                raise BootPSFFailure('failed to fit psf')
+
+            g1, g2 = res['e']
             T = res['T']
-            if 'e' in res:
-                g1, g2 = res['e']
-            else:
-                g1, g2 = res['g']
 
-            g1sum += g1*wt
-            g2sum += g2*wt
-            Tsum += T*wt
-            wsum += wt
+            g1sum += g1*wgt
+            g2sum += g2*wgt
+            Tsum += T*wgt
 
-        if wsum <= 0.0:
-            raise BootPSFFailure('zero weights, could not '
-                                 'get mean psf properties')
         g1 = g1sum/wsum
         g2 = g2sum/wsum
         T = Tsum/wsum

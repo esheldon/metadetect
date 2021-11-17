@@ -337,7 +337,7 @@ class Metadetect(dict):
             newres['sx_col'] = cat['x']
             newres['sx_row'] = cat['y']
 
-            rows_noshear, cols_noshear = shearpos.unshear_positions(
+            rows_noshear, cols_noshear = shearpos.unshear_positions_obs(
                 newres['sx_row'],
                 newres['sx_col'],
                 shear_str,

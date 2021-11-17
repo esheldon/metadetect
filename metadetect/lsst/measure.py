@@ -58,11 +58,16 @@ def detect_and_deblend(
     sources, meas_task
         The sources and the measurement task
     """
+    import lsst.afw.image as afw_image
 
     if len(mbexp.singles) > 1:
         detexp = util.coadd_exposures(mbexp.singles)
     else:
         detexp = mbexp.singles[0]
+
+    # background measurement within the detection code requires ExposureF
+    if not isinstance(detexp, afw_image.ExposureF):
+        detexp = afw_image.ExposureF(detexp, deep=True)
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
