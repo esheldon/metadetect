@@ -39,7 +39,7 @@ from .util import MultibandNoiseReplacer, ContextNoiseReplacer
 from .defaults import DEFAULT_THRESH
 from .measure import (
     get_output,
-    get_ormask,
+    get_bmask,
     extract_psf_image,
     extract_obs,
 )
@@ -200,7 +200,7 @@ def measure(
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
     detexp: Exposure
-        The detection exposure, used for getting ormasks
+        The detection exposure, used for getting ored bmasks
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
@@ -224,7 +224,7 @@ def measure(
 
     wcs = detexp.getWcs()
     exp_bbox = detexp.getBBox()
-    ormasks = get_ormasks(sources=sources, exposure=detexp)
+    bmasks = get_bmasks(sources=sources, exposure=detexp)
 
     if show:
         vis.show_mbexp(mbexp, mess='Original')
@@ -265,7 +265,7 @@ def measure(
                             parent_mbexp=parent_mbexp, stamp_size=stamp_size,
                             source=parent,
                             fitter=fitter, wcs=wcs, exp_bbox=exp_bbox,
-                            ormask=ormasks[parent.getId()],
+                            bmask=bmasks[parent.getId()],
                             rng=rng, show=show,
                         )
                         these_results = [res]
@@ -284,7 +284,7 @@ def measure(
                         these_results = _process_blend(
                             blend_mbexp=blend_mbexp, children=children,
                             fitter=fitter, wcs=wcs, exp_bbox=exp_bbox,
-                            ormasks=ormasks,
+                            bmasks=bmasks,
                             rng=rng,
                             stamp_size=stamp_size,
                             Tvals=Tvals, show=show,
@@ -309,7 +309,7 @@ def measure(
                     results += [
                         get_output(wcs=wcs,
                                    source=source, res=object_res, psf_res=psf_res,
-                                   ormask=ormasks[source.getId()],
+                                   bmask=bmasks[source.getId()],
                                    stamp_size=stamp_size,
                                    exp_bbox=exp_bbox)
                         for source in tosend
@@ -324,7 +324,7 @@ def measure(
 
 
 def _process_parent(
-    parent_mbexp, stamp_size, source, fitter, wcs, rng, ormask, exp_bbox,
+    parent_mbexp, stamp_size, source, fitter, wcs, rng, bmask, exp_bbox,
     show=False,
 ):
 
@@ -349,14 +349,14 @@ def _process_parent(
     return get_output(
         wcs=wcs,
         source=source, res=this_res,
-        ormask=ormask,
+        bmask=bmask,
         stamp_size=stamp_size,
         exp_bbox=exp_bbox,
     )
 
 
 def _process_blend(
-    blend_mbexp, children, wcs, rng, Tvals, stamp_size, fitter, ormasks,
+    blend_mbexp, children, wcs, rng, Tvals, stamp_size, fitter, bmasks,
     exp_bbox, shredder_config, show=False,
 ):
     from shredder import ModelSubtractor
@@ -396,7 +396,7 @@ def _process_blend(
         results = [
             get_output(wcs=wcs,
                        source=source, res=this_res,
-                       ormask=ormasks[source.getId()],
+                       bmask=bmasks[source.getId()],
                        stamp_size=stamp_size,
                        exp_bbox=exp_bbox)
             for source in children
@@ -430,7 +430,7 @@ def _process_blend(
                 res = get_output(
                     wcs=wcs, source=child,
                     res=this_res,
-                    ormask=ormasks[child.getId()],
+                    bmask=bmasks[child.getId()],
                     stamp_size=stamp_size, exp_bbox=exp_bbox,
                 )
                 results.append(res)
@@ -878,9 +878,9 @@ def get_shredder_guess(
     return gm_guess
 
 
-def get_ormasks(sources, exposure):
+def get_bmasks(sources, exposure):
     """
-    get a list of all the ormasks for the sources
+    get a list of all the ored bmasks for the sources
 
     Parameters
     ----------
@@ -891,12 +891,12 @@ def get_ormasks(sources, exposure):
 
     Returns
     -------
-    list of ormask values
+    list of bmask values
     """
-    ormasks = {}
+    bmasks = {}
     for source in sources:
-        ormasks[source.getId()] = get_ormask(source=source, exposure=exposure)
-    return ormasks
+        bmasks[source.getId()] = get_bmask(source=source, exposure=exposure)
+    return bmasks
 
 
 def measure_one(obs, fitter):

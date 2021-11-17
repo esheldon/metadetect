@@ -41,7 +41,7 @@ from . import vis
 from . import util
 from .defaults import DEFAULT_THRESH
 from .measure import (
-    get_output_struct, get_ormask, extract_psf_image, AllZeroWeight,
+    get_output_struct, get_bmask, extract_psf_image, AllZeroWeight,
     find_and_set_center, CentroidFail,
 )
 
@@ -180,8 +180,8 @@ def measure(
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
     detexp: Exposure
-        The detection exposure, used for getting ormasks. This is returned
-        by lsst_measure_scarlet.detect_and_deblend
+        The detection exposure, used for getting or of masks over bands. This
+        is returned by lsst_measure_scarlet.detect_and_deblend
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
@@ -260,7 +260,7 @@ def _process_source(
 ):
     source_id = source.getId()
 
-    ormask = get_ormask(source=source, exposure=detexp)
+    bmask = get_bmask(source=source, exposure=detexp)
     exp_bbox = detexp.getBBox()
     nband = len(subtractor.filters)
 
@@ -332,7 +332,7 @@ def _process_source(
 
         res = get_output_scarlet(
             mbobs=mbobs, wcs=wcs, fitter=fitter, source=source, res=this_res,
-            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
+            bmask=bmask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
     return res
@@ -949,7 +949,7 @@ def _extract_weight(exp):
 
 
 def get_output_scarlet(
-    mbobs, wcs, fitter, source, res, ormask, stamp_size, exp_bbox,
+    mbobs, wcs, fitter, source, res, bmask, stamp_size, exp_bbox,
 ):
     """
     get the output structure, copying in results
@@ -981,6 +981,6 @@ def get_output_scarlet(
     output['ra'] = skypos.getRa().asDegrees()
     output['dec'] = skypos.getDec().asDegrees()
 
-    output['ormask'] = ormask
+    output['bmask'] = bmask
 
     return output

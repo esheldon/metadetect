@@ -190,15 +190,15 @@ def measure(
     wcs = mbexp.singles[0].getWcs()
     results = []
 
-    # ormasks will be different within the loop below due to the replacer
-    ormasks = get_ormasks(sources=sources, exposure=detexp)
+    # bmasks will be different within the loop below due to the replacer
+    bmasks = get_bmasks(sources=sources, exposure=detexp)
 
     for i, source in enumerate(sources):
 
         if source.get('deblend_nChild') != 0:
             continue
 
-        ormask = ormasks[i]
+        bmask = bmasks[i]
 
         flags = 0
         try:
@@ -239,7 +239,7 @@ def measure(
 
         res = get_output(
             wcs=wcs, source=source, res=this_res,
-            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
+            bmask=bmask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -292,9 +292,9 @@ def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
         obs.jacobian.set_cen(row=new_row, col=new_col)
 
 
-def get_ormasks(sources, exposure):
+def get_bmasks(sources, exposure):
     """
-    get a list of all the ormasks for the sources
+    get a list of all the bmasks for the sources
 
     Parameters
     ----------
@@ -305,18 +305,18 @@ def get_ormasks(sources, exposure):
 
     Returns
     -------
-    list of ormask values
+    list of bmask values
     """
-    ormasks = []
+    bmasks = []
     for source in sources:
-        ormask = get_ormask(source=source, exposure=exposure)
-        ormasks.append(ormask)
-    return ormasks
+        bmask = get_bmask(source=source, exposure=exposure)
+        bmasks.append(bmask)
+    return bmasks
 
 
-def get_ormask(source, exposure):
+def get_bmask(source, exposure):
     """
-    get ormask based on original peak position
+    get bmask based on original peak position
 
     Parameters
     ----------
@@ -327,7 +327,7 @@ def get_ormask(source, exposure):
 
     Returns
     -------
-    ormask value
+    bmask value
     """
     peak = source.getFootprint().getPeaks()[0]
     orig_cen = peak.getI()
@@ -666,7 +666,11 @@ def get_output_dtype():
         ('psfrec_g', 'f8', 2),
         ('psfrec_T', 'f8'),
 
+        # values from .mask of input exposures
+        ('bmask', 'i4'),
+        # values for ormask across all input exposures to coadd
         ('ormask', 'i4'),
+        # fraction of images going into a pixel that were masked
         ('mfrac', 'f4'),
     ]
 
@@ -696,7 +700,7 @@ def get_output_struct(res):
 
         if 'flags' in name:
             output[name] = NO_ATTEMPT
-        elif name == 'ormask':
+        elif name == 'bmask':
             output[name] = 0
         elif dtype[0] == 'i':
             output[name] = -9999
@@ -706,7 +710,7 @@ def get_output_struct(res):
     return output
 
 
-def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
+def get_output(wcs, source, res, bmask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -721,8 +725,8 @@ def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
         The wcs with which to determine the ra, dec
     res: ndarray
         The result from running metadetect.fitting.fit_mbobs_wavg
-    ormask: int
-        The ormask value at the location of this object
+    bmask: int
+        The bmask value at the location of this object
     stamp_size: int
         The stamp size used for the measurement
     exp_bbox: lsst.geom.Box2I
@@ -763,7 +767,7 @@ def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
     output['ra'] = skypos.getRa().asDegrees()
     output['dec'] = skypos.getDec().asDegrees()
 
-    output['ormask'] = ormask
+    output['bmask'] = bmask
 
     return output
 

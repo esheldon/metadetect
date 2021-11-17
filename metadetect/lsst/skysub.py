@@ -53,6 +53,24 @@ def subtract_sky_mbobs(mbobs, thresh=DEFAULT_THRESH):
             obs.image = exp.image.array
 
 
+def subtract_sky_mbexp(mbexp, thresh=DEFAULT_THRESH):
+    """
+    subtract sky
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
+    thresh: float
+        Threshold for detection
+    """
+    for exp in mbexp:
+        iterate_detection_and_skysub(
+            exposure=exp,
+            thresh=thresh,
+        )
+
+
 def iterate_detection_and_skysub(
     exposure, thresh, niter=2,
 ):

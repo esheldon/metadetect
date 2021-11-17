@@ -32,19 +32,110 @@ from .. import fitting
 from .. import shearpos
 from .. import procflags
 
-from .skysub import subtract_sky_mbobs
-from . import util
+from .skysub import subtract_sky_mbobs, subtract_sky_mbexp
 
 from .configs import get_config
 from . import measure
 from . import measure_scarlet
 from . import measure_shredder
-from . import measure_em
+from .metacal_exposures import get_metacal_mbexps_fixnoise
 
 LOG = logging.getLogger('lsst_metadetect')
 
 
 def run_metadetect(
+    mbexp, noise_mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show=False,
+):
+    """
+    Run metadetection on the input MultiBandObsList
+
+    Note that bright object masking must be applied outside of this function.
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
+    noise_mbexp: lsst.afw.image.MultibandExposure
+        The noise exposures for metacal
+    mfrac_mbexp: lsst.afw.image.MultibandExposure, optional
+        The fraction of masked exposures for the pixel; for coadds this is the
+        fraction of input images contributing to each pixel that were masked
+    ormasks: list of images, optional
+        A list of logical or masks, such as created for all images that went
+        into a coadd.
+
+        Note when coadding an ormask is created in the .mask attribute. But
+        this code expects the mask attribute for each exposure to be not an or
+        of all masks from the original exposures, but a mask indicating problem
+        areas such as bright objects or apodized edges.
+
+        In the future we expect the MultibandExposure to have an ormask attribute
+    rng: np.random.RandomState
+        Random number generator
+    config: dict, optional
+        Configuration for the fitter, metacal, psf, detect, deblend, Entries
+        in this dict override defaults; see lsst_configs.py
+    show: bool, optional
+        if set to True images will be shown
+
+    Returns
+    -------
+    result dict
+        This is keyed by shear string 'noshear', '1p', ... or None if there was
+        a problem doing the metacal steps; this only happens if the setting
+        metacal_psf is set to 'fitgauss' and the fitting fails
+    """
+
+    config = get_config(config)
+
+    ormask = combine_ormasks(mbexp, ormasks)
+    # TODO do proper mfrac
+    # wgts = [1.0]*len(mbexp)
+    # mfrac, wgts = get_mfrac_mbexp(mfrac_mbexp)
+
+    if config['subtract_sky']:
+        subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
+
+    # TODO we get psf stats for the entire coadd, not location dependent
+    # for each object on original image
+    # psf_stats = fit_original_psfs_mbexp(
+    #     psf_config=config['psf'],
+    #     mbexp=mbexp,
+    #     wgts=wgts,
+    #     rng=rng,
+    # )
+    #
+    fitter = get_fitter(config, rng=rng)
+
+    mdict, noise_mdict = get_metacal_mbexps_fixnoise(
+        mbexp=mbexp, noise_mbexp=noise_mbexp,
+    )
+
+    result = {}
+    for shear_str, mcal_mbexp in mdict.items():
+
+        res = detect_deblend_and_measure(
+            mbexp=mcal_mbexp,
+            fitter=fitter,
+            config=config,
+            rng=rng,
+            show=show,
+        )
+
+        if res is not None:
+            print('TODO: ADAPT add_noshear_pos TO EXPOSURE DATA')
+            # add_noshear_pos(config, res, shear_str, obs)
+            print('TODO: ADAPT ADD_FRAC TO EXPOSURE DATA')
+            # add_mfrac(config, mfrac, res, obs)
+            add_ormask(ormask, res)
+            # add_original_psf(psf_stats, res)
+
+        result[shear_str] = res
+
+    return None
+
+
+def run_metadetect_old(
     mbobs, rng, config=None, show=False,
 ):
     """
@@ -60,7 +151,7 @@ def run_metadetect(
         Random number generator
     config: dict, optional
         Configuration for the fitter, metacal, psf, detect, deblend, Entries
-        in this dict override defaults; see lsst_configs.py
+        in this dict override defaults; see metadetect.lsst.configs
     show: bool, optional
         if True images will be shown
 
@@ -79,14 +170,14 @@ def run_metadetect(
 
     # TODO we get psf stats for the entire coadd, not location dependent
     # for each object on original image
-    psf_stats = fit_original_psfs(
+    psf_stats = fit_original_psfs_mbobs(
         psf_config=config['psf'], mbobs=mbobs, rng=rng,
     )
 
     fitter = get_fitter(config, rng=rng)
 
-    ormask, bmask = get_ormask_and_bmask(mbobs)
-    mfrac = get_mfrac(mbobs)
+    ormask, bmask = get_ormask_and_bmask_mbobs(mbobs)
+    mfrac = get_mfrac_mbobs(mbobs)
 
     odict = get_all_metacal(
         metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
@@ -117,7 +208,7 @@ def run_metadetect(
 
 
 def detect_deblend_and_measure(
-    mbobs,
+    mbexp,
     fitter,
     config,
     rng,
@@ -150,13 +241,10 @@ def detect_deblend_and_measure(
         If set to True, show images during processing
     """
 
-    exposures = [obslist[0].exposure for obslist in mbobs]
-
     if config['deblend']:
 
         if config['deblender'] == 'scarlet':
             LOG.info('measuring with deblended stamps')
-            mbexp = util.get_mbexp(exposures)
             sources, detexp = measure_scarlet.detect_and_deblend(
                 mbexp=mbexp,
                 thresh=config['detect']['thresh'],
@@ -171,20 +259,9 @@ def detect_deblend_and_measure(
                 rng=rng,
                 show=show,
             )
-        elif config['deblender'] == 'em':
-            LOG.info('measuring with em')
-            assert len(exposures) == 1, 'one band for now'
-            assert fitter is None, 'no fitter for em'
-            results = measure_em.measure(
-                exp=exposures[0],
-                rng=rng,
-                thresh=config['detect']['thresh'],
-                show=show,
-            )
         else:
             LOG.info('measuring with the Shredder')
 
-            mbexp = util.get_mbexp(exposures)
             shredder_config = config['shredder_config']
 
             sources, detexp, Tvals = measure_shredder.detect_and_deblend(
@@ -210,11 +287,6 @@ def detect_deblend_and_measure(
     else:
 
         LOG.info('measuring with blended stamps')
-
-        mbexp = util.get_mbexp(exposures)
-
-        for obslist in mbobs:
-            assert len(obslist) == 1, 'no multiepoch'
 
         sources, detexp = measure.detect_and_deblend(
             mbexp=mbexp,
@@ -266,6 +338,19 @@ def add_mfrac(config, mfrac, res, obs):
         )
     else:
         res['mfrac'] = 0
+
+
+def add_ormask(ormask, res):
+    """
+    copy in ormask values using the row, col positions
+    """
+    for i in range(res.size):
+        row_diff = res['row'][i] - res['row0'][i]
+        col_diff = res['col'][i] - res['col0'][i]
+        local_row = int(np.floor(row_diff + 0.5))
+        local_col = int(np.floor(col_diff + 0.5))
+
+        res['ormask'][i] = ormask[local_row, local_col]
 
 
 def add_original_psf(psf_stats, res):
@@ -366,7 +451,22 @@ def get_all_metacal(metacal_config, mbobs, rng, show=False):
     return odict
 
 
-def get_ormask_and_bmask(mbobs):
+def combine_ormasks(mbexp, ormasks):
+    if ormasks is None:
+        bands = mbexp.filters
+        dims = mbexp[bands[0]].image.array.shape
+        ormask = np.zeros(dims, dtype='i4')
+    else:
+        for imask, tormask in enumerate(ormasks):
+            if imask == 0:
+                ormask = tormask.copy()
+            else:
+                ormask |= tormask
+
+    return ormask
+
+
+def get_ormask_and_bmask_mbobs(mbobs):
     """
     get the ormask and bmask, ored from all epochs
     """
@@ -387,7 +487,7 @@ def get_ormask_and_bmask(mbobs):
     return ormask, bmask
 
 
-def get_mfrac(mbobs):
+def get_mfrac_mbobs(mbobs):
     """
     set the masked fraction image, averaged over all bands
     """
@@ -407,7 +507,42 @@ def get_mfrac(mbobs):
     return mfrac
 
 
-def fit_original_psfs(psf_config, mbobs, rng):
+def get_mfrac_mbexp(mfrac_mbexp):
+    """
+    set the masked fraction image, averaged over all bands
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
+
+    Returns
+    -------
+    mfrac: array
+    """
+    wgts = []
+
+    wsum = 0.0
+    for iband, exp in enumerate(mfrac_mbexp):
+        w = np.where(np.isfinite(exp.variance.array))
+        if w[0].size == 0:
+            raise ValueError('no variance are finite')
+
+        var = np.median(exp.variance.array[w])
+        wgt = 1/var
+        wgts.append(wgt)
+        wsum += wgt
+        if iband == 0:
+            mfrac = wgt * np.zeros_like(exp.image.array)
+        else:
+            mfrac += wgt * exp.image.array
+
+    mfrac *= 1.0/wsum
+
+    return mfrac, wgts
+
+
+def fit_original_psfs_mbobs(psf_config, mbobs, rng):
     """
     fit the original psfs and get the mean g1,g2,T across
     all bands
@@ -437,6 +572,62 @@ def fit_original_psfs(psf_config, mbobs, rng):
                 g2sum += g2*wt
                 Tsum += T*wt
                 wsum += wt
+
+        if wsum <= 0.0:
+            raise BootPSFFailure('zero weights, could not '
+                                 'get mean psf properties')
+        g1 = g1sum/wsum
+        g2 = g2sum/wsum
+        T = Tsum/wsum
+
+        flags = 0
+
+    except BootPSFFailure:
+        flags = procflags.PSF_FAILURE
+        g1 = -9999.0
+        g2 = -9999.0
+        T = -9999.0
+
+    return {
+        'flags': flags,
+        'g1': g1,
+        'g2': g2,
+        'T': T,
+    }
+
+
+def fit_original_psfs_mbexp(psf_config, mbexp, rng, wgts):
+    """
+    fit the original psfs at the center of the image and get the mean g1,g2,T
+    across all bands
+
+    This can fail and flags will be set, but we proceed
+    """
+
+    assert len(wgts) == len(mbexp)
+
+    try:
+        # fitting.fit_all_psfs(mbobs=mbobs, psf_conf=psf_config, rng=rng)
+
+        g1sum = 0.0
+        g2sum = 0.0
+        Tsum = 0.0
+        wsum = 0.0
+
+        for iexp, exp in enumerate(mbexp):
+            wt = wgts[iexp]
+            # res = obs.psf.meta['result']
+            res = None  # put measurement here
+            T = res['T']
+            if 'e' in res:
+                g1, g2 = res['e']
+            else:
+                g1, g2 = res['g']
+
+            g1sum += g1*wt
+            g2sum += g2*wt
+            Tsum += T*wt
+            wsum += wt
 
         if wsum <= 0.0:
             raise BootPSFFailure('zero weights, could not '
