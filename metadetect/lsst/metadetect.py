@@ -36,7 +36,6 @@ from .skysub import subtract_sky_mbobs, subtract_sky_mbexp
 from .configs import get_config
 from . import measure
 from . import measure_scarlet
-from . import measure_shredder
 from .metacal_exposures import get_metacal_mbexps_fixnoise
 from .util import get_integer_center, get_jacobian
 
@@ -91,7 +90,7 @@ def run_metadetect(
     ormask = combine_ormasks(mbexp, ormasks)
     # TODO do proper mfrac
     # wgts = [1.0]*len(mbexp)
-    mfrac, wgts = get_mfrac_mbexp(mfrac_mbexp)
+    mfrac, wgts = get_mfrac_mbexp(mbexp, mfrac_mbexp)
 
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
@@ -234,54 +233,27 @@ def detect_deblend_and_measure(
         If True, use deblended the postage stamps for each measurement using
         the scarlet deblender.  If not True, the SDSS deblender code is used
         but only to find the sub-peaks in the footprint, and bands are coadded
-    deblender: str
-        Deblender to use, scarlet or shredder
     show: bool, optional
         If set to True, show images during processing
     """
 
     if config['deblend']:
 
-        if config['deblender'] == 'scarlet':
-            LOG.info('measuring with deblended stamps')
-            sources, detexp = measure_scarlet.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-                show=show,
-            )
-            results = measure_scarlet.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                rng=rng,
-                show=show,
-            )
-        else:
-            LOG.info('measuring with the Shredder')
-
-            shredder_config = config['shredder_config']
-
-            sources, detexp, Tvals = measure_shredder.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                rng=rng,
-                show=show,
-            )
-            results = measure_shredder.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                Tvals=Tvals,
-                shredder_config=shredder_config,
-                rng=rng,
-                show=show,
-            )
+        LOG.info('measuring with deblended stamps')
+        sources, detexp = measure_scarlet.detect_and_deblend(
+            mbexp=mbexp,
+            thresh=config['detect']['thresh'],
+            show=show,
+        )
+        results = measure_scarlet.measure(
+            mbexp=mbexp,
+            detexp=detexp,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=config['stamp_size'],
+            rng=rng,
+            show=show,
+        )
 
     else:
 
@@ -633,7 +605,7 @@ def get_mfrac_mbobs(mbobs):
     return mfrac
 
 
-def get_mfrac_mbexp(mfrac_mbexp):
+def get_mfrac_mbexp(mbexp, mfrac_mbexp):
     """
     set the masked fraction image, averaged over all bands
 
@@ -649,8 +621,12 @@ def get_mfrac_mbexp(mfrac_mbexp):
     wgts = []
 
     wsum = 0.0
-    for iband, exp in enumerate(mfrac_mbexp):
-        w = np.where(np.isfinite(exp.variance.array))
+
+    mfrac = None
+    for exp, mfrac_exp in zip(mbexp, mfrac_mbexp):
+        varray = exp.variance.array
+        w = np.where(np.isfinite(varray) & (varray > 0))
+
         if w[0].size == 0:
             raise ValueError('no variance are finite')
 
@@ -658,10 +634,11 @@ def get_mfrac_mbexp(mfrac_mbexp):
         wgt = 1/var
         wgts.append(wgt)
         wsum += wgt
-        if iband == 0:
-            mfrac = wgt * np.zeros_like(exp.image.array)
+
+        if mfrac is None:
+            mfrac = wgt * mfrac_exp.image.array
         else:
-            mfrac += wgt * exp.image.array
+            mfrac += wgt * mfrac_exp.image.array
 
     mfrac *= 1.0/wsum
 
