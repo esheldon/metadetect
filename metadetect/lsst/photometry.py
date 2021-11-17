@@ -6,7 +6,6 @@ from . import util
 from .configs import get_config
 from . import measure
 from . import measure_scarlet
-from . import measure_shredder
 from .metadetect import (
     fit_original_psfs, get_mfrac, get_fitter, get_ormask_and_bmask,
     add_original_psf, add_mfrac,
@@ -59,42 +58,20 @@ def run_photometry(mbobs, rng, config=None, show=False):
 
     mbexp = util.get_mbexp(exposures)
     if config['deblend']:
-        if config['deblender'] == 'scarlet':
-            sources, detexp = measure_scarlet.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-                show=show,
-            )
-            res = measure_scarlet.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                rng=rng,
-                show=show,
-            )
-        else:
-            shredder_config = config['shredder_config']
-            sources, detexp, Tvals = measure_shredder.detect_and_deblend(
-                mbexp=mbexp,
-                thresh=config['detect']['thresh'],
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                show=show,
-                rng=rng,
-            )
-            res = measure_shredder.measure(
-                mbexp=mbexp,
-                detexp=detexp,
-                sources=sources,
-                fitter=fitter,
-                stamp_size=config['stamp_size'],
-                Tvals=Tvals,
-                shredder_config=shredder_config,
-                rng=rng,
-                show=show,
-            )
+        sources, detexp = measure_scarlet.detect_and_deblend(
+            mbexp=mbexp,
+            thresh=config['detect']['thresh'],
+            show=show,
+        )
+        res = measure_scarlet.measure(
+            mbexp=mbexp,
+            detexp=detexp,
+            sources=sources,
+            fitter=fitter,
+            stamp_size=config['stamp_size'],
+            rng=rng,
+            show=show,
+        )
     else:
         LOG.info('measuring with blended stamps')
 
