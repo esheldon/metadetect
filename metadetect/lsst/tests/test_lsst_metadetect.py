@@ -75,10 +75,6 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
 
     data = util.extract_multiband_coadd_data(coadd_data_list)
 
-    mbexp = data['mbexp']
-    noise_mbexp = data['noise_mbexp']
-    mfrac_mbexp = data['mfrac_mbexp']
-
     config = {}
 
     if subtract_sky is not None:
@@ -87,13 +83,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
-    res = run_metadetect(
-        mbexp=mbexp,
-        noise_mbexp=noise_mbexp,
-        mfrac_mbexp=mfrac_mbexp,
-        rng=rng,
-        config=config,
-    )
+    res = run_metadetect(rng=rng, config=config, **data)
 
     if meas_type is None:
         front = 'wmom'
@@ -112,6 +102,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
+        assert len(res[shear][flux_name][0]) == len(bands)
 
 
 def test_lsst_metadetect_fullcoadd_smoke():
@@ -136,18 +127,8 @@ def test_lsst_metadetect_fullcoadd_smoke():
 
     data = util.extract_multiband_coadd_data(coadd_data_list)
 
-    mbexp = data['mbexp']
-    noise_mbexp = data['noise_mbexp']
-    mfrac_mbexp = data['mfrac_mbexp']
-
     config = {'meas_type': 'pgauss'}
-    res = run_metadetect(
-        mbexp=mbexp,
-        noise_mbexp=noise_mbexp,
-        mfrac_mbexp=mfrac_mbexp,
-        config=config,
-        rng=rng,
-    )
+    res = run_metadetect(config=config, rng=rng, **data)
 
     front = 'pgauss'
     gname = f'{front}_g'
@@ -162,6 +143,7 @@ def test_lsst_metadetect_fullcoadd_smoke():
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
+        assert len(res[shear][flux_name][0]) == len(bands)
 
 
 def test_lsst_metadetect_find_cen():
@@ -253,55 +235,6 @@ def test_lsst_metadetect_deblend_smoke(deblender):
 
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
-
-
-@pytest.mark.parametrize('deblender', [None, 'scarlet', 'shredder'])
-def test_lsst_metadetect_multiband(deblender, show=False):
-    rng = np.random.RandomState(seed=99)
-
-    bands = ('g', 'r', 'i')
-    nband = len(bands)
-
-    sim_data = make_lsst_sim(99, mag=23, bands=bands)
-
-    coadd_mbobs = ngmix.MultiBandObsList()
-
-    for band, exps in sim_data['band_data'].items():
-        coadd_obs, exp_info = make_coadd_obs_nowarp(
-            exp=exps[0],
-            psf_dims=sim_data['psf_dims'],
-            rng=rng,
-            remove_poisson=False,
-        )
-
-        # to avoid flagged edges
-        coadd_obs.mfrac = np.zeros(coadd_obs.image.shape)
-
-        obslist = ngmix.ObsList()
-        obslist.append(coadd_obs)
-        coadd_mbobs.append(obslist)
-
-    config = {'meas_type': 'pgauss'}
-    if deblender is not None:
-        config['deblend'] = True
-        config['deblender'] = deblender
-
-    res = run_metadetect(
-        mbobs=coadd_mbobs, rng=rng,
-        config=config,
-        show=show,
-    )
-
-    name = 'pgauss_band_flux'
-
-    assert name in res['noshear'].dtype.names
-
-    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
-        # 6x6 grid
-        assert res[shear].size == 36
-
-        assert len(res[shear][name].shape) == 2
-        assert len(res[shear][name][0]) == nband
 
 
 def test_lsst_zero_weights(show=False):
@@ -454,12 +387,5 @@ def test_lsst_metadetect_mfrac_ormask():
 
 
 if __name__ == '__main__':
-    test_lsst_metadetect_multiband(deblender=None, show=True)
-    # test_lsst_metadetect_smoke(
-    #     # meas_type='wmom',
-    #     # subtract_sky=False,
-    #     meas_type=None,
-    #     subtract_sky=None,
-    # )
-    # test_lsst_metadetect_prepsf_stars('pgauss')
+    test_lsst_metadetect_prepsf_stars('pgauss')
     # test_lsst_metadetect_deblend_multiband('scarlet')
