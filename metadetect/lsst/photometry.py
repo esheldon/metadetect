@@ -5,7 +5,6 @@ from . import util
 
 from .configs import get_config
 from . import measure
-from . import measure_scarlet
 from .metadetect import (
     fit_original_psfs, get_mfrac, get_fitter, get_ormask_and_bmask,
     add_original_psf, add_mfrac,
@@ -57,43 +56,23 @@ def run_photometry(mbobs, rng, config=None, show=False):
     exposures = [obslist[0].coadd_exp for obslist in mbobs]
 
     mbexp = util.get_mbexp(exposures)
-    if config['deblend']:
-        sources, detexp = measure_scarlet.detect_and_deblend(
-            mbexp=mbexp,
-            thresh=config['detect']['thresh'],
-            show=show,
-        )
-        res = measure_scarlet.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=config['stamp_size'],
-            rng=rng,
-            show=show,
-        )
-    else:
-        LOG.info('measuring with blended stamps')
 
-        for obslist in mbobs:
-            assert len(obslist) == 1, 'no multiepoch'
+    sources, detexp = measure.detect_and_deblend(
+        mbexp=mbexp,
+        rng=rng,
+        thresh=config['detect']['thresh'],
+        show=show,
+    )
 
-        sources, detexp = measure.detect_and_deblend(
-            mbexp=mbexp,
-            rng=rng,
-            thresh=config['detect']['thresh'],
-            show=show,
-        )
-
-        res = measure.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=config['stamp_size'],
-            find_cen=config['find_cen'],
-            rng=rng,  # needed if find_cen is True
-        )
+    res = measure.measure(
+        mbexp=mbexp,
+        detexp=detexp,
+        sources=sources,
+        fitter=fitter,
+        stamp_size=config['stamp_size'],
+        find_cen=config['find_cen'],
+        rng=rng,  # needed if find_cen is True
+    )
 
     if res is not None:
         obs = mbobs[0][0]

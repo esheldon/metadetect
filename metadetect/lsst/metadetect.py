@@ -35,7 +35,6 @@ from .skysub import subtract_sky_mbobs, subtract_sky_mbexp
 
 from .configs import get_config
 from . import measure
-from . import measure_scarlet
 from .metacal_exposures import get_metacal_mbexps_fixnoise
 from .util import get_integer_center, get_jacobian
 
@@ -133,78 +132,6 @@ def run_metadetect(
     return result
 
 
-def run_metadetect_old(
-    mbobs, rng, config=None, show=False,
-):
-    """
-    Run metadetection on the input MultiBandObsList
-
-    Note that bright object masking must be applied outside of this function.
-
-    Parameters
-    ----------
-    mbobs: ngmix.MultiBandObsList
-        The observations to process
-    rng: np.random.RandomState
-        Random number generator
-    config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, deblend, Entries
-        in this dict override defaults; see metadetect.lsst.configs
-    show: bool, optional
-        if True images will be shown
-
-    Returns
-    -------
-    result dict
-        This is keyed by shear string 'noshear', '1p', ... or None if there was
-        a problem doing the metacal steps; this only happens if the setting
-        metacal_psf is set to 'fitgauss' and the fitting fails
-    """
-
-    config = get_config(config)
-
-    if config['subtract_sky']:
-        subtract_sky_mbobs(mbobs=mbobs, thresh=config['detect']['thresh'])
-
-    # TODO we get psf stats for the entire coadd, not location dependent
-    # for each object on original image
-    psf_stats = fit_original_psfs_mbobs(
-        psf_config=config['psf'], mbobs=mbobs, rng=rng,
-    )
-
-    fitter = get_fitter(config, rng=rng)
-
-    ormask, bmask = get_ormask_and_bmask_mbobs(mbobs)
-    mfrac = get_mfrac_mbobs(mbobs)
-
-    odict = get_all_metacal(
-        metacal_config=config['metacal'], mbobs=mbobs, rng=rng,
-    )
-    if odict is None:
-        result = None
-    else:
-        result = {}
-        for shear_str, mbobs in odict.items():
-
-            res = detect_deblend_and_measure(
-                mbobs=mbobs,
-                fitter=fitter,
-                config=config,
-                rng=rng,
-                show=show,
-            )
-
-            if res is not None:
-                obs = mbobs[0][0]
-                add_noshear_pos_obs(config, res, shear_str, obs)
-                add_mfrac(config, mfrac, res, obs)
-                add_original_psf(psf_stats, res)
-
-            result[shear_str] = res
-
-    return result
-
-
 def detect_deblend_and_measure(
     mbexp,
     fitter,
@@ -229,51 +156,27 @@ def detect_deblend_and_measure(
         The detection threshold in units of the sky noise
     stamp_size: int
         Size for postage stamps.
-    deblend: bool
-        If True, use deblended the postage stamps for each measurement using
-        the scarlet deblender.  If not True, the SDSS deblender code is used
-        but only to find the sub-peaks in the footprint, and bands are coadded
     show: bool, optional
         If set to True, show images during processing
     """
 
-    if config['deblend']:
+    LOG.info('measuring with blended stamps')
 
-        LOG.info('measuring with deblended stamps')
-        sources, detexp = measure_scarlet.detect_and_deblend(
-            mbexp=mbexp,
-            thresh=config['detect']['thresh'],
-            show=show,
-        )
-        results = measure_scarlet.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=config['stamp_size'],
-            rng=rng,
-            show=show,
-        )
-
-    else:
-
-        LOG.info('measuring with blended stamps')
-
-        sources, detexp = measure.detect_and_deblend(
-            mbexp=mbexp,
-            rng=rng,
-            thresh=config['detect']['thresh'],
-            show=show,
-        )
-        results = measure.measure(
-            mbexp=mbexp,
-            detexp=detexp,
-            sources=sources,
-            fitter=fitter,
-            stamp_size=config['stamp_size'],
-            find_cen=config['find_cen'],
-            rng=rng,  # needed if find_cen is True
-        )
+    sources, detexp = measure.detect_and_deblend(
+        mbexp=mbexp,
+        rng=rng,
+        thresh=config['detect']['thresh'],
+        show=show,
+    )
+    results = measure.measure(
+        mbexp=mbexp,
+        detexp=detexp,
+        sources=sources,
+        fitter=fitter,
+        stamp_size=config['stamp_size'],
+        find_cen=config['find_cen'],
+        rng=rng,  # needed if find_cen is True
+    )
 
     return results
 

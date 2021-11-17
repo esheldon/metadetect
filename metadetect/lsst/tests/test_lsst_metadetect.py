@@ -178,37 +178,6 @@ def test_lsst_metadetect_find_cen():
                 )
 
 
-def test_lsst_metadetect_deblend_smoke():
-    rng = np.random.RandomState(seed=99)
-
-    bands = ('r', 'i')
-    sim_data = make_lsst_sim(99, mag=23, bands=bands)
-    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-    config = {
-        'meas_type': 'pgauss',
-        'deblend': True,
-    }
-
-    res = run_metadetect(rng=rng, config=config, **data)
-
-    front = 'pgauss'
-    gname = f'{front}_g'
-    flux_name = f'{front}_band_flux'
-
-    assert gname in res['noshear'].dtype.names
-
-    for shear in ('noshear', '1p', '1m'):
-        # 6x6 grid
-        assert res[shear].size == 36
-
-        assert np.any(res[shear]["flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
-
-        assert len(res[shear][flux_name].shape) == len(bands)
-        assert len(res[shear][flux_name][0]) == len(bands)
-
-
 def test_lsst_zero_weights(show=False):
     nobj = []
     seed = 55
