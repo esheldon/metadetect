@@ -13,7 +13,7 @@ from metadetect import procflags
 from metadetect.lsst.metadetect import run_metadetect
 from metadetect.lsst import util
 import descwl_shear_sims
-from descwl_coadd.coadd import make_coadd, make_coadd_obs
+from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
 logging.basicConfig(
