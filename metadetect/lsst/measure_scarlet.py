@@ -78,6 +78,10 @@ def detect_and_deblend(
     else:
         detexp = mbexp.singles[0]
 
+    # background measurement within the detection code requires ExposureF
+    if not isinstance(detexp, afw_image.ExposureF):
+        detexp = afw_image.ExposureF(detexp, deep=True)
+
     schema = afw_table.SourceTable.makeMinimalSchema()
 
     # note we won't run any of these measurements, but it is needed so that
@@ -393,6 +397,7 @@ class ModelSubtractor(object):
         assert isinstance(sources, dict)
 
         self.orig = mbexp
+        print(type(self.orig.singles[0]))
         self.filters = mbexp.filters
 
         self.sources = sources
@@ -715,12 +720,19 @@ class ModelSubtractor(object):
             self.heavies[band] = {}
 
             for id, fp in footprints.items():
-                if fp[1].isHeavy():
-                    self.heavies[band][id] = fp[1]
-                elif fp[0] == 0:
-                    self.heavies[band][id] = afw_det.makeHeavyFootprint(
-                        fp[1], self.mbexp[band].maskedImage,
-                    )
+                # TODO test/ask if this is ok
+                self.heavies[band][id] = afw_det.makeHeavyFootprint(
+                    fp[1], self.mbexp[band].maskedImage,
+                )
+
+                # if fp[1].isHeavy():
+                #     self.heavies[band][id] = fp[1]
+                #     print('setting from existing:', type(self.heavies[band][id]))
+                # elif fp[0] == 0:
+                #     self.heavies[band][id] = afw_det.makeHeavyFootprint(
+                #         fp[1], self.mbexp[band].maskedImage,
+                #     )
+                #     print('setting from make:', type(self.heavies[band][id]))
 
     def _build_subtracted_image(self):
         heavies = self.heavies
@@ -745,6 +757,7 @@ class ModelSubtractor(object):
                 for child in children:
                     child_id = child.getId()
                     heavy_fp = heavies[band][child_id]
+                    print('heavy_fp type:', type(heavy_fp))
                     heavy_fp.insert(scratch[band].image)
 
                     bbox = self.get_bbox(source_id=child_id)
