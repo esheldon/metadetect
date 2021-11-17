@@ -27,6 +27,7 @@ class ContextNoiseReplacer(object):
 
     def __init__(self, exposure, sources, rng, noise_image=None):
         from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
+        import lsst.afw.detection as afw_det
 
         # Notes for metacal.
         #
@@ -48,10 +49,16 @@ class ContextNoiseReplacer(object):
             # TODO remove_poisson should be true for real data
             noise_image = get_noise_image(exposure, rng=rng, remove_poisson=False)
 
-        footprints = {
-            source.getId(): (source.getParent(), source.getFootprint())
-            for source in sources
-        }
+        footprints = {}
+        for source in sources:
+            parent_id = source.getParent()
+            fp = source.getFootprint()
+            heavy = afw_det.makeHeavyFootprint(fp, exposure.maskedImage)
+            footprints[source.getId()] = (parent_id, heavy)
+        # footprints = {
+        #     source.getId(): (source.getParent(), source.getFootprint())
+        #     for source in sources
+        # }
 
         # This constructor will replace all detected pixels with noise in the
         # image
@@ -395,7 +402,6 @@ def coadd_exposures(exposures):
         w = np.where(exp.variance.array > 0)
         medvar = np.median(exp.variance.array[w])
         this_weight = 1.0/medvar
-        # print('medvar', medvar)
 
         coadd_exp.image.array[w] += exp.image.array[w] * this_weight
         psf_im += this_psfim * this_weight
