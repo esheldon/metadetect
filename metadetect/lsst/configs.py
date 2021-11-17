@@ -4,7 +4,6 @@ from .defaults import (
     DEFAULT_MDET_CONFIG,
     DEFAULT_WEIGHT_FWHMS,
     DEFAULT_STAMP_SIZES,
-    DEFAULT_SHREDDER_CONFIG,
 )
 
 
@@ -55,24 +54,6 @@ def _fill_config(config):
     if meas_type != 'am':
         if 'weight' not in config or config['weight'] is None:
             config['weight'] = get_default_weight_config(meas_type)
-
-    assert config['deblender'] in ['scarlet', 'shredder', 'em'], (
-        'bad deblender "%s", should be scarlet or shredder' % config['deblender']
-    )
-
-    if config['deblender'] == 'shredder':
-
-        new_sc = deepcopy(DEFAULT_SHREDDER_CONFIG)
-        sc = config['shredder_config']
-        if sc is not None:
-
-            for key in sc:
-                if key not in DEFAULT_SHREDDER_CONFIG:
-                    raise ValueError(f'bad shredder_config key "{key}"')
-
-            new_sc.update(sc)
-
-        config['shredder_config'] = new_sc
 
     # note we allow ngmix.metacal.get_all_metacal to do its
     # own verification
