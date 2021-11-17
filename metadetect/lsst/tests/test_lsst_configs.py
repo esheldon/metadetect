@@ -20,14 +20,12 @@ def test_config_smoke():
 
 
 @pytest.mark.parametrize('deblend', [None, False, True])
-@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
-def test_deblend_config(deblend, deblender):
+def test_deblend_config(deblend):
 
     config = {}
 
     if deblend is not None:
         config['deblend'] = deblend
-        config['deblender'] = deblender
 
     # make sure the default is verified
     get_config(config)
