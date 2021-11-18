@@ -492,7 +492,7 @@ class Metadetect(dict):
         """
 
         try:
-            fitting.fit_all_psfs(self.mbobs, self['psf'], self.rng)
+            fitting.fit_all_psfs(self.mbobs, self.rng)
 
             g1sum = 0.0
             g2sum = 0.0

@@ -3,7 +3,6 @@ import numpy as np
 
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
-from ngmix.defaults import DEFAULT_LM_PARS
 from ngmix.moments import make_mom_result
 
 from .util import Namer
@@ -20,7 +19,7 @@ def get_coellip_ngauss(name):
     return ngauss
 
 
-def fit_all_psfs(mbobs, psf_conf, rng):
+def fit_all_psfs(mbobs, rng):
     """
     measure all psfs in the input observations and store the results
     in the meta dictionary, and possibly as a gmix for model fits
@@ -30,36 +29,17 @@ def fit_all_psfs(mbobs, psf_conf, rng):
     mbobs: ngmix.MultiBandObsList
         The observations to fit
     psf_conf: dict
-        Config for  the measurements/fitting
+        Config for the measurements/fitting
     rng: np.random.RandomState
         The random number generator, used for guessers
     """
-    if 'coellip' in psf_conf['model']:
-        ngauss = get_coellip_ngauss(psf_conf['model'])
-        fitter = ngmix.fitting.CoellipFitter(
-            ngauss=ngauss,
-            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
-        )
-        guesser = ngmix.guessers.CoellipPSFGuesser(
-            rng=rng, ngauss=ngauss,
-        )
-    elif psf_conf['model'] == 'wmom':
-        fitter = ngmix.gaussmom.GaussMom(fwhm=psf_conf['weight_fwhm'])
-        guesser = None
-    elif psf_conf['model'] in ['am', 'admom']:
-        fitter = ngmix.admom.AdmomFitter(rng=rng)
-        guesser = ngmix.guessers.GMixPSFGuesser(
-            rng=rng, ngauss=1, guess_from_moms=True,
-        )
-    else:
-        fitter = ngmix.fitting.Fitter(
-            model=psf_conf['model'],
-            fit_pars=psf_conf.get('lm_pars', DEFAULT_LM_PARS),
-        )
-        guesser = ngmix.guessers.SimplePSFGuesser(rng=rng)
+    fitter = ngmix.admom.AdmomFitter(rng=rng)
+    guesser = ngmix.guessers.GMixPSFGuesser(
+        rng=rng, ngauss=1, guess_from_moms=True,
+    )
 
     runner = ngmix.runners.PSFRunner(
-        fitter=fitter, guesser=guesser, ntry=psf_conf.get('ntry', 1),
+        fitter=fitter, guesser=guesser, ntry=10,
     )
 
     for obslist in mbobs:
