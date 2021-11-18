@@ -40,7 +40,7 @@ def detect_and_deblend(
 ):
     """
     run detection and deblending of peaks, as well as basic measurments such as
-    centroid.  The SDSS deblender is run in order to split peaks.
+    centroid.  The SDSS deblender is run in order to split footprints.
 
     We must combine detection and deblending in the same function because the
     schema gets modified in place, which means we must construct the deblend
@@ -163,12 +163,7 @@ def measure(
 ):
     """
     run measurements on the input exposure, given the input measurement task,
-    list of sources, and fitter.  These steps are combined because of the way
-    that the deblending works to produce noise-replaced images for neighbors
-    where the image is temporarily modified.
-
-    To avoid data inconsistency in the case an exception is raised, a copy of
-    the exposure is made when using the noise replacer.
+    list of sources, and fitter.
 
     Parameters
     ----------

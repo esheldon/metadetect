@@ -21,9 +21,6 @@ DEFAULT_STAMP_SIZES = {
 # threshold for detection
 DEFAULT_THRESH = 5.0
 
-# deblending settings
-DEFAULT_DEBLEND = False
-
 # whether to find and subtract the sky, happens before metacal
 DEFAULT_SUBTRACT_SKY = False
 
@@ -50,7 +47,6 @@ DEFAULT_MDET_CONFIG = {
     'meas_type': 'wmom',
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
-    'deblend': DEFAULT_DEBLEND,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'weight': None,

@@ -115,8 +115,8 @@ def detect_deblend_and_measure(
     run detection, deblending and measurements.
 
     Note deblending is always run in a hierarchical detection process, but the
-    user has a choice whether to use deblended postage stamps for the
-    measurement.
+    deblending is only used for getting centers, and because there is currently
+    no other way to split footprints
 
     Parameters
     ----------
