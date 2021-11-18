@@ -654,7 +654,7 @@ def get_output_struct(res):
 
         if 'flags' in name:
             output[name] = NO_ATTEMPT
-        elif name == 'bmask':
+        elif name in ('bmask', 'ormask'):
             output[name] = 0
         elif dtype[0] == 'i':
             output[name] = -9999
