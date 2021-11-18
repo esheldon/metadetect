@@ -5,17 +5,12 @@ DEFAULT_WEIGHT_FWHMS = {
     'wmom': 1.2,
     'ksigma': 2.0,
     'pgauss': 2.0,
-    'em': -1,  # not using moments currently
 }
 
 DEFAULT_STAMP_SIZES = {
     'wmom': 32,
-    # TODO determine a good value for this. We used 48 in DES
-    # which would be 64 for lsst
     'ksigma': 64,
-    'am': 64,
-    'pgauss': 64,  # TODO would smaller be OK since does not ring?
-    'em': -1,  # no stamps used currently
+    'pgauss': 49,
 }
 
 # threshold for detection
@@ -31,6 +26,7 @@ DEFAULT_PSF_CONFIG = {
 }
 
 # Control of the metacal process
+# not currently used for new metacal_exposures code that always
 DEFAULT_METACAL_CONFIG = {
     "use_noise_image": True,
     "psf": "fitgauss",
