@@ -432,7 +432,7 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
     guesser = ngmix.guessers.GMixPSFGuesser(
         rng=rng, ngauss=1, guess_from_moms=True,
     )
-    runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4,)
+    runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4)
 
     try:
         g1sum = 0.0
