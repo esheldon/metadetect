@@ -3,11 +3,6 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 
-from lsst.meas.algorithms import KernelPsf
-from lsst.afw.math import FixedKernel
-import lsst.afw.image as afw_image
-
-from .. import fitting
 from .. import shearpos
 from .. import procflags
 
@@ -125,10 +120,13 @@ def detect_deblend_and_measure(
 
     Parameters
     ----------
-    exposure: Exposure
-        Exposure on which to detect and measure
+    mbexp: lsst.afw.image.MultibandExposure
+        The metacal'ed exposures to process
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
         For calculating moments
+    config: dict, optional
+        Configuration for the fitter, metacal, psf, detect, Entries
+        in this dict override defaults; see lsst_configs.py
     thresh: float
         The detection threshold in units of the sky noise
     stamp_size: int
@@ -178,20 +176,6 @@ def add_noshear_pos_exp(res, shear_str, exp):
         shear_str,
         jac=jac,
         dims=dims,
-    )
-    res['row_noshear'] = rows_noshear
-    res['col_noshear'] = cols_noshear
-
-
-def add_noshear_pos_obs(config, res, shear_str, obs):
-    """
-    add unsheared positions to the input result array
-    """
-    rows_noshear, cols_noshear = shearpos.unshear_positions_obs(
-        res['row'] - res['row0'],
-        res['col'] - res['col0'],
-        shear_str,
-        obs,  # an example for jacobian and image shape
     )
     res['row_noshear'] = rows_noshear
     res['col_noshear'] = cols_noshear
@@ -252,9 +236,8 @@ def measure_weighted_mfrac(
     box_sizes : np.ndarray
         The size of the stamp to use to measure the weighted average. Should be
         big enough to hold 2 * `fwhm`.
-    obs : ngmix.Observation
-        An observation that holds the weight maps, WCS Jacobian, etc
-        corresponding to `mfrac`.
+    jac: ngmix.Jacobian
+        The jacobian for the data
     fwhm : float or None
         The FWHM of the Gaussian aperture in arcseconds. If None, a default
         of 1.2 is used.
@@ -374,62 +357,11 @@ def get_fitter(config, rng=None):
     return fitter
 
 
-def get_all_metacal(metacal_config, mbobs, rng, show=False):
-    """
-    get the sheared versions of the observations
-
-    call the parent and then add in the stack exposure with image copied
-    in, modify the variance and set the new psf
-    """
-
-    orig_mbobs = mbobs
-
-    try:
-        odict = ngmix.metacal.get_all_metacal(
-            orig_mbobs,
-            rng=rng,
-            **metacal_config,
-        )
-    except BootPSFFailure:
-        # this can happen if we were using psf='fitgauss'
-        return None
-
-    # make sure .exposure is set for each obs
-    for mtype, mbobs in odict.items():
-        for band in range(len(mbobs)):
-
-            obslist = mbobs[band]
-            orig_obslist = orig_mbobs[band]
-
-            for iobs in range(len(obslist)):
-                obs = obslist[iobs]
-                orig_obs = orig_obslist[iobs]
-
-                # exp = copy.deepcopy(orig_obs.coadd_exp)
-                exp = afw_image.ExposureF(orig_obs.coadd_exp, deep=True)
-                exp.image.array[:, :] = obs.image
-
-                # we ran fixnoise, need to update variance plane
-                exp.variance.array[:, :] = exp.variance.array[:, :]*2
-
-                psf_image = obs.psf.image
-                stack_psf = KernelPsf(
-                    FixedKernel(
-                        afw_image.ImageD(psf_image.astype(float))
-                    )
-                )
-                exp.setPsf(stack_psf)
-                obs.exposure = exp
-
-                if show:
-                    import descwl_coadd.vis
-                    descwl_coadd.vis.show_image_and_mask(exp)
-                    input('hit a key')
-
-    return odict
-
-
 def combine_ormasks(mbexp, ormasks):
+    """
+    logical or together all the ormasks, or if ormasks is None create zeroed
+    versions for each band
+    """
     if ormasks is None:
         bands = mbexp.filters
         dims = mbexp[bands[0]].image.array.shape
@@ -442,47 +374,6 @@ def combine_ormasks(mbexp, ormasks):
                 ormask |= tormask
 
     return ormask
-
-
-def get_ormask_and_bmask_mbobs(mbobs):
-    """
-    get the ormask and bmask, ored from all epochs
-    """
-
-    for band, obslist in enumerate(mbobs):
-        nepoch = len(obslist)
-        assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
-
-        obs = obslist[0]
-
-        if band == 0:
-            ormask = obs.ormask.copy()
-            bmask = obs.bmask.copy()
-        else:
-            ormask |= obs.ormask
-            bmask |= obs.bmask
-
-    return ormask, bmask
-
-
-def get_mfrac_mbobs(mbobs):
-    """
-    set the masked fraction image, averaged over all bands
-    """
-    wgts = []
-    mfrac = np.zeros_like(mbobs[0][0].image)
-    for band, obslist in enumerate(mbobs):
-        nepoch = len(obslist)
-        assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
-
-        obs = obslist[0]
-        wgt = np.median(obs.weight)
-        if hasattr(obs, "mfrac"):
-            mfrac += (obs.mfrac * wgt)
-        wgts.append(wgt)
-
-    mfrac = mfrac / np.sum(wgts)
-    return mfrac
 
 
 def get_mfrac_mbexp(mbexp, mfrac_mbexp):
@@ -523,60 +414,6 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
     mfrac *= 1.0/wsum
 
     return mfrac, wgts
-
-
-def fit_original_psfs_mbobs(psf_config, mbobs, rng):
-    """
-    fit the original psfs and get the mean g1,g2,T across
-    all bands
-
-    This can fail and flags will be set, but we proceed
-    """
-
-    try:
-        fitting.fit_all_psfs(mbobs=mbobs, psf_conf=psf_config, rng=rng)
-
-        g1sum = 0.0
-        g2sum = 0.0
-        Tsum = 0.0
-        wsum = 0.0
-
-        for obslist in mbobs:
-            for obs in obslist:
-                wt = obs.weight.max()
-                res = obs.psf.meta['result']
-                T = res['T']
-                if 'e' in res:
-                    g1, g2 = res['e']
-                else:
-                    g1, g2 = res['g']
-
-                g1sum += g1*wt
-                g2sum += g2*wt
-                Tsum += T*wt
-                wsum += wt
-
-        if wsum <= 0.0:
-            raise BootPSFFailure('zero weights, could not '
-                                 'get mean psf properties')
-        g1 = g1sum/wsum
-        g2 = g2sum/wsum
-        T = Tsum/wsum
-
-        flags = 0
-
-    except BootPSFFailure:
-        flags = procflags.PSF_FAILURE
-        g1 = -9999.0
-        g2 = -9999.0
-        T = -9999.0
-
-    return {
-        'flags': flags,
-        'g1': g1,
-        'g2': g2,
-        'T': T,
-    }
 
 
 def fit_original_psfs_mbexp(mbexp, rng, wgts):
