@@ -56,8 +56,6 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
 
-    # TODO we get psf stats for the entire coadd, not location dependent
-    # for each object on original image
     psf_stats = fit_original_psfs_mbexp(
         mbexp=mbexp,
         wgts=wgts,
