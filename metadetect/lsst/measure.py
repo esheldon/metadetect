@@ -50,13 +50,17 @@ def detect_and_deblend(
     ----------
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
+    rng: np.random.RandomState
+        Random number generator for noise replacer
     thresh: float, optional
         The detection threshold in units of the sky noise
+    show: bool, optional
+        If set to True, show images
 
     Returns
     -------
-    sources, meas_task
-        The sources and the measurement task
+    sources, detexp
+        The sources and the detection exposure
     """
     import lsst.afw.image as afw_image
 
@@ -170,8 +174,10 @@ def measure(
 
     Parameters
     ----------
-    exposure: Exposure
+    mbexp: lsst.afw.image.MultibandExposure
         The exposure on which to detect and measure
+    detexp: lsst.afw.image.Exposure*
+        The detection exposure, used for bmask info
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.PGaussMom
