@@ -64,19 +64,6 @@ TEST_METADETECT_CONFIG = {
         "box_padding": 2,
     },
 
-    # needed for PSF symmetrization
-    "psf": {
-        "model": "gauss",
-
-        "ntry": 2,
-
-        "lm_pars": {
-            "maxfev": 2000,
-            "ftol": 1.0e-5,
-            "xtol": 1.0e-5,
-        }
-    },
-
     # check for an edge hit
     "bmask_flags": 2**30,
 
