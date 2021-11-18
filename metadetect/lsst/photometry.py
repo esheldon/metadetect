@@ -79,8 +79,6 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
         sources=sources,
         fitter=fitter,
         stamp_size=config['stamp_size'],
-        find_cen=config['find_cen'],
-        rng=rng,  # needed if find_cen is True
     )
 
     if res is not None:

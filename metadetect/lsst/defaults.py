@@ -20,8 +20,6 @@ DEFAULT_STAMP_SIZES = {
 
 # threshold for detection
 DEFAULT_THRESH = 5.0
-# refind the center in lsst.measure.measure
-DEFAULT_FIND_CEN = False
 
 # deblending settings
 DEFAULT_DEBLEND = False
@@ -55,7 +53,6 @@ DEFAULT_MDET_CONFIG = {
     'deblend': DEFAULT_DEBLEND,
     'psf': deepcopy(DEFAULT_PSF_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
-    'find_cen': DEFAULT_FIND_CEN,
     'weight': None,
     'stamp_size': None,
 }

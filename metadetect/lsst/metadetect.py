@@ -149,8 +149,6 @@ def detect_deblend_and_measure(
         sources=sources,
         fitter=fitter,
         stamp_size=config['stamp_size'],
-        find_cen=config['find_cen'],
-        rng=rng,  # needed if find_cen is True
     )
 
     return results

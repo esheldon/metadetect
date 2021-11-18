@@ -147,36 +147,6 @@ def test_lsst_metadetect_fullcoadd_smoke():
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
-def test_lsst_metadetect_find_cen():
-
-    for itrial in (1, 2):
-
-        if itrial == 1:
-            find_cen = False
-        else:
-            find_cen = True
-
-        rng = np.random.RandomState(seed=91)
-        sim_data = make_lsst_sim(45, mag=23)
-        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-        config = {
-            'meas_type': 'pgauss',
-            'find_cen': find_cen,
-        }
-
-        this_res = run_metadetect(rng=rng, config=config, **data)
-
-        if itrial == 1:
-            old_res = this_res
-        else:
-
-            for shear in ('noshear', '1p', '1m'):
-                assert np.any(
-                    this_res[shear]['pgauss_g'] != old_res[shear]['pgauss_g']
-                )
-
-
 def test_lsst_zero_weights(show=False):
     nobj = []
     seed = 55

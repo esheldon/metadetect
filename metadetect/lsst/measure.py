@@ -160,8 +160,6 @@ def measure(
     sources,
     fitter,
     stamp_size,
-    find_cen=False,
-    rng=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -184,10 +182,6 @@ def measure(
         For calculating moments
     stamp_size: int
         Size for postage stamps
-    find_cen: bool, optional
-        If set to True, find the center in the coadded stamp
-    rng: np.RandomState, optional
-        Needed if find_cen is True
 
     Returns
     -------
@@ -216,12 +210,6 @@ def measure(
             mbobs = _get_stamp_mbobs(
                 mbexp=mbexp, source=source, stamp_size=stamp_size,
             )
-            if find_cen:
-                coadd_obs = util.coadd_mbobs(mbobs)
-                find_and_set_center(obs=coadd_obs, rng=rng)
-
-                for _obslist in mbobs:
-                    _obslist[0].jacobian = coadd_obs.jacobian
 
             # TODO do something with bmask_flags?
             # TODO implement nonshear_mbobs
@@ -261,46 +249,6 @@ def measure(
         results = None
 
     return results
-
-
-def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
-    """
-    Attempt to find the centroid and update the jacobian.  Update
-    'orig_cen' in the metadata with the difference. Add entry
-    "orig_cen_offset" as an Extend2D
-
-    If the centroiding fails, raise CentroidFail
-    """
-
-    obs.meta['orig_cen_offset'] = geom.Extent2D(x=np.nan, y=np.nan)
-
-    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
-    if res['flags'] != 0:
-        raise CentroidFail('failed to find centroid')
-
-    jac = obs.jacobian
-
-    # this is an offset in arcsec
-    voff, uoff = res['cen']
-
-    # current center within stamp, in pixels
-    rowcen, colcen = jac.get_cen()
-
-    # new center within stamp, in pixels
-    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
-
-    # difference, which we will use to update the center in the original image
-    rowdiff = new_row - rowcen
-    coldiff = new_col - colcen
-
-    diff = geom.Extent2D(x=coldiff, y=rowdiff)
-
-    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
-    obs.meta['orig_cen_offset'] = diff
-
-    # update jacobian center within the stamp
-    with obs.writeable():
-        obs.jacobian.set_cen(row=new_row, col=new_col)
 
 
 def get_bmasks(sources, exposure):
