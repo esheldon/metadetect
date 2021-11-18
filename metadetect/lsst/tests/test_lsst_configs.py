@@ -19,20 +19,6 @@ def test_config_smoke():
         get_config({'blah': 3})
 
 
-@pytest.mark.parametrize('deblend', [None, False, True])
-@pytest.mark.parametrize('deblender', ['scarlet', 'shredder'])
-def test_deblend_config(deblend, deblender):
-
-    config = {}
-
-    if deblend is not None:
-        config['deblend'] = deblend
-        config['deblender'] = deblender
-
-    # make sure the default is verified
-    get_config(config)
-
-
 @pytest.mark.parametrize('model', ['am', 'wmom', 'gauss', 'coellip3'])
 def test_psf_configs(model):
 

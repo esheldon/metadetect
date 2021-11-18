@@ -40,7 +40,7 @@ def detect_and_deblend(
 ):
     """
     run detection and deblending of peaks, as well as basic measurments such as
-    centroid.  The SDSS deblender is run in order to split peaks.
+    centroid.  The SDSS deblender is run in order to split footprints.
 
     We must combine detection and deblending in the same function because the
     schema gets modified in place, which means we must construct the deblend
@@ -50,19 +50,28 @@ def detect_and_deblend(
     ----------
     mbexp: lsst.afw.image.MultibandExposure
         The exposures to process
+    rng: np.random.RandomState
+        Random number generator for noise replacer
     thresh: float, optional
         The detection threshold in units of the sky noise
+    show: bool, optional
+        If set to True, show images
 
     Returns
     -------
-    sources, meas_task
-        The sources and the measurement task
+    sources, detexp
+        The sources and the detection exposure
     """
+    import lsst.afw.image as afw_image
 
     if len(mbexp.singles) > 1:
         detexp = util.coadd_exposures(mbexp.singles)
     else:
         detexp = mbexp.singles[0]
+
+    # background measurement within the detection code requires ExposureF
+    if not isinstance(detexp, afw_image.ExposureF):
+        detexp = afw_image.ExposureF(detexp, deep=True)
 
     schema = afw_table.SourceTable.makeMinimalSchema()
 
@@ -151,32 +160,23 @@ def measure(
     sources,
     fitter,
     stamp_size,
-    find_cen=False,
-    rng=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
-    list of sources, and fitter.  These steps are combined because of the way
-    that the deblending works to produce noise-replaced images for neighbors
-    where the image is temporarily modified.
-
-    To avoid data inconsistency in the case an exception is raised, a copy of
-    the exposure is made when using the noise replacer.
+    list of sources, and fitter.
 
     Parameters
     ----------
-    exposure: Exposure
+    mbexp: lsst.afw.image.MultibandExposure
         The exposure on which to detect and measure
+    detexp: lsst.afw.image.Exposure*
+        The detection exposure, used for bmask info
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.PGaussMom
         For calculating moments
     stamp_size: int
         Size for postage stamps
-    find_cen: bool, optional
-        If set to True, find the center in the coadded stamp
-    rng: np.RandomState, optional
-        Needed if find_cen is True
 
     Returns
     -------
@@ -190,27 +190,21 @@ def measure(
     wcs = mbexp.singles[0].getWcs()
     results = []
 
-    # ormasks will be different within the loop below due to the replacer
-    ormasks = get_ormasks(sources=sources, exposure=detexp)
+    # bmasks will be different within the loop below due to the replacer
+    bmasks = get_bmasks(sources=sources, exposure=detexp)
 
     for i, source in enumerate(sources):
 
         if source.get('deblend_nChild') != 0:
             continue
 
-        ormask = ormasks[i]
+        bmask = bmasks[i]
 
         flags = 0
         try:
             mbobs = _get_stamp_mbobs(
                 mbexp=mbexp, source=source, stamp_size=stamp_size,
             )
-            if find_cen:
-                coadd_obs = util.coadd_mbobs(mbobs)
-                find_and_set_center(obs=coadd_obs, rng=rng)
-
-                for _obslist in mbobs:
-                    _obslist[0].jacobian = coadd_obs.jacobian
 
             # TODO do something with bmask_flags?
             # TODO implement nonshear_mbobs
@@ -239,7 +233,7 @@ def measure(
 
         res = get_output(
             wcs=wcs, source=source, res=this_res,
-            ormask=ormask, stamp_size=stamp_size, exp_bbox=exp_bbox,
+            bmask=bmask, stamp_size=stamp_size, exp_bbox=exp_bbox,
         )
 
         results.append(res)
@@ -252,49 +246,9 @@ def measure(
     return results
 
 
-def find_and_set_center(obs, rng, ntry=4, fwhm=1.2):
+def get_bmasks(sources, exposure):
     """
-    Attempt to find the centroid and update the jacobian.  Update
-    'orig_cen' in the metadata with the difference. Add entry
-    "orig_cen_offset" as an Extend2D
-
-    If the centroiding fails, raise CentroidFail
-    """
-
-    obs.meta['orig_cen_offset'] = geom.Extent2D(x=np.nan, y=np.nan)
-
-    res = ngmix.admom.find_cen_admom(obs, fwhm=fwhm, rng=rng, ntry=ntry)
-    if res['flags'] != 0:
-        raise CentroidFail('failed to find centroid')
-
-    jac = obs.jacobian
-
-    # this is an offset in arcsec
-    voff, uoff = res['cen']
-
-    # current center within stamp, in pixels
-    rowcen, colcen = jac.get_cen()
-
-    # new center within stamp, in pixels
-    new_row, new_col = jac.get_rowcol(u=uoff, v=voff)
-
-    # difference, which we will use to update the center in the original image
-    rowdiff = new_row - rowcen
-    coldiff = new_col - colcen
-
-    diff = geom.Extent2D(x=coldiff, y=rowdiff)
-
-    obs.meta['orig_cen'] = obs.meta['orig_cen'] + diff
-    obs.meta['orig_cen_offset'] = diff
-
-    # update jacobian center within the stamp
-    with obs.writeable():
-        obs.jacobian.set_cen(row=new_row, col=new_col)
-
-
-def get_ormasks(sources, exposure):
-    """
-    get a list of all the ormasks for the sources
+    get a list of all the bmasks for the sources
 
     Parameters
     ----------
@@ -305,18 +259,18 @@ def get_ormasks(sources, exposure):
 
     Returns
     -------
-    list of ormask values
+    list of bmask values
     """
-    ormasks = []
+    bmasks = []
     for source in sources:
-        ormask = get_ormask(source=source, exposure=exposure)
-        ormasks.append(ormask)
-    return ormasks
+        bmask = get_bmask(source=source, exposure=exposure)
+        bmasks.append(bmask)
+    return bmasks
 
 
-def get_ormask(source, exposure):
+def get_bmask(source, exposure):
     """
-    get ormask based on original peak position
+    get bmask based on original peak position
 
     Parameters
     ----------
@@ -327,7 +281,7 @@ def get_ormask(source, exposure):
 
     Returns
     -------
-    ormask value
+    bmask value
     """
     peak = source.getFootprint().getPeaks()[0]
     orig_cen = peak.getI()
@@ -666,7 +620,11 @@ def get_output_dtype():
         ('psfrec_g', 'f8', 2),
         ('psfrec_T', 'f8'),
 
+        # values from .mask of input exposures
+        ('bmask', 'i4'),
+        # values for ormask across all input exposures to coadd
         ('ormask', 'i4'),
+        # fraction of images going into a pixel that were masked
         ('mfrac', 'f4'),
     ]
 
@@ -696,7 +654,7 @@ def get_output_struct(res):
 
         if 'flags' in name:
             output[name] = NO_ATTEMPT
-        elif name == 'ormask':
+        elif name in ('bmask', 'ormask'):
             output[name] = 0
         elif dtype[0] == 'i':
             output[name] = -9999
@@ -706,7 +664,7 @@ def get_output_struct(res):
     return output
 
 
-def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
+def get_output(wcs, source, res, bmask, stamp_size, exp_bbox):
     """
     get the output structure, copying in results
 
@@ -721,8 +679,8 @@ def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
         The wcs with which to determine the ra, dec
     res: ndarray
         The result from running metadetect.fitting.fit_mbobs_wavg
-    ormask: int
-        The ormask value at the location of this object
+    bmask: int
+        The bmask value at the location of this object
     stamp_size: int
         The stamp size used for the measurement
     exp_bbox: lsst.geom.Box2I
@@ -763,7 +721,7 @@ def get_output(wcs, source, res, ormask, stamp_size, exp_bbox):
     output['ra'] = skypos.getRa().asDegrees()
     output['dec'] = skypos.getDec().asDegrees()
 
-    output['ormask'] = ormask
+    output['bmask'] = bmask
 
     return output
 

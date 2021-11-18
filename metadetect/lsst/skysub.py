@@ -30,27 +30,22 @@ def determine_and_subtract_sky(exp):
     return background
 
 
-def subtract_sky_mbobs(mbobs, thresh=DEFAULT_THRESH):
+def subtract_sky_mbexp(mbexp, thresh=DEFAULT_THRESH):
     """
     subtract sky
 
     Parameters
     ----------
-    mbobs: ngmix.MultiBandObsList
-        The observations to sky subtract
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures to process
     thresh: float
         Threshold for detection
     """
-    for obslist in mbobs:
-        for obs in obslist:
-            exp = obs.coadd_exp
-
-            iterate_detection_and_skysub(
-                exposure=exp,
-                thresh=thresh,
-            )
-
-            obs.image = exp.image.array
+    for exp in mbexp:
+        iterate_detection_and_skysub(
+            exposure=exp,
+            thresh=thresh,
+        )
 
 
 def iterate_detection_and_skysub(
