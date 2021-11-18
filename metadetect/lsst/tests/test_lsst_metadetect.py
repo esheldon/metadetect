@@ -3,7 +3,6 @@ test using lsst simple sim
 """
 import sys
 import numpy as np
-import time
 import pytest
 
 import logging
@@ -22,7 +21,7 @@ logging.basicConfig(
 )
 
 
-def make_lsst_sim(seed, mag=14, hlr=0.5, bands=None):
+def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None):
 
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
@@ -242,10 +241,9 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
         assert np.all(np.isfinite(data[field][wgood])), field
 
 
-def test_lsst_metadetect_mfrac_ormask():
+def test_lsst_metadetect_mfrac_ormask(show=False):
     rng = np.random.RandomState(seed=116)
 
-    tm0 = time.time()
     ntrial = 1
     flag = 2**31
 
@@ -253,25 +251,22 @@ def test_lsst_metadetect_mfrac_ormask():
         sim_data = make_lsst_sim(rng.randint(0, 2**30))
         data = do_coadding(rng=rng, sim_data=sim_data, nowarp=False)
 
-        data['noise_mbexp']['i'].image.array[:, :] = rng.uniform(
-            size=coadd_obs.image.shape, low=0.2, high=0.8
+        data['mfrac_mbexp']['i'].image.array[:, :] = rng.uniform(
+            size=data['mbexp']['i'].image.array.shape, low=0.2, high=0.8
         )
 
-        ormask = np.zeros(coadd_obs.image.shape, dtype='i4')
-        ormask[30:150, 30:150] = flag
-        coadd_obs.ormask = ormask
-        # TODO make setting ormask in a CoaddObs also set exp ormask to keep
-        # data consistency
-        coadd_obs.coadd_exp.mask.array[:, :] = ormask
+        for ormask in data['ormasks']:
+            ormask[30:150, 30:150] = flag
+            if show:
+                import matplotlib.pyplot as mplt
+                fig, axs = mplt.subplots(ncols=2)
+                axs[0].imshow(data['mbexp']['i'].image.array)
+                axs[1].imshow(ormask)
+                mplt.show()
 
-        coadd_mbobs = ngmix.MultiBandObsList()
-        obslist = ngmix.ObsList()
-        obslist.append(coadd_obs)
-        coadd_mbobs.append(obslist)
+        res = run_metadetect(config=None, rng=rng, **data)
 
-        res = run_metadetect(mbobs=coadd_mbobs, rng=rng)
-
-        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        for shear in ('noshear', '1p', '1m'):
             assert np.any(res[shear]["flags"] == 0)
             assert np.any(
                 (res[shear]["mfrac"] > 0.40)
@@ -279,9 +274,8 @@ def test_lsst_metadetect_mfrac_ormask():
             )
             assert np.any(res[shear]["ormask"] & flag != 0)
 
-        total_time = time.time()-tm0
-        print("time per:", total_time)
-
 
 if __name__ == '__main__':
-    test_lsst_zero_weights(show=True)
+    # test_lsst_zero_weights(show=True)
+    # test_lsst_metadetect_smoke('wmom', 'False')
+    test_lsst_metadetect_mfrac_ormask(show=True)

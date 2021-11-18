@@ -1,23 +1,3 @@
-"""
-
-TODO
-    - when using deblended stamps, sources are replaced by noise.
-      We need to make this noise field consistent for the different
-      sheared images.  We have a noise field but it is used already
-      for the correlated noise corrections.  We need another that
-      gets treated in parallel with the the real image: an Observation
-      with noise as the image and another noise field present, and
-      run through the entire metacal process as if it were real data..
-      This can then be sent through as the noiseImage to the
-      NoiseReplacer
-    - more tests
-    - full shear test like in /shear_meas_test/test_shear_meas.py ?
-    - understand why we are trimming the psf to even dims
-    - maybe make weight_fwhm not have a default, since the default
-      will most likely depend on the meas_type: wmom will have a smaller
-      weight function parhaps
-    - more TODO are in the code, here and in lsst_measure.py
-"""
 import logging
 import numpy as np
 import ngmix
@@ -31,7 +11,7 @@ from .. import fitting
 from .. import shearpos
 from .. import procflags
 
-from .skysub import subtract_sky_mbobs, subtract_sky_mbexp
+from .skysub import subtract_sky_mbexp
 
 from .configs import get_config
 from . import measure
@@ -71,7 +51,7 @@ def run_metadetect(
     rng: np.random.RandomState
         Random number generator
     config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, deblend, Entries
+        Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
     show: bool, optional
         if set to True images will be shown
@@ -87,9 +67,7 @@ def run_metadetect(
     config = get_config(config)
 
     ormask = combine_ormasks(mbexp, ormasks)
-    # TODO do proper mfrac
-    # wgts = [1.0]*len(mbexp)
-    mfrac, wgts = get_mfrac_mbexp(mbexp, mfrac_mbexp)
+    mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
 
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
@@ -122,7 +100,6 @@ def run_metadetect(
             exp = mcal_mbexp[band]
             add_noshear_pos_exp(res=res, shear_str=shear_str, exp=exp)
 
-            print('TODO: ADAPT ADD_FRAC TO EXPOSURE DATA')
             add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
             add_ormask(ormask, res)
             add_original_psf(psf_stats, res)
@@ -302,13 +279,13 @@ def measure_weighted_mfrac(
 
     mfracs = []
     for i in range(x.shape[0]):
-        x = int(np.floor(x[i] + 0.5))
-        y = int(np.floor(y[i] + 0.5))
+        ix = int(np.floor(x[i] + 0.5))
+        iy = int(np.floor(y[i] + 0.5))
 
-        xstart = x - box_rad
-        xend = x + box_rad + 1
-        ystart = y - box_rad
-        yend = y + box_rad + 1
+        xstart = ix - box_rad
+        xend = ix + box_rad + 1
+        ystart = iy - box_rad
+        yend = iy + box_rad + 1
 
         if xstart < 0:
             xstart = 0
@@ -323,7 +300,7 @@ def measure_weighted_mfrac(
         if sub_mfrac.size == 0:
             mfracs.append(1.0)
         else:
-            cy, cx = (x[i] - xstart, y[i] - ystart)
+            cy, cx = (y[i] - ystart, x[i] - xstart)
             this_jac = jac.copy()
             this_jac.set_cen(row=cy, col=cx)
 
