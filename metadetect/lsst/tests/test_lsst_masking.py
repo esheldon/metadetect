@@ -158,7 +158,6 @@ def test_apply_apodized_bright_masks(show=False):
                 assert np.all(exp.image.array[w] != exp_orig.image.array[w])
                 assert np.all(nexp.image.array[w] != noise_image[w])
 
-
                 # mask is expanded and bit is set, but data are not modified in
                 # the expanded area
                 w = np.where(r2 < (rr + masking.EXPAND_RAD)**2)
@@ -208,7 +207,7 @@ def test_apply_apodized_edge_masks(show=False):
     w = np.where(
         (xgrid < ap_range) |
         (ygrid < ap_range) |
-        (xgrid > (dim - ap_range -1)) |
+        (xgrid > (dim - ap_range - 1)) |
         (ygrid > (dim - ap_range - 1))
     )
     for iband, band in enumerate(data['mbexp'].filters):
