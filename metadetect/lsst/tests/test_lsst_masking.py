@@ -1,5 +1,6 @@
 import numpy as np
 import descwl_shear_sims
+from metadetect.masking import get_ap_range
 from metadetect.lsst import masking
 from metadetect.lsst import vis
 from metadetect.lsst import util
@@ -66,7 +67,7 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-def test_apply_apodize_masks(show=False):
+def test_apply_apodized_bright_masks(show=False):
     ntrial = 5
     nmasked = 2
 
@@ -108,7 +109,7 @@ def test_apply_apodize_masks(show=False):
         ]
 
         # works in place
-        masking.apply_apodized_masks_mbexp(
+        masking.apply_apodized_bright_masks_mbexp(
             mbexp=data['mbexp'],
             noise_mbexp=data['noise_mbexp'],
             mfrac_mbexp=data['mfrac_mbexp'],
@@ -129,6 +130,7 @@ def test_apply_apodize_masks(show=False):
             assert exp_orig is not exp
             nexp = data['noise_mbexp'][band]
             ormask = data['ormasks'][iband]
+            mfrac = data['mfrac_mbexp'][band]
 
             noise_image = noise_images[iband]
 
@@ -151,6 +153,7 @@ def test_apply_apodize_masks(show=False):
 
                 assert np.all(exp.variance.array[w] == np.inf)
                 assert np.all(nexp.variance.array[w] == np.inf)
+                assert np.all(mfrac.image.array[w] == 1)
 
                 assert np.all(exp.image.array[w] != exp_orig.image.array[w])
                 assert np.all(nexp.image.array[w] != noise_image[w])
@@ -172,5 +175,63 @@ def test_apply_apodize_masks(show=False):
                 assert np.all(nexp.variance.array[w] != np.inf)
 
 
+def test_apply_apodized_edge_masks(show=False):
+    seed = 101
+    dim = 250
+    rng = np.random.RandomState(seed=seed)
+
+    sim_data = make_lsst_sim(rng=rng, dim=dim)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    noise_images = [
+        nexp.image.array.copy() for nexp in data['noise_mbexp']
+    ]
+
+    # works in place
+    masking.apply_apodized_edge_masks_mbexp(
+        mbexp=data['mbexp'],
+        noise_mbexp=data['noise_mbexp'],
+        mfrac_mbexp=data['mfrac_mbexp'],
+        ormasks=data['ormasks'],
+    )
+
+    if show:
+        vis.show_multi_mbexp(data['mbexp'])
+
+    band0 = data['mbexp'].filters[0]
+    edge = data['mbexp'][band0].mask.getPlaneBitMask('APODIZED_EDGE')
+
+    ygrid, xgrid = np.mgrid[0:dim, 0:dim]
+
+    ap_range = get_ap_range(masking.AP_RAD)
+    w = np.where(
+        (xgrid < ap_range) |
+        (ygrid < ap_range) |
+        (xgrid > (dim - ap_range - 1)) |
+        (ygrid > (dim - ap_range - 1))
+    )
+    for iband, band in enumerate(data['mbexp'].filters):
+        exp_orig = sim_data['band_data'][band][0]
+        exp = data['mbexp'][band]
+        assert exp_orig is not exp
+        nexp = data['noise_mbexp'][band]
+        mfrac = data['mfrac_mbexp'][band]
+        ormask = data['ormasks'][iband]
+
+        noise_image = noise_images[iband]
+
+        assert np.all(exp.mask.array[w] & edge != 0)
+        assert np.all(nexp.mask.array[w] & edge != 0)
+        assert np.all(ormask[w] & edge != 0)
+
+        assert np.all(exp.variance.array[w] == np.inf)
+        assert np.all(nexp.variance.array[w] == np.inf)
+        assert np.all(mfrac.image.array[w] == 1)
+
+        assert np.all(exp.image.array[w] != exp_orig.image.array[w])
+        assert np.all(nexp.image.array[w] != noise_image[w])
+
+
 if __name__ == '__main__':
-    test_apply_apodize_masks(show=True)
+    # test_apply_apodized_bright_masks(show=True)
+    test_apply_apodized_edge_masks(show=True)

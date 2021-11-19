@@ -4,12 +4,64 @@ EXPAND_RAD = 16
 AP_RAD = 1.5
 
 
-def apply_apodized_masks_mbexp(
+def apply_apodized_edge_masks_mbexp(
+    mbexp, noise_mbexp=None, mfrac_mbexp=None, ormasks=None,
+):
+    """
+    Apply apodized edge masks.  The .image, .variance and .bmask for each
+    exposure is modified in place
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The data to mask.  The image and mask are modified, with the mask
+        value set to BRIGHT or BRIGHT_EXPANDED for the expanded mask.
+    noise_mbexp: lsst.afw.image.MultibandExposure
+        Optional noise data to mask.  The image and mask are modified.
+    mfrac_mbexp: lsst.afw.image.MultibandExposure
+        Optional mfrac data to mask.  The image and mask are modified, with
+        mfrac set to 1 everywhere that apodization is applied
+    ormasks: list of arrays, optional
+        A list of masks to logically or with the bright mask
+    """
+
+    import lsst.afw.image as afw_image
+    from ..masking import _build_square_apodization_mask
+
+    afw_image.Mask.addMaskPlane('APODIZED_EDGE')
+    edge = afw_image.Mask.getPlaneBitMask('APODIZED_EDGE')
+
+    bands = mbexp.filters
+    band0 = bands[0]
+    ap_mask = np.ones_like(mbexp[band0].image.array)
+    _build_square_apodization_mask(AP_RAD, ap_mask)
+
+    msk = np.where(ap_mask < 1)
+    if msk[0].size > 0:
+        for band in bands:
+            exps = [mbexp[band]]
+            if noise_mbexp is not None:
+                exps.append(noise_mbexp[band])
+
+            for exp in exps:
+                exp.image.array[msk] *= ap_mask[msk]
+                exp.variance.array[msk] = np.inf
+                exp.mask.array[msk] |= edge
+
+            if ormasks is not None:
+                for ormask in ormasks:
+                    ormask[msk] |= edge
+
+            if mfrac_mbexp is not None:
+                mfrac_mbexp[band].image.array[msk] = 1.0
+
+
+def apply_apodized_bright_masks_mbexp(
     mbexp, bright_info, noise_mbexp=None, mfrac_mbexp=None, ormasks=None,
 ):
     """
     Apply bright object masks with apodization and expansion.  The .image,
-    .noise and .bmask for each observation are modified in place
+    .variance and .bmask for each exposure is modified in place
 
     Parameters
     ----------

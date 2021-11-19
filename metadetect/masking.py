@@ -3,6 +3,25 @@ import numpy as np
 from .interpolate import interpolate_image_at_mask
 
 
+@njit
+def get_ap_range(ap_rad):
+    """
+    Get the range over which the the apodization kernel drops to zero
+
+        int(6*ap_rad + 0.5)
+
+    Parameters
+    ----------
+    ap_rad: float
+        The apodization radius over which the kernel goes to zero
+
+    Returns
+    -------
+    ap range as an integer
+    """
+    return int(6*ap_rad + 0.5)
+
+
 def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
     """Apply an apodization mask around the edge of the images in an mbobs to
     prevent FFT artifacts.
@@ -38,7 +57,7 @@ def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
 
 @njit
 def _build_square_apodization_mask(ap_rad, ap_mask):
-    ap_range = int(6*ap_rad + 0.5)
+    ap_range = get_ap_range(ap_rad)
 
     ny, nx = ap_mask.shape
     for y in range(min(ap_range+1, ny)):
