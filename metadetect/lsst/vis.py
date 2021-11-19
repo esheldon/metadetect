@@ -293,3 +293,33 @@ def show_multi_mbobs(mbobs):
             axs[iband, itype].set_title(f'band {iband} {type}')
 
     mplt.show()
+
+
+def show_multi_mbexp(mbexp):
+    """
+    Show images from a ngmix.MultiBandObsList
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The data
+    """
+    import matplotlib.pyplot as mplt
+
+    nband = len(mbexp)
+
+    fig, axs = mplt.subplots(nrows=3, ncols=nband)
+
+    for iband, band in enumerate(mbexp.filters):
+        exp = mbexp[band]
+
+        axs[iband, 0].imshow(exp.image.array)
+        axs[iband, 0].set_title(f'band {iband} image')
+
+        axs[iband, 1].imshow(exp.variance.array)
+        axs[iband, 1].set_title(f'band {iband} var')
+
+        axs[iband, 2].imshow(exp.mask.array)
+        axs[iband, 2].set_title(f'band {iband} mask')
+
+    mplt.show()

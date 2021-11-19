@@ -1,10 +1,10 @@
 import numpy as np
 import descwl_shear_sims
-import metadetect.lsst.masking
-from metadetect.lsst.masking import EXPAND_RAD
-from metadetect.lsst.util import exp2obs
-import metadetect.lsst.vis as vis
-import ngmix
+from metadetect.lsst import masking
+from metadetect.lsst import vis
+from metadetect.lsst import util
+from descwl_coadd.coadd import make_coadd
+from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
 
 def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z']):
@@ -36,6 +36,36 @@ def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z']):
     return sim_data
 
 
+def do_coadding(rng, sim_data, nowarp):
+
+    bands = list(sim_data['band_data'].keys())
+
+    if nowarp:
+        coadd_data_list = [
+            make_coadd_nowarp(
+                exp=sim_data['band_data'][band][0],
+                psf_dims=sim_data['psf_dims'],
+                rng=rng,
+                remove_poisson=False,
+            )
+            for band in bands
+        ]
+    else:
+        coadd_data_list = [
+            make_coadd(
+                exps=sim_data['band_data'][band],
+                psf_dims=sim_data['psf_dims'],
+                rng=rng,
+                coadd_wcs=sim_data['coadd_wcs'],
+                coadd_bbox=sim_data['coadd_bbox'],
+                remove_poisson=False,
+            )
+            for band in bands
+        ]
+
+    return util.extract_multiband_coadd_data(coadd_data_list)
+
+
 def test_apply_apodize_masks(show=False):
     ntrial = 5
     nmasked = 2
@@ -46,87 +76,100 @@ def test_apply_apodize_masks(show=False):
 
     for itrial in range(ntrial):
         sim_data = make_lsst_sim(rng=rng, dim=dim)
+        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-        bands = list(sim_data['band_data'].keys())
-        exp = sim_data['band_data'][bands[0]][0]
+        bands = data['mbexp'].filters
+
+        dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
+
+        wcs = data['mbexp'][bands[0]].getWcs()
+
+        buff = 21
+
+        exp = data['mbexp'][bands[0]]
         dims = exp.image.array.shape
         dim = dims[0]
 
-        dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
-        masks = np.zeros(nmasked, dtype=dtype)
-
-        wcs = exp.getWcs()
-        buff = 21
         x = rng.uniform(low=buff, high=dim-buff, size=nmasked)
         y = rng.uniform(low=buff, high=dim-buff, size=nmasked)
         radius = rng.uniform(low=10, high=20, size=nmasked)
         ra, dec = wcs.pixelToSkyArray(x=x, y=y, degrees=True)
-        masks['ra'] = ra
-        masks['dec'] = dec
-        masks['radius_pixels'] = radius
+        bright_info = np.zeros(nmasked, dtype=dtype)
+        bright_info['ra'] = ra
+        bright_info['dec'] = dec
+        bright_info['radius_pixels'] = radius
 
         xp, yp = wcs.skyToPixelArray(ra=ra, dec=dec, degrees=True)
         assert np.allclose(x, xp)
         assert np.allclose(y, yp)
 
-        mbobs = ngmix.MultiBandObsList()
-        noise_images = []
-        for band, exps in sim_data['band_data'].items():
-            exp = exps[0]
-            obs = exp2obs(exp)
+        noise_images = [
+            nexp.image.array.copy() for nexp in data['noise_mbexp']
+        ]
 
-            noiseval = np.sqrt(1/obs.weight[0, 0])
-            noise_image = rng.normal(scale=noiseval, size=dims)
-            obs.noise = noise_image
-            obslist = ngmix.ObsList()
-            obslist.append(obs)
-            mbobs.append(obslist)
-
-            noise_images.append(noise_image.copy())
-
-        metadetect.lsst.masking.apply_apodized_masks(
-            mbobs=mbobs, masks=masks, wcs=wcs,
+        # works in place
+        masking.apply_apodized_masks_mbexp(
+            mbexp=data['mbexp'],
+            noise_mbexp=data['noise_mbexp'],
+            mfrac_mbexp=data['mfrac_mbexp'],
+            bright_info=bright_info,
+            ormasks=data['ormasks'],
         )
+
         if show:
-            vis.show_multi_mbobs(mbobs)
+            vis.show_multi_mbexp(data['mbexp'])
 
         bright = exp.mask.getPlaneBitMask('BRIGHT')
         bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
         ygrid, xgrid = np.mgrid[0:dim, 0:dim]
-        for iband, obslist in enumerate(mbobs):
-            band = bands[iband]
-            obs = obslist[0]
-            exp = sim_data['band_data'][band][0]
+        for iband, band in enumerate(data['mbexp'].filters):
+            exp_orig = sim_data['band_data'][band][0]
+            exp = data['mbexp'][band]
+            assert exp_orig is not exp
+            nexp = data['noise_mbexp'][band]
+            ormask = data['ormasks'][iband]
+
             noise_image = noise_images[iband]
 
             for xx, yy, rr in zip(x, y, radius):
                 ix = int(np.floor(xx+0.5))
                 iy = int(np.floor(yy+0.5))
-                assert obs.image[iy, ix] == 0
-                assert obs.noise[iy, ix] == 0
-                assert obs.bmask[iy, ix] == (bright | bright_expanded)
+                assert exp.image.array[iy, ix] == 0
+                assert nexp.image.array[iy, ix] == 0
+                assert exp.mask.array[iy, ix] == (bright | bright_expanded)
+                assert nexp.mask.array[iy, ix] == (bright | bright_expanded)
 
                 # within mask the bit is set and data are modified
                 r2 = (ygrid - yy)**2 + (xgrid - xx)**2
-                w = np.where(r2 < rr**2)
-                assert np.all(obs.bmask[w] & bright != 0)
-                assert np.all(obs.weight[w] == 0.0)
-                assert np.all(obs.image[w] != exp.image.array[w])
-                assert np.all(obs.noise[w] != noise_image[w])
+
+                # shrink radius a little to deal with some roundoff errors
+                w = np.where(r2 < (rr-0.1)**2)
+                assert np.all(exp.mask.array[w] & bright != 0)
+                assert np.all(nexp.mask.array[w] & bright != 0)
+                assert np.all(ormask[w] & bright != 0)
+
+                assert np.all(exp.variance.array[w] == np.inf)
+                assert np.all(nexp.variance.array[w] == np.inf)
+
+                assert np.all(exp.image.array[w] != exp_orig.image.array[w])
+                assert np.all(nexp.image.array[w] != noise_image[w])
 
                 # mask is expanded and bit is set, but data are not modified in
                 # the expanded area
-                w = np.where(r2 < (rr + EXPAND_RAD)**2)
-                assert np.all(obs.bmask[w] & bright_expanded != 0)
+                w = np.where(r2 < (rr + masking.EXPAND_RAD)**2)
+                assert np.all(exp.mask.array[w] & bright_expanded != 0)
+                assert np.all(nexp.mask.array[w] & bright_expanded != 0)
+                assert np.all(ormask[w] & bright_expanded != 0)
 
                 w = np.where(
-                    (obs.bmask & bright == 0) &
-                    (obs.bmask & bright_expanded != 0)
+                    (exp.mask.array & bright == 0) &
+                    (exp.mask.array & bright_expanded != 0)
                 )
-                assert np.all(obs.image[w] == exp.image.array[w])
-                assert np.all(obs.noise[w] == noise_image[w])
-                assert np.all(obs.weight[w] != 0)
+                assert np.all(exp.image.array[w] == exp_orig.image.array[w])
+                assert np.all(nexp.image.array[w] == noise_image[w])
+                assert np.all(exp.variance.array[w] != np.inf)
+                assert np.all(nexp.variance.array[w] != np.inf)
 
 
 if __name__ == '__main__':
