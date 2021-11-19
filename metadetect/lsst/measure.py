@@ -216,7 +216,7 @@ def measure(
             )
         except LengthError as err:
             # This is raised when a bbox hits an edge
-            LOG.info('%s', err)
+            # LOG.info('%s', err)
             flags = EDGE_HIT
         except AllZeroWeight as err:
             # failure creating some observation due to zero weights
