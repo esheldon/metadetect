@@ -17,7 +17,7 @@ def get_ap_range(ap_rad):
 
     Returns
     -------
-    ap range as a float
+    ap range as an integer
     """
     return int(6*ap_rad + 0.5)
 
