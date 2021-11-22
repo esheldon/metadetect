@@ -315,7 +315,7 @@ def extract_obs(exp, source):
         raise AllZeroWeight('all weights <= 0')
 
     bmask = exp.mask.array
-    jacob = _extract_jacobian(
+    jacob = _extract_jacobian_at_source(
         exp=exp,
         source=source,
     )
@@ -548,7 +548,7 @@ def _extract_weight(exp):
     return weight
 
 
-def _extract_jacobian(exp, source):
+def _extract_jacobian_at_source(exp, source):
     """
     extract an ngmix.Jacobian from the image object
     and object record
@@ -563,8 +563,7 @@ def _extract_jacobian(exp, source):
     Jacobian: ngmix.Jacobian
         The local jacobian
     """
-
-    xy0 = exp.getXY0()
+    from .util import get_jacobian
 
     orig_cen = exp.getWcs().skyToPixel(source.getCoord())
 
@@ -577,28 +576,8 @@ def _extract_jacobian(exp, source):
             x=orig_cen_i.getX(),
             y=orig_cen_i.getY(),
         )
-        # x, y = peak.getIx(), peak.getIy()
 
-    cen = orig_cen - geom.Extent2D(xy0)
-    row = cen.getY()
-    col = cen.getX()
-
-    wcs = exp.getWcs().linearizePixelToSky(
-        orig_cen,
-        geom.arcseconds,
-    )
-    jmatrix = wcs.getLinear().getMatrix()
-
-    jacob = ngmix.Jacobian(
-        row=row,
-        col=col,
-        dudcol=jmatrix[0, 0],
-        dudrow=jmatrix[0, 1],
-        dvdcol=jmatrix[1, 0],
-        dvdrow=jmatrix[1, 1],
-    )
-
-    return jacob
+    return get_jacobian(exp, orig_cen)
 
 
 def get_output_dtype():

@@ -743,19 +743,20 @@ def get_jacobian(exp, cen):
     """
     import lsst.geom as geom
 
-    bbox = exp.getBBox()
     wcs = exp.getWcs()
+    xy0 = exp.getXY0()
 
     dm_jac = wcs.linearizePixelToSky(cen, geom.arcseconds)
     matrix = dm_jac.getLinear().getMatrix()
 
+    relative_cen = cen - geom.Extent2D(xy0)
+
     # ESS reverse engineered this convention mismatch.  No documentation
     # was found.  Don't change this unless you know what you are doing.
-    jx = cen.x - bbox.beginX
-    jy = cen.y - bbox.beginY
+
     return ngmix.Jacobian(
-        x=jx,
-        y=jy,
+        x=relative_cen.getX(),
+        y=relative_cen.getY(),
         dudx=matrix[1, 1],
         dudy=-matrix[1, 0],
         dvdx=matrix[0, 1],
