@@ -50,7 +50,7 @@
 ## 0.3.10 - 2021-10-02
 
 ### changed
- - Refactored LSST code to a functional approach.
+ - Refactored LSST code to use functions instead of classes.
 
 ### added
  - Added new utils for interpolating in foreground mask holes.
