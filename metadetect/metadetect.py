@@ -311,6 +311,9 @@ class Metadetect(dict):
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
+            ('ormask_det', 'i4'),
+            ('mfrac_det', 'f4'),
+            ('bmask_det', 'i4'),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -350,10 +353,6 @@ class Metadetect(dict):
             newres['sx_row_noshear'] = rows_noshear
             newres['sx_col_noshear'] = cols_noshear
 
-            dims = obs.image.shape
-            rclip = _clip_and_round(rows_noshear, dims[0])
-            cclip = _clip_and_round(cols_noshear, dims[1])
-
             if 'ormask_region' in self and self['ormask_region'] > 1:
                 ormask_region = self['ormask_region']
             elif 'mask_region' in self and self['mask_region'] > 1:
@@ -372,59 +371,46 @@ class Metadetect(dict):
                 bmask_region,
             )
 
-            if ormask_region > 1:
-                for ind in range(cat.size):
-                    lr = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] - ormask_region)))
-                    ur = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] + ormask_region)))
+            newres["ormask"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
+                mask=self.ormask,
+            )
+            newres["ormask_det"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row'],
+                cols=newres['sx_col'],
+                mask=self.ormask,
+            )
 
-                    lc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] - ormask_region)))
-                    uc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] + ormask_region)))
-
-                    newres['ormask'][ind] = np.bitwise_or.reduce(
-                        self.ormask[lr:ur+1, lc:uc+1],
-                        axis=None,
-                    )
-            else:
-                newres['ormask'] = self.ormask[rclip, cclip]
-
-            if bmask_region > 1:
-                for ind in range(cat.size):
-                    lr = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] - bmask_region)))
-                    ur = int(min(
-                        dims[0]-1,
-                        max(0, rclip[ind] + bmask_region)))
-
-                    lc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] - bmask_region)))
-                    uc = int(min(
-                        dims[1]-1,
-                        max(0, cclip[ind] + bmask_region)))
-
-                    newres['bmask'][ind] = np.bitwise_or.reduce(
-                        self.bmask[lr:ur+1, lc:uc+1],
-                        axis=None,
-                    )
-            else:
-                newres['bmask'] = self.bmask[rclip, cclip]
+            newres["bmask"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
+                mask=self.bmask,
+            )
+            newres["bmask_det"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row'],
+                cols=newres['sx_col'],
+                mask=self.bmask,
+            )
 
             if np.any(self.mfrac > 0):
-                # we are using the positions with the metacal shear removed
-                # for this.
                 newres["mfrac"] = measure_mfrac(
                     mfrac=self.mfrac,
                     x=newres["sx_col_noshear"],
                     y=newres["sx_row_noshear"],
+                    box_sizes=cat["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
+
+                newres["mfrac_det"] = measure_mfrac(
+                    mfrac=self.mfrac,
+                    x=newres["sx_col"],
+                    y=newres["sx_row"],
                     box_sizes=cat["box_size"],
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
@@ -548,3 +534,35 @@ def _clip_and_round(vals_in, dim):
     vals.clip(min=0, max=dim-1, out=vals)
 
     return vals.astype('i4')
+
+
+def _fill_in_mask_col(*, mask_region, rows, cols, mask):
+    dims = mask.shape
+    rclip = _clip_and_round(rows, dims[0])
+    cclip = _clip_and_round(cols, dims[1])
+
+    if mask_region > 1:
+        res = np.zeros_like(rows, dtype=np.int32)
+        for ind in range(rows.size):
+            lr = int(min(
+                dims[0]-1,
+                max(0, rclip[ind] - mask_region)))
+            ur = int(min(
+                dims[0]-1,
+                max(0, rclip[ind] + mask_region)))
+
+            lc = int(min(
+                dims[1]-1,
+                max(0, cclip[ind] - mask_region)))
+            uc = int(min(
+                dims[1]-1,
+                max(0, cclip[ind] + mask_region)))
+
+            res[ind] = np.bitwise_or.reduce(
+                mask[lr:ur+1, lc:uc+1],
+                axis=None,
+            )
+    else:
+        res = mask[rclip, cclip].astype(np.int32)
+
+    return res
