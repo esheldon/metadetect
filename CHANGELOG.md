@@ -4,6 +4,7 @@
 
 ### added
  - Added edge apodization for LSST.
+ - Added detected position quantities for DES codes.
 
 ### changed
  - LSST codes internally use DM exposures as opposed to ngmix observations.
