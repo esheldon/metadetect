@@ -385,13 +385,13 @@ class Metadetect(dict):
             )
 
             newres["bmask"] = _fill_in_mask_col(
-                mask_region=ormask_region,
+                mask_region=bmask_region,
                 rows=newres['sx_row_noshear'],
                 cols=newres['sx_col_noshear'],
                 mask=self.bmask,
             )
             newres["bmask_det"] = _fill_in_mask_col(
-                mask_region=ormask_region,
+                mask_region=bmask_region,
                 rows=newres['sx_row'],
                 cols=newres['sx_col'],
                 mask=self.bmask,
