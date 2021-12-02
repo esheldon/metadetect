@@ -3,6 +3,17 @@
 ## unreleased
 
 ### added
+
+### changed
+
+### removed
+
+### fixed
+
+
+## 0.5.0 - 2021-12-02
+
+### added
  - Added edge apodization for LSST.
  - Added detected position quantities for DES codes.
 
