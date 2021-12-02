@@ -401,3 +401,30 @@ def test_metadetect_flux(model, nband, nshear):
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
+
+
+@pytest.mark.parametrize("mask_region", [1, 7])
+def test_fill_in_mask_col(mask_region):
+    rng = np.random.RandomState(seed=10)
+
+    rows = np.array([31.2])
+    cols = np.array([51.7])
+    mask = rng.randint(low=0, high=64, size=(100, 100))
+
+    vals = metadetect._fill_in_mask_col(
+        mask_region=mask_region,
+        rows=rows,
+        cols=cols,
+        mask=mask)
+
+    row = 31
+    col = 52
+    if mask_region == 1:
+        assert vals[0] == mask[row, col]
+    else:
+        assert vals[0] == np.bitwise_or.reduce(
+            mask[
+                row-mask_region:row+mask_region+1,
+                col-mask_region:col+mask_region+1
+            ]
+        )[0]
