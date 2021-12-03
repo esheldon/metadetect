@@ -64,12 +64,6 @@ def show_mbexp(
     -------
     The axis used for plotting
     """
-    from astropy.visualization.lupton_rgb import AsinhMapping
-    from astropy.visualization import (
-        AsinhStretch,
-        imshow_norm,
-    )
-    import scarlet
 
     image = mbexp.image.array
 
@@ -77,6 +71,9 @@ def show_mbexp(
         fig, ax = mplt.subplots()
 
     if image.shape[0] >= 3:
+        import scarlet
+        from astropy.visualization.lupton_rgb import AsinhMapping
+
         timage = image[:3, :, :]
 
         asinh = AsinhMapping(
@@ -90,12 +87,15 @@ def show_mbexp(
         ax.imshow(img_rgb)
 
     else:
+        noise = np.sqrt(np.median(mbexp.variance.array))
         if image.shape[0] == 1:
             timage = image[0]
         else:
             timage = image.sum(axis=0)
 
-        imshow_norm(timage, ax=ax, stretch=AsinhStretch())
+        noise = np.sqrt(np.median(mbexp.variance.array))
+        minval = 0.1 * noise
+        ax.imshow(np.log(timage.clip(min=minval)))
 
     if sources is not None:
         x, y = _extract_xy(mbexp, sources)
@@ -322,7 +322,9 @@ def show_multi_mbexp(mbexp, sources=None):
     for iband, band in enumerate(mbexp.filters):
         exp = mbexp[band]
 
-        axs[iband, 0].imshow(exp.image.array)
+        noise = np.sqrt(np.median(exp.variance.array))
+        minval = 0.1 * noise
+        axs[iband, 0].imshow(np.log(exp.image.array.clip(min=minval)))
         axs[iband, 0].set_title(f'band {iband} image')
 
         axs[iband, 1].imshow(exp.variance.array)
