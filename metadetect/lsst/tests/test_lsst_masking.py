@@ -246,6 +246,7 @@ def test_apply_apodized_bright_masks_metadetect(show=False):
     dim = 200
     rng = np.random.RandomState(seed=seed)
 
+    found = False
     for itrial in range(ntrial):
         sim_data = make_lsst_sim(
             rng=rng, dim=dim, layout='random', bands=['i'],
@@ -292,7 +293,10 @@ def test_apply_apodized_bright_masks_metadetect(show=False):
         bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
         if np.any(res['noshear']['bmask'] & bright_expanded != 0):
+            found = True
             break
+
+    assert found
 
 
 if __name__ == '__main__':
