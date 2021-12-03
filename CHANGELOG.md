@@ -24,7 +24,7 @@
 
 ### removed
  - Removed unused deblender code for LSST.
- - Removed detected bit in LSST output catalogs.
+ - Removed DETECTED bit in LSST output catalogs.
 
 ### fixed
  - Fixed bug in LSST jacobians.
