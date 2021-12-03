@@ -670,6 +670,7 @@ def get_output(wcs, source, res, bmask, stamp_size, exp_bbox):
     ndarray
         Has the fields from res, with new fields added, see get_output_dtype
     """
+    import lsst.afw.image as afw_image
 
     output = get_output_struct(res)
 
@@ -700,7 +701,10 @@ def get_output(wcs, source, res, bmask, stamp_size, exp_bbox):
     output['ra'] = skypos.getRa().asDegrees()
     output['dec'] = skypos.getDec().asDegrees()
 
-    output['bmask'] = bmask
+    # remove DETECTED bit, it is just clutter since all detected
+    # objects have this bit set
+    detected = afw_image.Mask.getPlaneBitMask('DETECTED')
+    output['bmask'] = bmask & ~detected
 
     return output
 

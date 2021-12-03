@@ -14,6 +14,7 @@ from metadetect.lsst import util
 import descwl_shear_sims
 from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
+import lsst.afw.image as afw_image
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -99,7 +100,11 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
+    detected = afw_image.Mask.getPlaneBitMask('DETECTED')
     res = run_metadetect(rng=rng, config=config, **data)
+
+    # we remove the DETECTED bit
+    assert np.all(res['noshear']['bmask'] & detected == 0)
 
     if meas_type is None:
         front = 'wmom'
