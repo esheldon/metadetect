@@ -3,8 +3,20 @@
 ## unreleased
 
 ### added
+
+### changed
+
+### removed
+
+### fixed
+
+
+## 0.5.0 - 2021-12-02
+
+### added
  - Added edge apodization for LSST.
  - Added detected position quantities for DES codes.
+ - Added tests for BRIGHT mask expansion in LSST.
 
 ### changed
  - LSST codes internally use DM exposures as opposed to ngmix observations.
@@ -12,6 +24,7 @@
 
 ### removed
  - Removed unused deblender code for LSST.
+ - Removed DETECTED bit in LSST output catalogs.
 
 ### fixed
  - Fixed bug in LSST jacobians.
