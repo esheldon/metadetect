@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as mplt
 from .util import copy_mbexp
 
@@ -113,16 +114,20 @@ def show_mbexp(
 
 
 def _extract_xy(mbexp, sources):
-    bbox = mbexp.getBBox()
-    x0 = bbox.getBeginX()
-    y0 = bbox.getBeginY()
-    x = []
-    y = []
-    for source in sources[mbexp.filters[0]]:
-        peak = source.getFootprint().getPeaks()[0]
-        cen = peak.getCentroid()
-        x.append(cen.getX() - x0)
-        y.append(cen.getY() - y0)
+    if isinstance(sources, np.ndarray):
+        y = sources['row'] - sources['row0']
+        x = sources['col'] - sources['col0']
+    else:
+        bbox = mbexp.getBBox()
+        x0 = bbox.getBeginX()
+        y0 = bbox.getBeginY()
+        x = []
+        y = []
+        for source in sources[mbexp.filters[0]]:
+            peak = source.getFootprint().getPeaks()[0]
+            cen = peak.getCentroid()
+            x.append(cen.getX() - x0)
+            y.append(cen.getY() - y0)
 
     return x, y
 
@@ -295,7 +300,7 @@ def show_multi_mbobs(mbobs):
     mplt.show()
 
 
-def show_multi_mbexp(mbexp):
+def show_multi_mbexp(mbexp, sources=None):
     """
     Show images from a ngmix.MultiBandObsList
 
@@ -308,7 +313,11 @@ def show_multi_mbexp(mbexp):
 
     nband = len(mbexp)
 
-    fig, axs = mplt.subplots(nrows=3, ncols=nband)
+    ncols = 3
+    fig, axs = mplt.subplots(nrows=nband, ncols=ncols, squeeze=False)
+
+    if sources is not None:
+        x, y = _extract_xy(mbexp, sources)
 
     for iband, band in enumerate(mbexp.filters):
         exp = mbexp[band]
@@ -321,5 +330,12 @@ def show_multi_mbexp(mbexp):
 
         axs[iband, 2].imshow(exp.mask.array)
         axs[iband, 2].set_title(f'band {iband} mask')
+
+        if sources is not None:
+            for col in range(ncols):
+                axs[iband, col].scatter(
+                    x, y,
+                    s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
+                )
 
     mplt.show()

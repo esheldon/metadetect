@@ -4,11 +4,14 @@ from metadetect.masking import get_ap_range
 from metadetect.lsst import masking
 from metadetect.lsst import vis
 from metadetect.lsst import util
+from metadetect.lsst.metadetect import run_metadetect
 from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
 
-def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z']):
+def make_lsst_sim(
+    rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z'], layout='grid',
+):
 
     coadd_dim = dim
     se_dim = dim
@@ -17,7 +20,7 @@ def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z']):
         rng=rng,
         coadd_dim=coadd_dim,
         buff=0,
-        layout='grid',
+        layout=layout,
         mag=mag,
         hlr=hlr,
     )
@@ -232,6 +235,67 @@ def test_apply_apodized_edge_masks(show=False):
         assert np.all(nexp.image.array[w] != noise_image[w])
 
 
+def test_apply_apodized_bright_masks_metadetect(show=False):
+    """
+    look for detected objects with expanded mask set
+    """
+    ntrial = 5
+    nmasked = 2
+
+    seed = 101
+    dim = 200
+    rng = np.random.RandomState(seed=seed)
+
+    for itrial in range(ntrial):
+        sim_data = make_lsst_sim(
+            rng=rng, dim=dim, layout='random', bands=['i'],
+        )
+
+        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+        bands = data['mbexp'].filters
+
+        dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
+
+        wcs = data['mbexp'][bands[0]].getWcs()
+
+        buff = 21
+
+        exp = data['mbexp'][bands[0]]
+        dims = exp.image.array.shape
+        dim = dims[0]
+
+        x = rng.uniform(low=buff, high=dim-buff, size=nmasked)
+        y = rng.uniform(low=buff, high=dim-buff, size=nmasked)
+        radius = rng.uniform(low=10, high=20, size=nmasked)
+        ra, dec = wcs.pixelToSkyArray(x=x, y=y, degrees=True)
+        bright_info = np.zeros(nmasked, dtype=dtype)
+        bright_info['ra'] = ra
+        bright_info['dec'] = dec
+        bright_info['radius_pixels'] = radius
+
+        # works in place
+        masking.apply_apodized_bright_masks_mbexp(
+            mbexp=data['mbexp'],
+            noise_mbexp=data['noise_mbexp'],
+            mfrac_mbexp=data['mfrac_mbexp'],
+            bright_info=bright_info,
+            ormasks=data['ormasks'],
+        )
+
+        res = run_metadetect(config=None, rng=rng, **data)
+
+        if show:
+            vis.show_multi_mbexp(data['mbexp'], sources=res['noshear'])
+
+        # bright = exp.mask.getPlaneBitMask('BRIGHT')
+        bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
+
+        if np.any(res['noshear']['bmask'] & bright_expanded != 0):
+            break
+
+
 if __name__ == '__main__':
     # test_apply_apodized_bright_masks(show=True)
-    test_apply_apodized_edge_masks(show=True)
+    # test_apply_apodized_edge_masks(show=True)
+    test_apply_apodized_bright_masks_metadetect(show=True)
