@@ -11,7 +11,7 @@
 ### fixed
 
 
-## 0.5.0 - 2021-12-02
+## 0.5.0 - 2021-12-03
 
 ### added
  - Added edge apodization for LSST.
