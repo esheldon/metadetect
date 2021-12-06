@@ -590,8 +590,6 @@ def get_output_dtype():
         ('col', 'f4'),  # col in image. Use col0 to get to global pixel coords
         ('row_diff', 'f4'),  # difference from peak location
         ('col_diff', 'f4'),  # difference from peak location
-        ('row_noshear', 'f4'),  # noshear row in local image, not global wcs
-        ('col_noshear', 'f4'),  # noshear col in local image, not global wcs
         ('ra', 'f8'),
         ('dec', 'f8'),
 
@@ -648,7 +646,6 @@ def get_output(wcs, source, res, bmask, stamp_size, exp_bbox):
     get the output structure, copying in results
 
     The following fields are not set:
-        row_noshear, col_noshear
         psfrec_flags, psfrec_g, psfrec_T
         mfrac
 
