@@ -3,7 +3,6 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 
-from .. import shearpos
 from .. import procflags
 
 from .skysub import subtract_sky_mbexp
@@ -93,7 +92,6 @@ def run_metadetect(
         if res is not None:
             band = mcal_mbexp.filters[0]
             exp = mcal_mbexp[band]
-            add_noshear_pos_exp(res=res, shear_str=shear_str, exp=exp)
 
             add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
             add_ormask(ormask, res)
@@ -154,31 +152,6 @@ def detect_deblend_and_measure(
     return results
 
 
-def add_noshear_pos_exp(res, shear_str, exp):
-    """
-    add unsheared positions to the input result array
-    """
-
-    dims = exp.image.array.shape
-
-    cen, _ = get_integer_center(
-        wcs=exp.getWcs(),
-        bbox=exp.getBBox(),
-        as_double=True,
-    )
-    jac = get_jacobian(exp=exp, cen=cen)
-
-    rows_noshear, cols_noshear = shearpos.unshear_positions(
-        res['row'] - res['row0'],
-        res['col'] - res['col0'],
-        shear_str,
-        jac=jac,
-        dims=dims,
-    )
-    res['row_noshear'] = rows_noshear
-    res['col_noshear'] = cols_noshear
-
-
 def add_mfrac(config, mfrac, res, exp):
     """
     calculate and add mfrac to the input result array
@@ -197,8 +170,8 @@ def add_mfrac(config, mfrac, res, exp):
 
         res['mfrac'] = measure_weighted_mfrac(
             mfrac=mfrac,
-            x=res['col_noshear'],
-            y=res['row_noshear'],
+            x=res['col'] - res['col0'],
+            y=res['row'] - res['row0'],
             jac=jac,
             fwhm=config.get('mfrac_fwhm', None),
         )
