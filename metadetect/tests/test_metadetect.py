@@ -222,6 +222,10 @@ def test_metadetect_mfrac(model):
                 (res[shear]["mfrac"] > 0.45)
                 & (res[shear]["mfrac"] < 0.55)
             )
+            assert np.all(
+                (res[shear]["mfrac_noshear"] > 0.45)
+                & (res[shear]["mfrac_noshear"] < 0.55)
+            )
             msk = res[shear]['flags'] == 0
             for col in res[shear].dtype.names:
                 assert np.all(np.isfinite(res[shear][msk][col])), (
