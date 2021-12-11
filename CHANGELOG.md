@@ -11,6 +11,13 @@
 ### fixed
 
 
+## 0.6.0 - 2021-12-10
+
+### changed
+
+ - regular metadetect now defaults to using the sheared positions
+
+
 ## 0.5.0 - 2021-12-03
 
 ### added
