@@ -311,9 +311,9 @@ class Metadetect(dict):
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
-            ('ormask_det', 'i4'),
-            ('mfrac_det', 'f4'),
-            ('bmask_det', 'i4'),
+            ('ormask_noshear', 'i4'),
+            ('mfrac_noshear', 'f4'),
+            ('bmask_noshear', 'i4'),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -373,41 +373,32 @@ class Metadetect(dict):
 
             newres["ormask"] = _fill_in_mask_col(
                 mask_region=ormask_region,
-                rows=newres['sx_row_noshear'],
-                cols=newres['sx_col_noshear'],
-                mask=self.ormask,
-            )
-            newres["ormask_det"] = _fill_in_mask_col(
-                mask_region=ormask_region,
                 rows=newres['sx_row'],
                 cols=newres['sx_col'],
+                mask=self.ormask,
+            )
+            newres["ormask_noshear"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
                 mask=self.ormask,
             )
 
             newres["bmask"] = _fill_in_mask_col(
                 mask_region=bmask_region,
-                rows=newres['sx_row_noshear'],
-                cols=newres['sx_col_noshear'],
-                mask=self.bmask,
-            )
-            newres["bmask_det"] = _fill_in_mask_col(
-                mask_region=bmask_region,
                 rows=newres['sx_row'],
                 cols=newres['sx_col'],
+                mask=self.bmask,
+            )
+            newres["bmask_noshear"] = _fill_in_mask_col(
+                mask_region=bmask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
                 mask=self.bmask,
             )
 
             if np.any(self.mfrac > 0):
                 newres["mfrac"] = measure_mfrac(
-                    mfrac=self.mfrac,
-                    x=newres["sx_col_noshear"],
-                    y=newres["sx_row_noshear"],
-                    box_sizes=cat["box_size"],
-                    obs=obs,
-                    fwhm=self.get("mfrac_fwhm", None),
-                )
-
-                newres["mfrac_det"] = measure_mfrac(
                     mfrac=self.mfrac,
                     x=newres["sx_col"],
                     y=newres["sx_row"],
@@ -415,8 +406,18 @@ class Metadetect(dict):
                     obs=obs,
                     fwhm=self.get("mfrac_fwhm", None),
                 )
+
+                newres["mfrac_noshear"] = measure_mfrac(
+                    mfrac=self.mfrac,
+                    x=newres["sx_col_noshear"],
+                    y=newres["sx_row_noshear"],
+                    box_sizes=cat["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
             else:
                 newres["mfrac"] = 0
+                newres["mfrac_noshear"] = 0
 
         return newres
 
