@@ -53,6 +53,8 @@ def apply_apodization_corrections(*, mbobs, ap_rad, mask_bit_val):
                     if msk[0].size == obs.image.size:
                         obs.ignore_zero_weight = False
                     obs.weight[msk] = 0.0
+                    if np.all(obs.weight == 0):
+                        obs.ignore_zero_weight = False
 
 
 @njit
@@ -210,6 +212,8 @@ def _apply_mask_interp(
                     if np.all(bad_logic):
                         obs.ignore_zero_weight = False
                     obs.weight[wbad] = 0.0
+                    if np.all(obs.weight == 0):
+                        obs.ignore_zero_weight = False
 
                     if not np.all(bad_logic):
                         wmsk = obs.weight > 0
@@ -282,6 +286,8 @@ def _apply_mask_apodize(
                     if np.all(msk):
                         obs.ignore_zero_weight = False
                     obs.weight[msk] = 0.0
+                    if np.all(obs.weight == 0):
+                        obs.ignore_zero_weight = False
 
 
 def make_foreground_bmask(

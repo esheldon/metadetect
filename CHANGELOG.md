@@ -10,6 +10,8 @@
 
 ### fixed
 
+ - Fixed bug where ngmix observations with all zero weights were not flagged 
+   properly.
 
 ## 0.6.0 - 2021-12-10
 
