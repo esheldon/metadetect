@@ -186,6 +186,7 @@ def measure(
     if len(sources) == 0:
         return None
 
+    nband = len(mbexp.filters)
     exp_bbox = mbexp.getBBox()
     wcs = mbexp.singles[0].getWcs()
     results = []
@@ -228,7 +229,7 @@ def measure(
             flags = CENTROID_FAILURE
 
         if flags != 0:
-            this_res = get_wavg_output_struct(nband=1, model=fitter.kind)
+            this_res = get_wavg_output_struct(nband=nband, model=fitter.kind)
             this_res['flags'] = flags
 
         res = get_output(
