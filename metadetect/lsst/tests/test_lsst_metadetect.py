@@ -116,8 +116,8 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     assert gname in res['noshear'].dtype.names
 
     for shear in ('noshear', '1p', '1m'):
-        # 6x6 grid
-        assert res[shear].size == 36
+        # 5x5 grid
+        assert res[shear].size == 25
 
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
@@ -142,8 +142,8 @@ def test_lsst_metadetect_fullcoadd_smoke():
     assert gname in res['noshear'].dtype.names
 
     for shear in ('noshear', '1p', '1m'):
-        # 6x6 grid
-        assert res[shear].size == 36
+        # 5x5 grid
+        assert res[shear].size == 25
 
         assert np.any(res[shear]["flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
@@ -179,8 +179,8 @@ def test_lsst_zero_weights(show=False):
                 assert np.any(tres['psf_flags'] & procflags.NO_ATTEMPT != 0)
         else:
             for shear_type, tres in resdict.items():
-                # 6x6 grid
-                assert tres.size == 36
+                # 5x5 grid
+                assert tres.size == 25
 
         nobj.append(resdict['noshear'].size)
 
