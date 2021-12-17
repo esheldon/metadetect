@@ -7,6 +7,7 @@ from metadetect.lsst import util
 from metadetect.lsst.metadetect import run_metadetect
 from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
+import lsst.geom as geom
 
 
 def make_lsst_sim(
@@ -178,6 +179,166 @@ def test_apply_apodized_bright_masks(show=False):
                 assert np.all(nexp.variance.array[w] != np.inf)
 
 
+def extract_cell_mbexp(mbexp, cell_size, start_x, start_y):
+    from metadetect.lsst.util import get_mbexp, copy_mbexp
+
+    bbox_begin = mbexp.getBBox().getBegin()
+
+    new_begin = geom.Point2I(
+        x=bbox_begin.getX() + start_x,
+        y=bbox_begin.getY() + start_y,
+    )
+    extent = geom.Extent2I(cell_size)
+    new_bbox = geom.Box2I(
+        new_begin,
+        extent,
+    )
+
+    subexps = []
+    for band in mbexp.filters:
+        exp = mbexp[band]
+        # we need to make a copy of it
+        subexp = exp[new_bbox]
+
+        assert np.all(
+            exp.image.array[
+                start_y:start_y+cell_size,
+                start_x:start_x+cell_size
+            ] == subexp.image.array[:, :]
+        )
+
+        subexps.append(subexp)
+
+    return copy_mbexp(get_mbexp(subexps))
+
+
+def test_apply_apodized_bright_masks_subexp(show=False):
+    """
+    test that this works for sub exposures
+    """
+    seed = 101
+    dim = 200
+    rng = np.random.RandomState(seed=seed)
+
+    sim_data = make_lsst_sim(rng=rng, dim=dim)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    bands = data['mbexp'].filters
+
+    dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
+
+    wcs = data['mbexp'][bands[0]].getWcs()
+
+    exp = data['mbexp'][bands[0]]
+    xy0 = exp.getXY0()
+
+    # in bigger coordinate system
+    x = xy0.x + 100
+    y = xy0.y + 100
+    radius = 20
+
+    spt = wcs.pixelToSky(x, y)
+    ra = spt.getRa().asDegrees()
+    dec = spt.getDec().asDegrees()
+
+    bright_info = np.zeros(1, dtype=dtype)
+    bright_info['ra'] = ra
+    bright_info['dec'] = dec
+    bright_info['radius_pixels'] = radius
+
+    xp, yp = wcs.skyToPixelArray(ra=ra, dec=dec, degrees=True)
+    assert np.allclose(x, xp)
+    assert np.allclose(y, yp)
+
+    masking.apply_apodized_bright_masks_mbexp(
+        mbexp=data['mbexp'],
+        noise_mbexp=data['noise_mbexp'],
+        mfrac_mbexp=data['mfrac_mbexp'],
+        bright_info=bright_info,
+        ormasks=data['ormasks'],
+    )
+
+    if show:
+        vis.show_multi_mbexp(data['mbexp'])
+
+    bright = exp.mask.getPlaneBitMask('BRIGHT')
+    bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
+
+    cell_size = 50
+    start_x = x - xy0.x - 25
+    start_y = y - xy0.y - 25
+    sub_mbexp = extract_cell_mbexp(
+        mbexp=data['mbexp'],
+        cell_size=cell_size,
+        start_x=start_x,
+        start_y=start_y,
+    )
+    nsub_mbexp = extract_cell_mbexp(
+        mbexp=data['noise_mbexp'],
+        cell_size=cell_size,
+        start_x=start_x,
+        start_y=start_y,
+    )
+    mfsub_mbexp = extract_cell_mbexp(
+        mbexp=data['mfrac_mbexp'],
+        cell_size=cell_size,
+        start_x=start_x,
+        start_y=start_y,
+    )
+    ormasks = [
+        ormask[
+            start_y:start_y+cell_size,
+            start_x:start_x+cell_size,
+        ] for ormask in data['ormasks']
+    ]
+
+    ygrid, xgrid = np.mgrid[0:cell_size, 0:cell_size]
+
+    for iband, band in enumerate(data['mbexp'].filters):
+        exp = sub_mbexp[band]
+        nexp = nsub_mbexp[band]
+        ormask = ormasks[iband]
+        mfrac = mfsub_mbexp[band]
+
+        txy0 = exp.getXY0()
+
+        ix = int(np.floor(x+0.5)) - txy0.x
+        iy = int(np.floor(y+0.5)) - txy0.y
+
+        assert exp.image.array[iy, ix] == 0
+        assert nexp.image.array[iy, ix] == 0
+        assert exp.mask.array[iy, ix] == (bright | bright_expanded)
+        assert nexp.mask.array[iy, ix] == (bright | bright_expanded)
+
+        # within mask the bit is set and data are modified
+        r2 = (ygrid - iy)**2 + (xgrid - ix)**2
+
+        # shrink radius a little to deal with some roundoff errors
+        w = np.where(r2 < (radius-0.1)**2)
+
+        assert np.all(exp.mask.array[w] & bright != 0)
+        assert np.all(nexp.mask.array[w] & bright != 0)
+        assert np.all(ormask[w] & bright != 0)
+
+        assert np.all(exp.variance.array[w] == np.inf)
+        assert np.all(nexp.variance.array[w] == np.inf)
+        assert np.all(mfrac.image.array[w] == 1)
+
+        # mask is expanded and bit is set, but data are not modified in
+        # the expanded area
+        w = np.where(r2 < (radius + masking.EXPAND_RAD)**2)
+        assert np.all(exp.mask.array[w] & bright_expanded != 0)
+        assert np.all(nexp.mask.array[w] & bright_expanded != 0)
+        assert np.all(ormask[w] & bright_expanded != 0)
+
+        w = np.where(
+            (exp.mask.array & bright == 0) &
+            (exp.mask.array & bright_expanded != 0)
+        )
+        assert np.all(exp.variance.array[w] != np.inf)
+        assert np.all(nexp.variance.array[w] != np.inf)
+
+
 def test_apply_apodized_edge_masks(show=False):
     seed = 101
     dim = 250
@@ -301,5 +462,6 @@ def test_apply_apodized_bright_masks_metadetect(show=False):
 
 if __name__ == '__main__':
     # test_apply_apodized_bright_masks(show=True)
+    test_apply_apodized_bright_masks_subexp(show=True)
     # test_apply_apodized_edge_masks(show=True)
-    test_apply_apodized_bright_masks_metadetect(show=True)
+    # test_apply_apodized_bright_masks_metadetect(show=True)

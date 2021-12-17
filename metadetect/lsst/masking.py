@@ -90,9 +90,16 @@ def apply_apodized_bright_masks_mbexp(
     bright_expanded = afw_image.Mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
     wcs = mbexp[bands[0]].getWcs()
+    xy0 = mbexp[bands[0]].getXY0()
+
+    # these will be in a possibly larger coordinate system
     xm, ym = wcs.skyToPixelArray(
         ra=bright_info['ra'], dec=bright_info['dec'], degrees=True,
     )
+
+    # put in local coordinate system
+    xm -= xy0.x
+    ym -= xy0.y
     rm = bright_info['radius_pixels']
 
     dims = mbexp[bands[0]].image.array.shape
