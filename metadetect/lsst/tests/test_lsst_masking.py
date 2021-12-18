@@ -250,19 +250,8 @@ def test_apply_apodized_bright_masks_subexp(show=False):
     assert np.allclose(x, xp)
     assert np.allclose(y, yp)
 
-    masking.apply_apodized_bright_masks_mbexp(
-        mbexp=data['mbexp'],
-        noise_mbexp=data['noise_mbexp'],
-        mfrac_mbexp=data['mfrac_mbexp'],
-        bright_info=bright_info,
-        ormasks=data['ormasks'],
-    )
-
     if show:
         vis.show_multi_mbexp(data['mbexp'])
-
-    bright = exp.mask.getPlaneBitMask('BRIGHT')
-    bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
     cell_size = 50
     start_x = x - xy0.x - 25
@@ -291,6 +280,17 @@ def test_apply_apodized_bright_masks_subexp(show=False):
             start_x:start_x+cell_size,
         ] for ormask in data['ormasks']
     ]
+
+    masking.apply_apodized_bright_masks_mbexp(
+        mbexp=sub_mbexp,
+        noise_mbexp=nsub_mbexp,
+        mfrac_mbexp=mfsub_mbexp,
+        bright_info=bright_info,
+        ormasks=ormasks,
+    )
+
+    bright = exp.mask.getPlaneBitMask('BRIGHT')
+    bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
     ygrid, xgrid = np.mgrid[0:cell_size, 0:cell_size]
 
