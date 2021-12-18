@@ -83,6 +83,7 @@ def do_coadding(rng, sim_data, nowarp):
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('nowarp', [False, True])
 def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
+    print('-'*70)
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
@@ -105,8 +106,8 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
         config=config,
     )
 
-    # 6x6 on the grid
-    assert res.size == 36
+    # 5x5 on the grid
+    assert res.size == 25
 
     if meas_type is None:
         front = 'wmom'
@@ -120,5 +121,13 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     assert np.any(res["flags"] == 0)
     assert np.all(res["mfrac"] == 0)
 
-    # one band
-    assert len(res[flux_name].shape) == len(bands)
+    assert len(res[flux_name].shape) == 2
+    assert res[flux_name].shape[1] == len(bands)
+
+
+if __name__ == '__main__':
+    for mt in ['pgauss', 'ksigma']:
+        for nowarp in [True, False]:
+            test_lsst_photometry_smoke(
+                meas_type=mt, subtract_sky=False, nowarp=nowarp
+            )

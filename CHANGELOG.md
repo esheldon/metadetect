@@ -10,6 +10,11 @@
 
 ### fixed
 
+ - Fixed bug not converting x, y to local coordinate system applying apodized
+   star mask for lsst
+ - Fixed bug when creating an output structure for multiband lsst data when
+   there was a measurement failure
+
 ## 0.6.1 - 2021-12-13
 
 ### fixed
