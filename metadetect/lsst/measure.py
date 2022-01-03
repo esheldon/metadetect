@@ -66,6 +66,8 @@ def detect_and_deblend(
 
     if len(mbexp.singles) > 1:
         detexp = util.coadd_exposures(mbexp.singles)
+        if detexp is None:
+            return [], None
     else:
         detexp = mbexp.singles[0]
 

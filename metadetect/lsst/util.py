@@ -410,6 +410,10 @@ def coadd_exposures(exposures):
 
         wsum += this_weight
 
+    if wsum <= 0:
+        logger.info('found wsum <= 0')
+        return None
+
     fac = 1.0/wsum
 
     coadd_exp.image.array[:, :] *= fac
