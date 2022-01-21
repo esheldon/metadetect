@@ -112,8 +112,7 @@ class Metadetect(dict):
             else 0
         )
 
-        if 'psf' in config:
-            self._fit_original_psfs()
+        self._fit_original_psfs()
 
         self._set_fitter()
 
@@ -328,11 +327,10 @@ class Metadetect(dict):
         if 'psfrec_flags' not in res.dtype.names:
             newres['psfrec_flags'] = procflags.NO_ATTEMPT
 
-        if hasattr(self, 'psf_stats'):
-            newres['psfrec_flags'][:] = self.psf_stats['flags']
-            newres['psfrec_g'][:, 0] = self.psf_stats['g1']
-            newres['psfrec_g'][:, 1] = self.psf_stats['g2']
-            newres['psfrec_T'][:] = self.psf_stats['T']
+        newres['psfrec_flags'][:] = self.psf_stats['flags']
+        newres['psfrec_g'][:, 0] = self.psf_stats['g1']
+        newres['psfrec_g'][:, 1] = self.psf_stats['g2']
+        newres['psfrec_T'][:] = self.psf_stats['T']
 
         if cat.size > 0:
             obs = self.mbobs[0][0]
