@@ -184,8 +184,8 @@ def test_metadetect(model):
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
             assert any(c.endswith("band_flux") for c in res[shear].dtype.names)
-            assert np.any(res[shear]["psfrec_g"] > 0)
-            assert np.any(res[shear]["psfrec_T"] > 0)
+            assert np.any(res[shear]["psfrec_g"] != 0)
+            assert np.any(res[shear]["psfrec_T"] != 0)
             msk = res[shear]['flags'] == 0
             for col in res[shear].dtype.names:
                 assert np.all(np.isfinite(res[shear][msk][col])), (
