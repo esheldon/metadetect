@@ -10,6 +10,15 @@
 
 ### fixed
 
+
+## 0.6.2 - 2022-01-21
+
+### changed
+
+ - DES metadetect now always fits the PSF.
+
+### fixed
+
  - Fixed bug not converting x, y to local coordinate system applying apodized
    star mask for lsst
  - Fixed bug when creating an output structure for multiband lsst data when
@@ -19,7 +28,7 @@
 
 ### fixed
 
- - Fixed bug where ngmix observations with all zero weights were not flagged 
+ - Fixed bug where ngmix observations with all zero weights were not flagged
    properly.
 
 
