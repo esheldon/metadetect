@@ -13,6 +13,8 @@ import numpy as np
 
 from .. import detect
 from .. import metadetect
+from .. import fitting
+from .. import procflags
 from .sim import Sim
 
 
@@ -488,29 +490,45 @@ def test_fill_in_mask_col(mask_region):
         )[0]
 
 
-def test_get_bmask_ormask():
-    assert False
-
-
-def test_get_mfrac():
-    assert False
-
-
 def test_get_psf_stats():
-    assert False
+    rng = np.random.RandomState(seed=10)
+    sim = Sim(rng)
+    mbobs = sim.get_mbobs()
+    fitting.fit_all_psfs(mbobs, rng)
 
+    psf_stats = metadetect._get_psf_stats(mbobs, 0)
+    assert psf_stats["flags"] == 0
+    assert np.isfinite(psf_stats["g1"])
+    assert np.isfinite(psf_stats["g2"])
+    assert np.isfinite(psf_stats["T"])
 
-def test_add_positions():
-    assert False
+    psf_stats = metadetect._get_psf_stats(mbobs, 2)
+    assert psf_stats["flags"] == (procflags.PSF_FAILURE | 2)
+    assert not np.isfinite(psf_stats["g1"])
+    assert not np.isfinite(psf_stats["g2"])
+    assert not np.isfinite(psf_stats["T"])
 
+    for obslist in mbobs:
+        for obs in obslist:
+            obs.weight = -1.0*obs.weight
+    psf_stats = metadetect._get_psf_stats(mbobs, 0)
+    assert psf_stats["flags"] == procflags.PSF_FAILURE
+    assert not np.isfinite(psf_stats["g1"])
+    assert not np.isfinite(psf_stats["g2"])
+    assert not np.isfinite(psf_stats["T"])
 
-def test_add_mfrac():
-    assert False
+    e1s = np.arange(len(mbobs)) + 0.1
+    e2s = 2*np.arange(len(mbobs)) + 0.1
+    Ts = 3*np.arange(len(mbobs)) + 0.1
+    wgts = np.arange(len(mbobs)) + 1
+    for i, obslist in enumerate(mbobs):
+        for obs in obslist:
+            obs.weight = 0*obs.weight + wgts[i]
+            obs.psf.meta["result"]["e"] = (e1s[i], e2s[i])
+            obs.psf.meta["result"]["T"] = Ts[i]
 
-
-def test_add_bmask_ormask():
-    assert False
-
-
-def test_add_psf_stats():
-    assert False
+    psf_stats = metadetect._get_psf_stats(mbobs, 0)
+    assert psf_stats["flags"] == 0
+    assert np.allclose(psf_stats["g1"], np.sum(wgts * e1s)/np.sum(wgts))
+    assert np.allclose(psf_stats["g2"], np.sum(wgts * e2s)/np.sum(wgts))
+    assert np.allclose(psf_stats["T"], np.sum(wgts * Ts)/np.sum(wgts))
