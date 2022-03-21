@@ -96,11 +96,33 @@ class Metadetect(dict):
         shear_band_combs=None,
     ):
         self._show = show
-        self._mbobs = mbobs
-        self._nband = len(mbobs)
-        self._rng = rng
 
-        # set the config
+        self._set_config(config)
+        self.mbobs = mbobs
+        self.nband = len(mbobs)
+        self.rng = rng
+
+        self._set_fitter()
+
+        # fit all PSFs
+        try:
+            fitting.fit_all_psfs(self.mbobs, self.rng)
+            self._psf_fit_flags = 0
+        except BootPSFFailure:
+            self._psf_fit_flags = procflags.PSF_FAILURE
+
+        if shear_band_combs is None:
+            shear_band_combs = [
+                list(range(self.nband)),
+            ]
+
+        self._shear_band_combs = shear_band_combs
+
+    def _set_config(self, config):
+        """
+        set the config, dealing with defaults
+        """
+
         self.update(config)
         assert 'metacal' in self, \
             'metacal setting must be present in config'
@@ -109,14 +131,60 @@ class Metadetect(dict):
         assert 'meds' in self, \
             'meds setting must be present in config'
         self['nodet_flags'] = self.get('nodet_flags', 0)
-        self["bmask_flags"] = self.get("bmask_flags", 0)
-        if 'ormask_region' in config:
-            raise RuntimeError("ormask_region is not supported, use mask_region!")
-        if 'bmask_region' in config:
-            raise RuntimeError("bmask_region is not supported, use mask_region!")
 
-        # set the fitter
+    def _get_ormask_and_bmask(self, mbobs):
+        """
+        set the ormask and bmask, ored from all epochs
+        """
+
+        for band, obslist in enumerate(mbobs):
+            nepoch = len(obslist)
+            assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
+
+            obs = obslist[0]
+
+            if band == 0:
+                ormask = obs.ormask.copy()
+                bmask = obs.bmask.copy()
+            else:
+                ormask |= obs.ormask
+                bmask |= obs.bmask
+
+        return ormask, bmask
+
+    def _get_mfrac(self, mbobs):
+        """
+        set the masked fraction image, averaged over all bands
+        """
+        wgts = []
+        mfrac = np.zeros_like(mbobs[0][0].image)
+        for band, obslist in enumerate(mbobs):
+            nepoch = len(obslist)
+            assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
+
+            obs = obslist[0]
+            msk = obs.weight > 0
+            if not np.any(msk):
+                wgt = 0
+            else:
+                wgt = np.median(obs.weight[msk])
+            if hasattr(obs, "mfrac"):
+                mfrac += (obs.mfrac * wgt)
+            wgts.append(wgt)
+
+        if np.sum(wgts) > 0:
+            mfrac = mfrac / np.sum(wgts)
+        else:
+            mfrac[:, :] = 1.0
+
+        return mfrac
+
+    def _set_fitter(self):
+        """
+        set the fitter to be used
+        """
         self['model'] = self.get('model', 'wmom')
+
         if self['model'] == 'wmom':
             self._fitter = ngmix.gaussmom.GaussMom(fwhm=self["weight"]["fwhm"])
         elif self['model'] == 'ksigma':
@@ -125,20 +193,6 @@ class Metadetect(dict):
             self._fitter = ngmix.prepsfmom.PGaussMom(fwhm=self["weight"]["fwhm"])
         else:
             raise ValueError("bad model: '%s'" % self['model'])
-
-        # fit all PSFs
-        try:
-            fitting.fit_all_psfs(self._mbobs, self._rng)
-            self._psf_fit_flags = 0
-        except BootPSFFailure:
-            self._psf_fit_flags = procflags.PSF_FAILURE
-
-        if shear_band_combs is None:
-            shear_band_combs = [
-                list(range(self._nband)),
-            ]
-
-        self._shear_band_combs = shear_band_combs
 
     @property
     def result(self):
@@ -154,10 +208,10 @@ class Metadetect(dict):
     def go(self):
         """Run metadetect and set the result."""
 
-        mfrac = _get_mfrac(self._mbobs)
+        mfrac = self._get_mfrac(self.mbobs)
         any_all_zero_weight = False
         any_all_masked = False
-        for obsl in self._mbobs:
+        for obsl in self.mbobs:
             for obs in obsl:
                 if np.all(obs.weight == 0):
                     any_all_zero_weight = True
@@ -172,7 +226,7 @@ class Metadetect(dict):
         # we do metacal on everything so we can get fluxes for non-shear bands later
         t0 = time.time()
         try:
-            mcal_res = self._get_all_metacal(self._mbobs)
+            mcal_res = self._get_all_metacal(self.mbobs)
         except BootPSFFailure:
             mcal_res = None
         logger.info("metacal took %s seconds", time.time() - t0)
@@ -201,26 +255,23 @@ class Metadetect(dict):
         self._result = all_res
 
     def _go_bands(self, shear_bands, mcal_res):
-        # the flagging and mfrac is done only with bands for shear
-        mbobs = ngmix.MultiBandObsList()
+        # the flagging, mfrac and psf stats are done only with bands for shear
+        _mbobs = ngmix.MultiBandObsList()
         for band in shear_bands:
-            mbobs.append(self._mbobs[band])
-        mfrac = _get_mfrac(mbobs)
-        bmask, ormask = _get_bmask_ormask(mbobs)
-
-        # psf stats come from the original mbobs
-        psf_stats = _get_psf_stats(self._mbobs, shear_bands, self._psf_fit_flags)
+            _mbobs.append(self.mbobs[band])
+        mfrac = self._get_mfrac(_mbobs)
+        ormask, bmask = self._get_ormask_and_bmask(_mbobs)
+        psf_stats = _get_psf_stats(_mbobs, self._psf_fit_flags)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
-            _result[shear_str] = self._measure_mdet(
+            _result[shear_str] = self._measure(
                 mbobs=shear_mbobs,
                 shear_str=shear_str,
                 shear_bands=shear_bands,
                 mfrac=mfrac,
                 bmask=bmask,
                 ormask=ormask,
-                fitter=self._fitter,
                 psf_stats=psf_stats,
             )
 
@@ -229,9 +280,8 @@ class Metadetect(dict):
         else:
             return _result
 
-    def _measure_mdet(
-        self, *, mbobs, shear_str, shear_bands, mfrac, bmask, ormask, fitter,
-        psf_stats,
+    def _measure(
+        self, *, mbobs, shear_str, shear_bands, mfrac, bmask, ormask, psf_stats
     ):
         """
         perform measurements on the input mbobs. This involves running
@@ -239,43 +289,184 @@ class Metadetect(dict):
 
         we only detect on the shear bands in mbobs.
 
-        we then do flux measurements on everything
+        we then do flux measurements on the nonshear_mbobs as well if it is given.
         """
-        cat, mbobs_list = self._do_detection(mbobs, shear_bands)
+        t0 = time.time()
+        medsifier = self._do_detect(mbobs, shear_bands)
+        if self._show:
+            import descwl_coadd.vis
+            descwl_coadd.vis.show_image(medsifier.seg)
+
+        all_medsifier = detect.CatalogMEDSifier(
+            mbobs,
+            medsifier.cat['x'],
+            medsifier.cat['y'],
+            medsifier.cat['box_size'],
+        )
+        mbm = all_medsifier.get_multiband_meds()
+        mbobs_list = mbm.get_mbobs_list()
+        logger.info("detect took %s seconds", time.time() - t0)
 
         t0 = time.time()
         res = fit_mbobs_list_wavg(
             mbobs_list=mbobs_list,
-            fitter=fitter,
-            bmask_flags=self["bmask_flags"],
+            fitter=self._fitter,
             shear_bands=shear_bands,
+            bmask_flags=self.get("bmask_flags", 0),
         )
-        logger.info("src measurements took %s seconds", time.time() - t0)
 
         if res is not None:
-            res = _add_positions(
-                cat=cat,
+            res = self._add_positions_and_psf(
+                cat=medsifier.cat,
                 res=res,
                 shear_str=shear_str,
-                obs=mbobs[0][0],
-                metacal_step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
-            )
-            res = _add_psf_stats(
-                res=res,
+                mfrac=mfrac,
+                bmask=bmask,
+                ormask=ormask,
                 psf_stats=psf_stats,
             )
-            res = _add_bmask_and_ormask(
-                res=res, bmask=bmask, ormask=ormask,
-                mask_region=self.get("mask_region", 1),
-            )
-            res = _add_mfrac(
-                res=res, mfrac=mfrac,
-                mfrac_fwhm=self.get("mfrac_fwhm", None),
-                box_sizes=cat["box_size"],
-                obs=mbobs[0][0],
-            )
+        logger.info("src measurements took %s seconds", time.time() - t0)
 
         return res
+
+    def _add_positions_and_psf(
+        self, *, cat, res, shear_str, mfrac, bmask, ormask, psf_stats
+    ):
+        """
+        add catalog positions to the result
+        """
+
+        new_dt = [
+            ('sx_row', 'f4'),
+            ('sx_col', 'f4'),
+            ('sx_row_noshear', 'f4'),
+            ('sx_col_noshear', 'f4'),
+            ('ormask', 'i4'),
+            ('mfrac', 'f4'),
+            ('bmask', 'i4'),
+            ('ormask_noshear', 'i4'),
+            ('mfrac_noshear', 'f4'),
+            ('bmask_noshear', 'i4'),
+        ]
+        if 'psfrec_flags' not in res.dtype.names:
+            new_dt += [
+                ('psfrec_flags', 'i4'),  # psfrec is the original psf
+                ('psfrec_g', 'f8', 2),
+                ('psfrec_T', 'f8'),
+            ]
+        newres = eu.numpy_util.add_fields(
+            res,
+            new_dt,
+        )
+        if 'psfrec_flags' not in res.dtype.names:
+            newres['psfrec_flags'] = procflags.NO_ATTEMPT
+
+        newres['psfrec_flags'][:] = psf_stats['flags']
+        newres['psfrec_g'][:, 0] = psf_stats['g1']
+        newres['psfrec_g'][:, 1] = psf_stats['g2']
+        newres['psfrec_T'][:] = psf_stats['T']
+
+        if cat.size > 0:
+            obs = self.mbobs[0][0]
+
+            newres['sx_col'] = cat['x']
+            newres['sx_row'] = cat['y']
+
+            rows_noshear, cols_noshear = shearpos.unshear_positions_obs(
+                newres['sx_row'],
+                newres['sx_col'],
+                shear_str,
+                obs,  # an example for jacobian and image shape
+                # default is 0.01 but make sure to use the passed in default
+                # if needed
+                step=self['metacal'].get("step", shearpos.DEFAULT_STEP),
+            )
+
+            newres['sx_row_noshear'] = rows_noshear
+            newres['sx_col_noshear'] = cols_noshear
+
+            if 'ormask_region' in self and self['ormask_region'] > 1:
+                ormask_region = self['ormask_region']
+            elif 'mask_region' in self and self['mask_region'] > 1:
+                ormask_region = self['mask_region']
+            else:
+                ormask_region = 1
+
+            if 'mask_region' in self and self['mask_region'] > 1:
+                bmask_region = self['mask_region']
+            else:
+                bmask_region = 1
+
+            logger.debug(
+                'ormask|bmask region: %s|%s',
+                ormask_region,
+                bmask_region,
+            )
+
+            newres["ormask"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row'],
+                cols=newres['sx_col'],
+                mask=ormask,
+            )
+            newres["ormask_noshear"] = _fill_in_mask_col(
+                mask_region=ormask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
+                mask=ormask,
+            )
+
+            newres["bmask"] = _fill_in_mask_col(
+                mask_region=bmask_region,
+                rows=newres['sx_row'],
+                cols=newres['sx_col'],
+                mask=bmask,
+            )
+            newres["bmask_noshear"] = _fill_in_mask_col(
+                mask_region=bmask_region,
+                rows=newres['sx_row_noshear'],
+                cols=newres['sx_col_noshear'],
+                mask=bmask,
+            )
+
+            if np.any(mfrac > 0):
+                newres["mfrac"] = measure_mfrac(
+                    mfrac=mfrac,
+                    x=newres["sx_col"],
+                    y=newres["sx_row"],
+                    box_sizes=cat["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
+
+                newres["mfrac_noshear"] = measure_mfrac(
+                    mfrac=mfrac,
+                    x=newres["sx_col_noshear"],
+                    y=newres["sx_row_noshear"],
+                    box_sizes=cat["box_size"],
+                    obs=obs,
+                    fwhm=self.get("mfrac_fwhm", None),
+                )
+            else:
+                newres["mfrac"] = 0
+                newres["mfrac_noshear"] = 0
+
+        return newres
+
+    def _do_detect(self, mbobs, shear_bands):
+        """
+        use a MEDSifier to run detection
+        """
+        shear_mbobs = ngmix.MultiBandObsList()
+        for band in shear_bands:
+            shear_mbobs.append(mbobs[band])
+
+        return detect.MEDSifier(
+            mbobs=shear_mbobs,
+            sx_config=self['sx'],
+            meds_config=self['meds'],
+            nodet_flags=self['nodet_flags'],
+        )
 
     def _get_all_metacal(self, mbobs):
         """
@@ -284,7 +475,7 @@ class Metadetect(dict):
 
         odict = ngmix.metacal.get_all_metacal(
             mbobs,
-            rng=self._rng,
+            rng=self.rng,
             **self['metacal']
         )
 
@@ -315,172 +506,8 @@ class Metadetect(dict):
 
         return odict
 
-    def _do_detection(self, mbobs, shear_bands):
-        shear_mbobs = ngmix.MultiBandObsList()
-        for band in shear_bands:
-            shear_mbobs.append(mbobs[band])
-        t0 = time.time()
-        medsifier = detect.MEDSifier(
-            mbobs=shear_mbobs,
-            sx_config=self['sx'],
-            meds_config=self['meds'],
-            nodet_flags=self['nodet_flags'],
-        )
-        logger.info("detect took %s seconds", time.time() - t0)
 
-        if self._show:
-            import descwl_coadd.vis
-            descwl_coadd.vis.show_image(medsifier.seg)
-
-        all_medsifier = detect.CatalogMEDSifier(
-            mbobs,
-            medsifier.cat['x'],
-            medsifier.cat['y'],
-            medsifier.cat['box_size'],
-        )
-        mbm = all_medsifier.get_multiband_meds()
-        mbobs_list = mbm.get_mbobs_list()
-
-        return medsifier.cat, mbobs_list
-
-
-def _add_positions(
-    *, cat, res, shear_str, obs, metacal_step,
-):
-    new_dt = [
-        ('sx_row', 'f4'),
-        ('sx_col', 'f4'),
-        ('sx_row_noshear', 'f4'),
-        ('sx_col_noshear', 'f4'),
-    ]
-    newres = eu.numpy_util.add_fields(
-        res,
-        new_dt,
-    )
-
-    if res.size > 0:
-        newres['sx_col'] = cat['x']
-        newres['sx_row'] = cat['y']
-
-        rows_noshear, cols_noshear = shearpos.unshear_positions_obs(
-            newres['sx_row'],
-            newres['sx_col'],
-            shear_str,
-            obs,  # an example for jacobian and image shape
-            # default is 0.01 but make sure to use the passed in default
-            # if needed
-            step=metacal_step,
-        )
-
-        newres['sx_row_noshear'] = rows_noshear
-        newres['sx_col_noshear'] = cols_noshear
-
-    return newres
-
-
-def _add_mfrac(
-    *, res, mfrac, mfrac_fwhm, box_sizes, obs
-):
-    new_dt = [
-        ('mfrac', 'f4'),
-        ('mfrac_noshear', 'f4'),
-    ]
-    newres = eu.numpy_util.add_fields(
-        res,
-        new_dt,
-    )
-
-    if res.size > 0:
-        if np.any(mfrac > 0):
-            newres["mfrac"] = measure_mfrac(
-                mfrac=mfrac,
-                x=newres["sx_col"],
-                y=newres["sx_row"],
-                box_sizes=box_sizes,
-                obs=obs,
-                fwhm=mfrac_fwhm,
-            )
-
-            newres["mfrac_noshear"] = measure_mfrac(
-                mfrac=mfrac,
-                x=newres["sx_col_noshear"],
-                y=newres["sx_row_noshear"],
-                box_sizes=box_sizes,
-                obs=obs,
-                fwhm=mfrac_fwhm,
-            )
-        else:
-            newres["mfrac"] = 0
-            newres["mfrac_noshear"] = 0
-
-    return newres
-
-
-def _add_bmask_and_ormask(*, res, bmask, ormask, mask_region):
-    new_dt = [
-        ('ormask', 'i4'),
-        ('bmask', 'i4'),
-        ('ormask_noshear', 'i4'),
-        ('bmask_noshear', 'i4'),
-    ]
-    newres = eu.numpy_util.add_fields(
-        res,
-        new_dt,
-    )
-
-    logger.debug('ormask|bmask region: %s', mask_region)
-
-    if res.size > 0:
-        newres["ormask"] = _fill_in_mask_col(
-            mask_region=mask_region,
-            rows=newres['sx_row'],
-            cols=newres['sx_col'],
-            mask=ormask,
-        )
-        newres["ormask_noshear"] = _fill_in_mask_col(
-            mask_region=mask_region,
-            rows=newres['sx_row_noshear'],
-            cols=newres['sx_col_noshear'],
-            mask=ormask,
-        )
-
-        newres["bmask"] = _fill_in_mask_col(
-            mask_region=mask_region,
-            rows=newres['sx_row'],
-            cols=newres['sx_col'],
-            mask=bmask,
-        )
-        newres["bmask_noshear"] = _fill_in_mask_col(
-            mask_region=mask_region,
-            rows=newres['sx_row_noshear'],
-            cols=newres['sx_col_noshear'],
-            mask=bmask,
-        )
-
-    return newres
-
-
-def _add_psf_stats(res, psf_stats):
-    new_dt = [
-        ('psfrec_flags', 'i4'),  # psfrec is the original psf
-        ('psfrec_g', 'f8', 2),
-        ('psfrec_T', 'f8'),
-    ]
-    newres = eu.numpy_util.add_fields(
-        res,
-        new_dt,
-    )
-
-    if res.size > 0:
-        newres['psfrec_flags'] = psf_stats['flags']
-        newres['psfrec_g'][:, 0] = psf_stats['g1']
-        newres['psfrec_g'][:, 1] = psf_stats['g2']
-        newres['psfrec_T'] = psf_stats['T']
-
-    return newres
-
-
-def _get_psf_stats(mbobs, shear_bands, global_flags):
+def _get_psf_stats(mbobs, global_flags):
     if global_flags != 0:
         flags = procflags.PSF_FAILURE
         g1 = np.nan
@@ -493,8 +520,7 @@ def _get_psf_stats(mbobs, shear_bands, global_flags):
             Tsum = 0.0
             wsum = 0.0
 
-            for band in shear_bands:
-                obslist = mbobs[band]
+            for obslist in mbobs:
                 for obs in obslist:
                     wt = obs.weight.max()
                     res = obs.psf.meta['result']
