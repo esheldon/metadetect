@@ -509,7 +509,7 @@ class Metadetect(dict):
 
 def _get_psf_stats(mbobs, global_flags):
     if global_flags != 0:
-        flags = procflags.PSF_FAILURE
+        flags = procflags.PSF_FAILURE | global_flags
         g1 = np.nan
         g2 = np.nan
         T = np.nan
@@ -557,51 +557,6 @@ def _get_psf_stats(mbobs, global_flags):
         'g2': g2,
         'T': T,
     }
-
-
-def _get_bmask_ormask(mbobs):
-    for band, obslist in enumerate(mbobs):
-        nepoch = len(obslist)
-        assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
-
-        obs = obslist[0]
-
-        if band == 0:
-            ormask = obs.ormask.copy()
-            bmask = obs.bmask.copy()
-        else:
-            ormask |= obs.ormask
-            bmask |= obs.bmask
-
-    return bmask, ormask
-
-
-def _get_mfrac(mbobs):
-    """
-    set the masked fraction image, averaged over all bands
-    """
-    wgts = []
-    mfrac = np.zeros_like(mbobs[0][0].image)
-    for band, obslist in enumerate(mbobs):
-        nepoch = len(obslist)
-        assert nepoch == 1, 'expected 1 epoch, got %d' % nepoch
-
-        obs = obslist[0]
-        msk = obs.weight > 0
-        if not np.any(msk):
-            wgt = 0
-        else:
-            wgt = np.median(obs.weight[msk])
-        if hasattr(obs, "mfrac"):
-            mfrac += (obs.mfrac * wgt)
-        wgts.append(wgt)
-
-    if np.sum(wgts) > 0:
-        mfrac = mfrac / np.sum(wgts)
-    else:
-        mfrac[:, :] = 1.0
-
-    return mfrac
 
 
 def _clip_and_round(vals_in, dim):
