@@ -17,7 +17,17 @@ from .. import procflags
 def _print_res(res):
     print("", flush=True)
     for name in res.dtype.names:
-        print("    %s:" % name, res[name], flush=True)
+        if "flag" in name:
+            print(
+                "    %s: %d (%s)" % (
+                    name,
+                    res[name],
+                    procflags.get_procflags_str(res[name]),
+                ),
+                flush=True,
+            )
+        else:
+            print("    %s:" % name, res[name], flush=True)
 
 
 def test_fitting_fit_mbobs_wavg_flagging_nodata():
@@ -27,7 +37,6 @@ def test_fitting_fit_mbobs_wavg_flagging_nodata():
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=None,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -37,15 +46,16 @@ def test_fitting_fit_mbobs_wavg_flagging_nodata():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
+    mbobs = make_mbobs_sim(45, 7)
     mbobs[1] = ngmix.ObsList()
-    nonshear_mbobs = make_mbobs_sim(45, 3)
+    shear_bands = [0, 1, 2, 3]
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=shear_bands,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -55,15 +65,16 @@ def test_fitting_fit_mbobs_wavg_flagging_nodata():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3, 4, 5, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
-    nonshear_mbobs = make_mbobs_sim(45, 3)
-    nonshear_mbobs[1] = ngmix.ObsList()
+    mbobs = make_mbobs_sim(45, 7)
+    mbobs[5] = ngmix.ObsList()
+    shear_bands = [0, 1, 2, 3]
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=shear_bands,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -73,6 +84,7 @@ def test_fitting_fit_mbobs_wavg_flagging_nodata():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 5]))
         for i in [0, 1, 2, 3, 4, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
 
 def test_fitting_fit_mbobs_wavg_flagging_edge():
@@ -86,7 +98,6 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=None,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
@@ -96,17 +107,17 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
+    mbobs = make_mbobs_sim(45, 7)
     with mbobs[1][0].writeable():
         mbobs[1][0].bmask[2, 3] = bmask_flags
         mbobs[1][0].bmask[3, 1] = other_flags
-    nonshear_mbobs = make_mbobs_sim(45, 3)
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
@@ -116,17 +127,17 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3, 4, 5, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
-    nonshear_mbobs = make_mbobs_sim(45, 3)
-    with nonshear_mbobs[1][0].writeable():
-        nonshear_mbobs[1][0].bmask[2, 3] = bmask_flags
-        nonshear_mbobs[1][0].bmask[3, 1] = other_flags
+    mbobs = make_mbobs_sim(45, 7)
+    with mbobs[5][0].writeable():
+        mbobs[5][0].bmask[2, 3] = bmask_flags
+        mbobs[5][0].bmask[3, 1] = other_flags
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.EDGE_HIT) != 0)
@@ -136,6 +147,7 @@ def test_fitting_fit_mbobs_wavg_flagging_edge():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 5]))
         for i in [0, 1, 2, 3, 4, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
 
 def test_fitting_fit_mbobs_wavg_flagging_zeroweight():
@@ -147,7 +159,6 @@ def test_fitting_fit_mbobs_wavg_flagging_zeroweight():
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=None,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
@@ -157,17 +168,17 @@ def test_fitting_fit_mbobs_wavg_flagging_zeroweight():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
+    mbobs = make_mbobs_sim(45, 7)
     with mbobs[1][0].writeable():
         mbobs[1][0].ignore_zero_weight = False
         mbobs[1][0].weight[:, :] = 0
-    nonshear_mbobs = make_mbobs_sim(45, 3)
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
@@ -177,17 +188,17 @@ def test_fitting_fit_mbobs_wavg_flagging_zeroweight():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 1]))
         for i in [0, 2, 3, 4, 5, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
-    nonshear_mbobs = make_mbobs_sim(45, 3)
-    with nonshear_mbobs[1][0].writeable():
-        nonshear_mbobs[1][0].ignore_zero_weight = False
-        nonshear_mbobs[1][0].weight[:, :] = 0
+    mbobs = make_mbobs_sim(45, 7)
+    with mbobs[5][0].writeable():
+        mbobs[5][0].ignore_zero_weight = False
+        mbobs[5][0].weight[:, :] = 0
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=0,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.ZERO_WEIGHTS) != 0)
@@ -197,6 +208,7 @@ def test_fitting_fit_mbobs_wavg_flagging_zeroweight():
         assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, 5]))
         for i in [0, 1, 2, 3, 4, 6]:
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
 
 def test_fitting_fit_mbobs_wavg_flagging_combined():
@@ -214,7 +226,6 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=None,
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -226,8 +237,9 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, 3]))
         for i in [0, 1, 2]:
             assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
+    mbobs = make_mbobs_sim(45, 7)
     bmask_flags = 2**8
     other_flags = 2**3
     mbobs[0] = ngmix.ObsList()
@@ -237,12 +249,11 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
     with mbobs[2][0].writeable():
         mbobs[2][0].ignore_zero_weight = False
         mbobs[2][0].weight[:, :] = 0
-    nonshear_mbobs = make_mbobs_sim(45, 3)
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -255,23 +266,23 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
         for i in [0, 1, 2]:
             assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
-    mbobs = make_mbobs_sim(45, 4)
-    nonshear_mbobs = make_mbobs_sim(45, 3)
+    mbobs = make_mbobs_sim(45, 7)
     bmask_flags = 2**8
     other_flags = 2**3
-    nonshear_mbobs[0] = ngmix.ObsList()
-    with nonshear_mbobs[1][0].writeable():
-        nonshear_mbobs[1][0].ignore_zero_weight = False
-        nonshear_mbobs[1][0].weight[:, :] = 0
-    with nonshear_mbobs[2][0].writeable():
-        nonshear_mbobs[2][0].bmask[2, 3] = bmask_flags
-        nonshear_mbobs[2][0].bmask[3, 1] = other_flags
+    mbobs[4] = ngmix.ObsList()
+    with mbobs[5][0].writeable():
+        mbobs[5][0].ignore_zero_weight = False
+        mbobs[5][0].weight[:, :] = 0
+    with mbobs[6][0].writeable():
+        mbobs[6][0].bmask[2, 3] = bmask_flags
+        mbobs[6][0].bmask[3, 1] = other_flags
     res = fit_mbobs_wavg(
         mbobs=mbobs,
         fitter=GaussMom(1.2),
         bmask_flags=bmask_flags,
-        nonshear_mbobs=nonshear_mbobs,
+        shear_bands=list(range(4)),
     )
     _print_res(res[0])
     assert np.all((res["flags"] & procflags.MISSING_BAND) != 0)
@@ -284,6 +295,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             assert np.all(np.isfinite(res["wmom_band_flux" + tail][:, i]))
         for i in [4, 5, 6]:
             assert not np.any(np.isfinite(res["wmom_band_flux" + tail][:, i]))
+    assert np.all(res["shear_bands"] == "0123")
 
 
 @pytest.mark.parametrize("purpose,kwargs,psf_flags,model_flags,flux_flags", [
@@ -870,25 +882,6 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
         ["ZERO_WEIGHTS", "PSF_FAILURE"],
         [],
     ),
-    (
-        "shear out of bounds",
-        dict(
-            all_res=[{
-                "flux_flags": 0,
-                "flux": 1,
-                "flux_err": 1,
-                "mom": np.array([0, 0, 1, 1, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
-            }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
-            all_is_shear_band=[True, True, False, False],
-            all_wgts=[1, 1, 1, 1],
-            all_flags=[0, 0, 0, 0],
-        ),
-        [],
-        ["SHEAR_RANGE_ERROR"],
-        [],
-    ),
 ])
 def test_fitting_combine_fit_results_wavg_flagging(
     purpose, kwargs, psf_flags, model_flags, flux_flags
@@ -913,9 +906,9 @@ def test_fitting_combine_fit_results_wavg_flagging(
         assert val == fval, purpose
 
     model = "wwmom"
+    shear_bands = [i for i, b in enumerate(kwargs["all_is_shear_band"]) if b]
 
-    # all missing
-    data = _combine_fit_results_wavg(model=model, **kwargs)
+    data = _combine_fit_results_wavg(model=model, shear_bands=shear_bands, **kwargs)
     print()
     _print_flags(data)
     _check_flags(data["psf_flags"][0], psf_flags)

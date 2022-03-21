@@ -4,7 +4,7 @@ import numpy as np
 import ngmix
 import galsim
 import metadetect
-import tqdm
+from esutil.pbar import PBar
 import joblib
 
 import pytest
@@ -188,7 +188,7 @@ def _bootstrap_stat(d1, d2, func, seed, nboot=500):
     dim = d1.shape[0]
     rng = np.random.RandomState(seed=seed)
     stats = []
-    for _ in tqdm.trange(nboot, leave=False):
+    for _ in range(nboot):
         ind = rng.choice(dim, size=dim, replace=True)
         stats.append(func(d1[ind], d2[ind]))
     return stats
@@ -259,42 +259,44 @@ def test_shear_meas(model, snr, ngrid, ntrial):
     pres = []
     mres = []
     loc = 0
-    for itr in tqdm.trange(nitr):
-        jobs = [
-            joblib.delayed(run_sim)(
-                seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
+    with joblib.Parallel(n_jobs=-1, verbose=100, backend='loky') as par:
+        for itr in PBar(range(nitr)):
+            jobs = [
+                joblib.delayed(run_sim)(
+                    seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
+                )
+                for i in range(nsub)
+            ]
+            print("\n", end="", flush=True)
+            outputs = par(jobs)
+
+            for out in outputs:
+                if out is None:
+                    continue
+                pres.append(out[0])
+                mres.append(out[1])
+            loc += nsub
+
+            m, merr, c, cerr = boostrap_m_c(
+                np.concatenate(pres),
+                np.concatenate(mres),
             )
-            for i in range(nsub)
-        ]
-        outputs = joblib.Parallel(n_jobs=-1, verbose=100, backend='loky')(jobs)
-
-        for out in outputs:
-            if out is None:
-                continue
-            pres.append(out[0])
-            mres.append(out[1])
-        loc += nsub
-
-        m, merr, c, cerr = boostrap_m_c(
-            np.concatenate(pres),
-            np.concatenate(mres),
-        )
-        print(
-            (
-                "\n"
-                "nsims: %d\n"
-                "m [1e-3, 3sigma]: %s +/- %s\n"
-                "c [1e-5, 3sigma]: %s +/- %s\n"
-                "\n"
-            ) % (
-                len(pres),
-                m/1e-3,
-                3*merr/1e-3,
-                c/1e-5,
-                3*cerr/1e-5,
-            ),
-            flush=True,
-        )
+            print(
+                (
+                    "\n"
+                    "nsims: %d\n"
+                    "m [1e-3, 3sigma]: %s +/- %s\n"
+                    "c [1e-5, 3sigma]: %s +/- %s\n"
+                    "\n"
+                ) % (
+                    len(pres),
+                    m/1e-3,
+                    3*merr/1e-3,
+                    c/1e-5,
+                    3*cerr/1e-5,
+                ),
+                flush=True,
+            )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial, flush=True)
@@ -305,7 +307,7 @@ def test_shear_meas(model, snr, ngrid, ntrial):
 
     print(
         (
-            "\n\nm [1e-3, 3sigma]: %s +/- %s"
+            "m [1e-3, 3sigma]: %s +/- %s"
             "\nc [1e-5, 3sigma]: %s +/- %s"
         ) % (
             m/1e-3,
@@ -318,3 +320,20 @@ def test_shear_meas(model, snr, ngrid, ntrial):
 
     assert np.abs(m) < max(1e-3, 3*merr)
     assert np.abs(c) < 3*cerr
+
+
+@pytest.mark.parametrize(
+    'model,snr,ngrid', [
+        ("wmom", 1e6, 7),
+        ("ksigma", 1e6, 7),
+        ("pgauss", 1e6, 7),
+    ]
+)
+def test_shear_meas_timing(model, snr, ngrid):
+    rng = np.random.RandomState(seed=116)
+    seeds = rng.randint(low=1, high=2**29, size=1)
+    mdet_seeds = rng.randint(low=1, high=2**29, size=1)
+
+    run_sim(
+        seeds[0], mdet_seeds[0], model, snr=snr, ngrid=ngrid,
+    )

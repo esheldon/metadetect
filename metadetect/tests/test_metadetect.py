@@ -4,10 +4,12 @@ to make sure it gets the right answer or anything, just
 to test all the moving parts
 """
 import time
-import pytest
 import copy
+import itertools
+
+import pytest
+
 import numpy as np
-import ngmix
 
 from .. import detect
 from .. import metadetect
@@ -188,8 +190,11 @@ def test_metadetect(model):
             assert np.any(res[shear]["psfrec_T"] != 0)
             msk = res[shear]['flags'] == 0
             for col in res[shear].dtype.names:
-                assert np.all(np.isfinite(res[shear][msk][col])), (
-                    "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
+                if col == "shear_bands":
+                    assert np.all(res[shear][msk][col] == "012")
+                else:
+                    assert np.all(np.isfinite(res[shear][msk][col])), (
+                        "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
@@ -230,8 +235,11 @@ def test_metadetect_mfrac(model):
             )
             msk = res[shear]['flags'] == 0
             for col in res[shear].dtype.names:
-                assert np.all(np.isfinite(res[shear][msk][col])), (
-                    "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
+                if col == "shear_bands":
+                    assert np.all(res[shear][msk][col] == "012")
+                else:
+                    assert np.all(np.isfinite(res[shear][msk][col])), (
+                        "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
@@ -384,26 +392,70 @@ def test_metadetect_flux(model, nband, nshear):
         print("trial: %d/%d" % (trial+1, ntrial))
 
         mbobs = sim.get_mbobs()
-        shear_mbobs = ngmix.MultiBandObsList()
-        nonshear_mbobs = ngmix.MultiBandObsList()
-        for i in range(len(mbobs)):
-            if i < nshear:
-                shear_mbobs.append(mbobs[i])
-            else:
-                nonshear_mbobs.append(mbobs[i])
-        if len(nonshear_mbobs) == 0:
-            nonshear_mbobs = None
+        for shear_bands in itertools.combinations(list(range(nband)), nshear):
+            res = metadetect.do_metadetect(
+                config, mbobs, rng, shear_band_combs=[shear_bands],
+            )
+            for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+                assert np.all(res[shear]["mfrac"] == 0)
+                assert np.all(
+                    res[shear]["shear_bands"] == "".join("%s" % b for b in shear_bands)
+                )
+                for c in res[shear].dtype.names:
+                    if c.endswith("band_flux"):
+                        if nband > 1:
+                            assert res[shear][c][0].shape == (nband,)
+                        else:
+                            assert res[shear][c][0].shape == tuple()
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial)
+
+
+def test_metadetect_multiband():
+    """
+    test full metadetection w/ multiple bands
+    """
+    model = "wmom"
+    nband = 3
+    ntrial = 1
+    rng = np.random.RandomState(seed=116)
+
+    tm0 = time.time()
+
+    sim = Sim(rng, config={"nband": nband})
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        mbobs = sim.get_mbobs()
+        shear_band_combs = [list(range(nband))]
+        shear_band_combs += [
+            list(shear_bands)
+            for shear_bands in itertools.combinations(list(range(nband)), 2)
+        ]
+        shear_band_combs += [
+            list(shear_bands)
+            for shear_bands in itertools.combinations(list(range(nband)), 1)
+        ]
         res = metadetect.do_metadetect(
-            config, shear_mbobs, rng, nonshear_mbobs=nonshear_mbobs
+            config, mbobs, rng, shear_band_combs=shear_band_combs,
         )
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
-            for c in res[shear].dtype.names:
-                if c.endswith("band_flux"):
-                    if nband > 1:
-                        assert res[shear][c][0].shape == (nband,)
-                    else:
-                        assert res[shear][c][0].shape == tuple()
+            for shear_bands in shear_band_combs:
+                assert np.any(
+                    res[shear]["shear_bands"] == "".join("%s" % b for b in shear_bands)
+                )
+                for c in res[shear].dtype.names:
+                    if c.endswith("band_flux"):
+                        if nband > 1:
+                            assert res[shear][c][0].shape == (nband,)
+                        else:
+                            assert res[shear][c][0].shape == tuple()
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
@@ -434,3 +486,31 @@ def test_fill_in_mask_col(mask_region):
                 col-mask_region:col+mask_region+1
             ]
         )[0]
+
+
+def test_get_bmask_ormask():
+    assert False
+
+
+def test_get_mfrac():
+    assert False
+
+
+def test_get_psf_stats():
+    assert False
+
+
+def test_add_positions():
+    assert False
+
+
+def test_add_mfrac():
+    assert False
+
+
+def test_add_bmask_ormask():
+    assert False
+
+
+def test_add_psf_stats():
+    assert False
