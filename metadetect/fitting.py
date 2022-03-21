@@ -474,8 +474,7 @@ def _make_combine_fit_results_wavg_dtype(nband, model, shear_bands):
             (n("band_flux_err"), "f8"),
         ]
 
-    if shear_bands is not None:
-        dt += [("shear_bands", "U%d" % MAX_NUM_SHEAR_BANDS)]
+    dt += [("shear_bands", "U%d" % MAX_NUM_SHEAR_BANDS)]
 
     return dt
 
