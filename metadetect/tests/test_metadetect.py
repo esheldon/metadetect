@@ -28,7 +28,6 @@ TEST_METADETECT_CONFIG = {
     "metacal": {
         "psf": "fitgauss",
         "types": ["noshear", "1p", "1m", "2p", "2m"],
-        "use_noise_image": True,
     },
 
     "sx": {
