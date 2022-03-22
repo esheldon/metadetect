@@ -28,6 +28,7 @@ TEST_METADETECT_CONFIG = {
     "metacal": {
         "psf": "fitgauss",
         "types": ["noshear", "1p", "1m", "2p", "2m"],
+        "use_noise_image": True,
     },
 
     "sx": {
@@ -458,6 +459,68 @@ def test_metadetect_multiband():
                             assert res[shear][c][0].shape == (nband,)
                         else:
                             assert res[shear][c][0].shape == tuple()
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial)
+
+
+def test_metadetect_with_color_is_same():
+    """
+    test full metadetection w/ multiple bands
+    """
+    model = "wmom"
+    nband = 3
+    ntrial = 1
+
+    tm0 = time.time()
+
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+    config["metacal"]["psf"] = "gauss"
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        shear_band_combs = [list(range(nband))]
+        shear_band_combs += [
+            list(shear_bands)
+            for shear_bands in itertools.combinations(list(range(nband)), 2)
+        ]
+        shear_band_combs += [
+            list(shear_bands)
+            for shear_bands in itertools.combinations(list(range(nband)), 1)
+        ]
+
+        rng = np.random.RandomState(seed=116)
+        sim = Sim(rng, config={"nband": nband})
+        mbobs = sim.get_mbobs()
+        rng = np.random.RandomState(seed=11)
+        res = metadetect.do_metadetect(
+            config, mbobs, rng, shear_band_combs=shear_band_combs,
+        )
+
+        rng = np.random.RandomState(seed=116)
+        sim = Sim(rng, config={"nband": nband})
+        mbobs = sim.get_mbobs()
+        rng = np.random.RandomState(seed=11)
+        res_color = metadetect.do_metadetect(
+            config, mbobs, rng, shear_band_combs=shear_band_combs,
+            color_key_func=lambda x: "blah", color_dep_mbobs={"blah": mbobs},
+        )
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            for col in res[shear].dtype.names:
+                assert col in res_color[shear].dtype.names
+                assert np.array_equal(res[shear][col], res_color[shear][col])
+
+            for shear_bands in shear_band_combs:
+                assert np.any(
+                    res[shear]["shear_bands"] == "".join("%s" % b for b in shear_bands)
+                )
+                assert np.any(
+                    res_color[shear]["shear_bands"]
+                    == "".join("%s" % b for b in shear_bands)
+                )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)

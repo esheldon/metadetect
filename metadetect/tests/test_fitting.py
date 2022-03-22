@@ -10,6 +10,7 @@ from ..fitting import (
     fit_mbobs_wavg,
     _combine_fit_results_wavg,
     symmetrize_obs_weights,
+    fit_all_psfs,
 )
 from .. import procflags
 
@@ -28,6 +29,21 @@ def _print_res(res):
             )
         else:
             print("    %s:" % name, res[name], flush=True)
+
+
+def test_fit_all_psfs_same():
+    mbobs1 = make_mbobs_sim(45, 4)
+    fit_all_psfs(mbobs1, np.random.RandomState(seed=10))
+
+    mbobs2 = make_mbobs_sim(45, 4)
+    fit_all_psfs(mbobs2, np.random.RandomState(seed=10))
+
+    for i in range(4):
+        for key in mbobs1[i][0].psf.meta["result"]:
+            assert np.all(
+                mbobs1[i][0].psf.meta["result"][key]
+                == mbobs2[i][0].psf.meta["result"][key]
+            )
 
 
 def test_fitting_fit_mbobs_wavg_flagging_nodata():

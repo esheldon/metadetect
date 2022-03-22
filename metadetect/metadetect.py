@@ -10,13 +10,17 @@ from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
+from .util import Namer
 from .mfrac import measure_mfrac
 from .fitting import fit_mbobs_list_wavg
 
 logger = logging.getLogger(__name__)
 
 
-def do_metadetect(config, mbobs, rng, shear_band_combs=None):
+def do_metadetect(
+    config, mbobs, rng, shear_band_combs=None,
+    color_key_func=None, color_dep_mbobs=None
+):
     """Run metadetect on the multi-band observations.
 
     Parameters
@@ -37,6 +41,12 @@ def do_metadetect(config, mbobs, rng, shear_band_combs=None):
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    color_key_func: function, optional
+        If given, a function that computes a color or tuple of colors to key the
+        `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs.
+    color_dep_mbobs: dict of mbobs, optional
+        A dictionary of color-dependently rendered observations of the mbobs for use
+        in color-dependent metadetect.
 
     Returns
     -------
@@ -46,6 +56,8 @@ def do_metadetect(config, mbobs, rng, shear_band_combs=None):
     md = Metadetect(
         config, mbobs, rng,
         shear_band_combs=shear_band_combs,
+        color_key_func=color_key_func,
+        color_dep_mbobs=color_dep_mbobs,
     )
     md.go()
     return md.result
@@ -90,10 +102,18 @@ class Metadetect(dict):
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    color_key_func: function, optional
+        If given, a function that computes a color or tuple of colors to key the
+        `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs.
+    color_dep_mbobs: dict of mbobs, optional
+        A dictionary of color-dependently rendered observations of the mbobs for use
+        in color-dependent metadetect.
     """
     def __init__(
         self, config, mbobs, rng, show=False,
         shear_band_combs=None,
+        color_key_func=None,
+        color_dep_mbobs=None,
     ):
         self._show = show
 
@@ -101,6 +121,9 @@ class Metadetect(dict):
         self.mbobs = mbobs
         self.nband = len(mbobs)
         self.rng = rng
+
+        self.color_key_func = color_key_func
+        self.color_dep_mbobs = color_dep_mbobs
 
         self._set_fitter()
 
@@ -224,20 +247,22 @@ class Metadetect(dict):
             return
 
         # we do metacal on everything so we can get fluxes for non-shear bands later
-        t0 = time.time()
-        try:
-            mcal_res = self._get_all_metacal(self.mbobs)
-        except BootPSFFailure:
-            mcal_res = None
-        logger.info("metacal took %s seconds", time.time() - t0)
+        mcal_res = self._get_all_metacal(self.mbobs)
 
         if mcal_res is None:
             self._result = None
             return
 
+        # past this point, the code should always return a dictionary with the minimal
+        # metacal types
+        # this indicates that a measurement should have been possible
+        # we may find nothing, but that is a different thing
         all_res = {}
         for shear_bands in self._shear_band_combs:
-            res = self._go_bands(shear_bands, mcal_res)
+            if self.color_key_func is not None and self.color_dep_mbobs is not None:
+                res = self._go_bands_with_color(shear_bands, mcal_res)
+            else:
+                res = self._go_bands(shear_bands, mcal_res)
             if res is not None:
                 for k, v in res.items():
                     if v is None:
@@ -246,11 +271,14 @@ class Metadetect(dict):
                         all_res[k] = []
                     all_res[k].append(v)
 
-        if len(all_res) == 0:
-            all_res = None
-        else:
-            for k in all_res:
-                all_res[k] = np.hstack(all_res[k])
+        for k in all_res:
+            all_res[k] = np.hstack(all_res[k])
+
+        for mcal_type in self['metacal'].get(
+            "types", ngmix.metacal.METACAL_MINIMAL_TYPES
+        ):
+            if mcal_type not in all_res:
+                all_res[mcal_type] = None
 
         self._result = all_res
 
@@ -265,47 +293,134 @@ class Metadetect(dict):
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
+            cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
             _result[shear_str] = self._measure(
-                mbobs=shear_mbobs,
-                shear_str=shear_str,
+                mbobs_list=mbobs_list,
                 shear_bands=shear_bands,
+                cat=cat,
+                shear_str=shear_str,
                 mfrac=mfrac,
                 bmask=bmask,
                 ormask=ormask,
-                psf_stats=psf_stats,
+                psf_stats=psf_stats
             )
 
-        if len(_result) == 0:
-            return None
-        else:
-            return _result
+        return _result
+
+    def _go_bands_with_color(self, shear_bands, mcal_res):
+        _result = {}
+        for shear_str, shear_mbobs in mcal_res.items():
+            # we first detect and get color of each detection
+            cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
+            nocolor_data = fit_mbobs_list_wavg(
+                mbobs_list=mbobs_list,
+                fitter=self._fitter,
+                shear_bands=shear_bands,
+                bmask_flags=self.get("bmask_flags", 0),
+            )
+            if nocolor_data is None:
+                _result[shear_str] = None
+                continue
+
+            # now we map color to the mbobs for that color
+            n = Namer(self._fitter.kind)
+            col = n("band_flux")
+            color_keys = [
+                self.color_key_func(nocolor_data[col][i])
+                for i in range(nocolor_data.shape[0])
+            ]
+
+            # now we remeasure the object at that mbobs
+            color_data = []
+            for i, color_key in enumerate(color_keys):
+                kdata = self._get_color_dep_mbobs_data(color_key, shear_bands)
+                if kdata["mcal_res"] is None or kdata["mcal_res"][shear_str] is None:
+                    continue
+
+                _medsifier = detect.CatalogMEDSifier(
+                    kdata["mcal_res"][shear_str],
+                    cat['x'][i:i+1],
+                    cat['y'][i:i+1],
+                    cat['box_size'][i:i+1],
+                )
+                mbm = _medsifier.get_multiband_meds()
+                mbobs_list = mbm.get_mbobs_list()
+
+                _data = self._measure(
+                    mbobs_list=mbobs_list,
+                    shear_bands=shear_bands,
+                    cat=cat[i:i+1],
+                    shear_str=shear_str,
+                    mfrac=kdata["mfrac"],
+                    bmask=kdata["bmask"],
+                    ormask=kdata["ormask"],
+                    psf_stats=kdata["psf_stats"],
+                )
+                if _data is not None:
+                    color_data.append(_data)
+
+            if len(color_data) > 0:
+                _result[shear_str] = np.hstack(color_data)
+            else:
+                _result[shear_str] = None
+
+        return _result
+
+    def _get_color_dep_mbobs_data(self, key, shear_bands):
+        if not hasattr(self, "_color_dep_mbobs_data_cache"):
+            self._color_dep_mbobs_data_cache = {}
+
+        if key not in self._color_dep_mbobs_data_cache:
+            self._color_dep_mbobs_data_cache[key] = {}
+
+        sbkey = tuple(sorted(shear_bands))
+        if sbkey not in self._color_dep_mbobs_data_cache[key]:
+            self._color_dep_mbobs_data_cache[key][sbkey] = {}
+
+            mbobs = self.color_dep_mbobs[key]
+
+            # fit all PSFs
+            if not any("result" in mbobs[i][0].psf.meta for i in range(len(mbobs))):
+                try:
+                    fitting.fit_all_psfs(mbobs, self.rng)
+                    _psf_fit_flags = 0
+                except BootPSFFailure:
+                    _psf_fit_flags = procflags.PSF_FAILURE
+            else:
+                # if we have reasults, reconstruct the flags
+                flags = 0
+                for i in range(len(mbobs)):
+                    if "result" in mbobs[i][0].psf.meta:
+                        flags |= mbobs[i][0].psf.meta['result']['flags']
+                    else:
+                        flags |= procflags.PSF_FAILURE
+                if flags != 0:
+                    _psf_fit_flags = procflags.PSF_FAILURE
+                else:
+                    _psf_fit_flags = 0
+            self._color_dep_mbobs_data_cache[key][sbkey]["psf_fit_flags"] \
+                = _psf_fit_flags
+
+            _mbobs = ngmix.MultiBandObsList()
+            for band in shear_bands:
+                _mbobs.append(mbobs[band])
+            mfrac = self._get_mfrac(_mbobs)
+            ormask, bmask = self._get_ormask_and_bmask(_mbobs)
+            psf_stats = _get_psf_stats(_mbobs, _psf_fit_flags)
+            self._color_dep_mbobs_data_cache[key][sbkey]["mfrac"] = mfrac
+            self._color_dep_mbobs_data_cache[key][sbkey]["bmask"] = bmask
+            self._color_dep_mbobs_data_cache[key][sbkey]["ormask"] = ormask
+            self._color_dep_mbobs_data_cache[key][sbkey]["psf_stats"] = psf_stats
+
+            mcal_res = self._get_all_metacal(mbobs)
+            self._color_dep_mbobs_data_cache[key][sbkey]["mcal_res"] = mcal_res
+
+        return self._color_dep_mbobs_data_cache[key][sbkey]
 
     def _measure(
-        self, *, mbobs, shear_str, shear_bands, mfrac, bmask, ormask, psf_stats
+        self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,
+        ormask, psf_stats
     ):
-        """
-        perform measurements on the input mbobs. This involves running
-        detection as well as measurements.
-
-        we only detect on the shear bands in mbobs.
-
-        we then do flux measurements on the nonshear_mbobs as well if it is given.
-        """
-        t0 = time.time()
-        medsifier = self._do_detect(mbobs, shear_bands)
-        if self._show:
-            import descwl_coadd.vis
-            descwl_coadd.vis.show_image(medsifier.seg)
-
-        all_medsifier = detect.CatalogMEDSifier(
-            mbobs,
-            medsifier.cat['x'],
-            medsifier.cat['y'],
-            medsifier.cat['box_size'],
-        )
-        mbm = all_medsifier.get_multiband_meds()
-        mbobs_list = mbm.get_mbobs_list()
-        logger.info("detect took %s seconds", time.time() - t0)
 
         t0 = time.time()
         res = fit_mbobs_list_wavg(
@@ -317,7 +432,7 @@ class Metadetect(dict):
 
         if res is not None:
             res = self._add_positions_and_psf(
-                cat=medsifier.cat,
+                cat=cat,
                 res=res,
                 shear_str=shear_str,
                 mfrac=mfrac,
@@ -457,29 +572,56 @@ class Metadetect(dict):
         """
         use a MEDSifier to run detection
         """
+        t0 = time.time()
         shear_mbobs = ngmix.MultiBandObsList()
         for band in shear_bands:
             shear_mbobs.append(mbobs[band])
 
-        return detect.MEDSifier(
+        medsifier = detect.MEDSifier(
             mbobs=shear_mbobs,
             sx_config=self['sx'],
             meds_config=self['meds'],
             nodet_flags=self['nodet_flags'],
         )
 
+        if self._show:
+            import descwl_coadd.vis
+            descwl_coadd.vis.show_image(medsifier.seg)
+
+        all_medsifier = detect.CatalogMEDSifier(
+            mbobs,
+            medsifier.cat['x'],
+            medsifier.cat['y'],
+            medsifier.cat['box_size'],
+        )
+        mbm = all_medsifier.get_multiband_meds()
+        mbobs_list = mbm.get_mbobs_list()
+        logger.info("detect took %s seconds", time.time() - t0)
+
+        return medsifier.cat, mbobs_list
+
     def _get_all_metacal(self, mbobs):
         """
         get the sheared versions of the observations
         """
+        # we cache this locally - may not be the best idea but here we are
+        if "__mdet_mcal_res" not in mbobs.meta:
+            t0 = time.time()
+            try:
+                odict = ngmix.metacal.get_all_metacal(
+                    mbobs,
+                    rng=self.rng,
+                    **self['metacal']
+                )
+            except BootPSFFailure:
+                odict = None
+            logger.info("metacal took %s seconds", time.time() - t0)
 
-        odict = ngmix.metacal.get_all_metacal(
-            mbobs,
-            rng=self.rng,
-            **self['metacal']
-        )
+            mbobs.meta["__mdet_mcal_res"] = odict
 
-        if self._show:
+        odict = mbobs.meta["__mdet_mcal_res"]
+
+        if self._show and odict is not None:
             import descwl_coadd.vis
 
             orig_mbobs = mbobs
