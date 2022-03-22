@@ -477,7 +477,6 @@ def test_metadetect_with_color_is_same():
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = model
-    config["metacal"]["psf"] = "gauss"
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))
@@ -511,7 +510,19 @@ def test_metadetect_with_color_is_same():
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             for col in res[shear].dtype.names:
                 assert col in res_color[shear].dtype.names
-                assert np.array_equal(res[shear][col], res_color[shear][col])
+                if col == "shear_bands":
+                    assert np.array_equal(
+                        res[shear][col],
+                        res_color[shear][col],
+                    )
+                else:
+                    np.testing.assert_allclose(
+                        res[shear][col],
+                        res_color[shear][col],
+                        atol=0,
+                        rtol=0,
+                        equal_nan=True,
+                    )
 
             for shear_bands in shear_band_combs:
                 assert np.any(
