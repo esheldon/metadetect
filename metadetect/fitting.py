@@ -266,8 +266,16 @@ def _combine_fit_results_wavg(
     *, all_res, all_psf_res, all_is_shear_band, all_wgts, model, all_flags, shear_bands,
 ):
     tot_nband = len(all_res)
-    nband = sum(1 if issb else 0 for issb in all_is_shear_band)
-    nonshear_nband = sum(0 if issb else 1 for issb in all_is_shear_band)
+    nband = (
+        sum(1 if issb else 0 for issb in all_is_shear_band)
+        if all_is_shear_band
+        else 0
+    )
+    nonshear_nband = (
+        sum(0 if issb else 1 for issb in all_is_shear_band)
+        if all_is_shear_band
+        else 0
+    )
     blens = [
         len(all_res), len(all_psf_res), len(all_is_shear_band),
         len(all_wgts), len(all_flags)
@@ -278,18 +286,19 @@ def _combine_fit_results_wavg(
     data = get_wavg_output_struct(tot_nband, model, shear_bands=shear_bands)
 
     if (
-        nband == 0
+        tot_nband == 0
+        or nband == 0
         or tot_nband != nband + nonshear_nband
         or not all(b == tot_nband for b in blens)
     ):
         if nband == 0:
             psf_flags = procflags.MISSING_BAND
             mdet_flags = procflags.MISSING_BAND
-            flux_flags = procflags.MISSING_BAND
+            flux_flags = [procflags.MISSING_BAND] * tot_nband
         else:
             psf_flags = procflags.INCONSISTENT_BANDS
             mdet_flags = procflags.INCONSISTENT_BANDS
-            flux_flags = procflags.INCONSISTENT_BANDS
+            flux_flags = [procflags.INCONSISTENT_BANDS] * tot_nband
         band_flux = [np.nan] * tot_nband
         band_flux_err = [np.nan] * tot_nband
     else:
@@ -329,15 +338,16 @@ def _combine_fit_results_wavg(
 
         band_flux = []
         band_flux_err = []
-        flux_flags = 0
+        flux_flags = []
         for gres, flags in zip(all_res, all_flags):
             # the input flags mark very basic failures and are ORed across all bands
             # these are things like missing and or all zero-weight data, edges, etc.
-            flux_flags |= flags
+            _flux_flags = 0
+            _flux_flags |= flags
 
             # an object fit missing in any band is bad too
             if gres is None:
-                flux_flags |= procflags.MISSING_BAND
+                _flux_flags |= procflags.MISSING_BAND
                 band_flux.append(np.nan)
                 band_flux_err.append(np.nan)
             elif (
@@ -345,13 +355,14 @@ def _combine_fit_results_wavg(
                 or "flux_err" not in gres
                 or "flux_flags" not in gres
             ):
-                flux_flags |= procflags.NOMOMENTS_FAILURE
+                _flux_flags |= procflags.NOMOMENTS_FAILURE
                 band_flux.append(np.nan)
                 band_flux_err.append(np.nan)
             else:
-                flux_flags |= gres["flux_flags"]
+                _flux_flags |= gres["flux_flags"]
                 band_flux.append(gres['flux'])
                 band_flux_err.append(gres['flux_err'])
+            flux_flags.append(_flux_flags)
 
     if psf_flags == 0:
         psf_raw_mom /= psf_wgt_sum
@@ -379,16 +390,22 @@ def _combine_fit_results_wavg(
     if tot_nband > 1:
         data[n('band_flux')] = np.array(band_flux)
         data[n('band_flux_err')] = np.array(band_flux_err)
+        data[n('band_flux_flags')] = np.array(flux_flags)
     elif tot_nband == 1:
         data[n('band_flux')] = band_flux[0]
         data[n('band_flux_err')] = band_flux_err[0]
+        data[n('band_flux_flags')] = flux_flags[0]
+    else:
+        data[n('band_flux_flags')] = procflags.MISSING_BAND
 
     # now we set the flags as they would have been set in our moments code
     # any PSF failure in a shear band causes a non-zero flags value
     data['psf_flags'] = psf_flags
     data[n('flags')] = mdet_flags
-    data[n('band_flux_flags')] = flux_flags
-    data['flags'] = mdet_flags | flux_flags
+    all_flags = mdet_flags
+    for f in flux_flags:
+        all_flags |= f
+    data['flags'] = all_flags
 
     if data['flags'] != 0:
         logger.debug(
@@ -463,7 +480,7 @@ def _make_combine_fit_results_wavg_dtype(nband, model, shear_bands):
     ]
     if nband > 1:
         dt += [
-            (n("band_flux_flags"), 'i4'),
+            (n("band_flux_flags"), 'i4', nband),
             (n("band_flux"), "f8", nband),
             (n("band_flux_err"), "f8", nband),
         ]
