@@ -247,7 +247,10 @@ class Metadetect(dict):
             return
 
         # we do metacal on everything so we can get fluxes for non-shear bands later
-        mcal_res = self._get_all_metacal(self.mbobs)
+        mcal_res = self._get_color_dep_mbobs_data(
+            None,
+            list(range(self.nband))
+        )["mcal_res"]
 
         if mcal_res is None:
             self._result = None
@@ -283,13 +286,7 @@ class Metadetect(dict):
         self._result = all_res
 
     def _go_bands(self, shear_bands, mcal_res):
-        # the flagging, mfrac and psf stats are done only with bands for shear
-        _mbobs = ngmix.MultiBandObsList()
-        for band in shear_bands:
-            _mbobs.append(self.mbobs[band])
-        mfrac = self._get_mfrac(_mbobs)
-        ormask, bmask = self._get_ormask_and_bmask(_mbobs)
-        psf_stats = _get_psf_stats(_mbobs, self._psf_fit_flags)
+        kdata = self._get_color_dep_mbobs_data(None, shear_bands)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
@@ -299,10 +296,10 @@ class Metadetect(dict):
                 shear_bands=shear_bands,
                 cat=cat,
                 shear_str=shear_str,
-                mfrac=mfrac,
-                bmask=bmask,
-                ormask=ormask,
-                psf_stats=psf_stats
+                mfrac=kdata["mfrac"],
+                bmask=kdata["bmask"],
+                ormask=kdata["ormask"],
+                psf_stats=kdata["psf_stats"],
             )
 
         return _result
@@ -377,7 +374,10 @@ class Metadetect(dict):
         if sbkey not in self._color_dep_mbobs_data_cache[key]:
             self._color_dep_mbobs_data_cache[key][sbkey] = {}
 
-            mbobs = self.color_dep_mbobs[key]
+            if key is None:
+                mbobs = self.mbobs
+            else:
+                mbobs = self.color_dep_mbobs[key]
 
             # fit all PSFs
             if not any("result" in mbobs[i][0].psf.meta for i in range(len(mbobs))):
