@@ -52,7 +52,10 @@ def fit_all_psfs(mbobs, rng):
             raise BootPSFFailure("failed to measure psfs: %s" % flags)
 
 
-def fit_mbobs_list_wavg(*, mbobs_list, fitter, bmask_flags, shear_bands=None):
+def fit_mbobs_list_wavg(
+    *, mbobs_list, fitter, bmask_flags, shear_bands=None,
+    extra_conv_psf_list=None, extra_deconv_psf_list=None,
+):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a weighted average
     over bands.
 
@@ -79,11 +82,18 @@ def fit_mbobs_list_wavg(*, mbobs_list, fitter, bmask_flags, shear_bands=None):
     res = []
     for i, mbobs in enumerate(mbobs_list):
 
+        kwargs = {}
+        if extra_conv_psf_list is not None:
+            kwargs["extra_conv_psf"] = extra_conv_psf_list[i]
+        if extra_deconv_psf_list is not None:
+            kwargs["extra_deconv_psf"] = extra_deconv_psf_list[i]
+
         _res = fit_mbobs_wavg(
             mbobs=mbobs,
             fitter=fitter,
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
+            **kwargs,
         )
         res.append(_res)
 
@@ -99,6 +109,8 @@ def fit_mbobs_wavg(
     fitter,
     bmask_flags,
     shear_bands=None,
+    extra_conv_psf=None,
+    extra_deconv_psf=None,
 ):
     """Fit the object in the ngmix.MultiBandObsList using a weighted average
     over bands.
@@ -139,6 +151,10 @@ def fit_mbobs_wavg(
             obslist=mbobs[band],
             fitter=fitter,
             bmask_flags=bmask_flags,
+            extra_conv_psf=(
+                extra_conv_psf[band] if extra_conv_psf is not None else None),
+            extra_deconv_psf=(
+                extra_deconv_psf[band] if extra_deconv_psf is not None else None),
         )
         all_wgts.append(fres["wgt"])
         all_res.append(fres["obj_res"])
@@ -161,6 +177,8 @@ def _fit_obslist(
     obslist,
     fitter,
     bmask_flags,
+    extra_conv_psf=None,
+    extra_deconv_psf=None,
 ):
     if len(obslist) == 0:
         # we will flag this later
@@ -176,6 +194,8 @@ def _fit_obslist(
             obs=obslist[0],
             fitter=fitter,
             bmask_flags=bmask_flags,
+            extra_conv_psf=extra_conv_psf,
+            extra_deconv_psf=extra_deconv_psf,
         )
 
 
@@ -184,11 +204,23 @@ def _fit_obs(
     obs,
     fitter,
     bmask_flags,
+    extra_conv_psf=None,
+    extra_deconv_psf=None,
 ):
     if isinstance(fitter, ngmix.prepsfmom.PrePSFMom):
         psf_go_kwargs = {"no_psf": True}
     else:
         psf_go_kwargs = {}
+
+    kwargs = {}
+    if isinstance(fitter, ngmix.prepsfmom.PrePSFMom):
+        if extra_conv_psf is not None:
+            kwargs["extra_conv_psfs"] = [extra_conv_psf]
+
+        if extra_deconv_psf is not None:
+            kwargs["extra_deconv_psfs"] = [extra_deconv_psf]
+
+        psf_go_kwargs.update(kwargs)
 
     res = {}
     flags = 0
@@ -210,7 +242,7 @@ def _fit_obs(
     else:
         res["flags"] = flags
         res["wgt"] = np.median(obs.weight[obs.weight > 0])
-        res["obj_res"] = fitter.go(obs)
+        res["obj_res"] = fitter.go(obs, **kwargs)
         res["psf_res"] = fitter.go(obs.psf, **psf_go_kwargs)
 
         if res["obj_res"]["flags"] != 0:

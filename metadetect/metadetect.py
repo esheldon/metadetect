@@ -247,7 +247,10 @@ class Metadetect(dict):
             return
 
         # we do metacal on everything so we can get fluxes for non-shear bands later
-        mcal_res = self._get_all_metacal(self.mbobs)
+        mcal_res = self._get_color_dep_mbobs_data(
+            None,
+            list(range(self.nband))
+        )["mcal_res"]
 
         if mcal_res is None:
             self._result = None
@@ -260,7 +263,7 @@ class Metadetect(dict):
         all_res = {}
         for shear_bands in self._shear_band_combs:
             if self.color_key_func is not None and self.color_dep_mbobs is not None:
-                res = self._go_bands_with_color(shear_bands, mcal_res)
+                res = self._go_bands_with_color_psfonly(shear_bands, mcal_res)
             else:
                 res = self._go_bands(shear_bands, mcal_res)
             if res is not None:
@@ -283,14 +286,7 @@ class Metadetect(dict):
         self._result = all_res
 
     def _go_bands(self, shear_bands, mcal_res):
-        # the flagging, mfrac and psf stats are done only with bands for shear
-        _mbobs = ngmix.MultiBandObsList()
-        for band in shear_bands:
-            _mbobs.append(self.mbobs[band])
-        mfrac = self._get_mfrac(_mbobs)
-        ormask, bmask = self._get_ormask_and_bmask(_mbobs)
-        psf_stats = _get_psf_stats(_mbobs, self._psf_fit_flags)
-
+        kdata = self._get_color_dep_mbobs_data(None, shear_bands)
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
             cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
@@ -299,11 +295,84 @@ class Metadetect(dict):
                 shear_bands=shear_bands,
                 cat=cat,
                 shear_str=shear_str,
-                mfrac=mfrac,
-                bmask=bmask,
-                ormask=ormask,
-                psf_stats=psf_stats
+                mfrac=kdata["mfrac"],
+                bmask=kdata["bmask"],
+                ormask=kdata["ormask"],
+                psf_stats=kdata["psf_stats"],
             )
+
+        return _result
+
+    def _go_bands_with_color_psfonly(self, shear_bands, mcal_res):
+        _result = {}
+        for shear_str, shear_mbobs in mcal_res.items():
+            # we first detect and get color of each detection
+            cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
+            nocolor_data = fit_mbobs_list_wavg(
+                mbobs_list=mbobs_list,
+                fitter=self._fitter,
+                shear_bands=shear_bands,
+                bmask_flags=self.get("bmask_flags", 0),
+            )
+            if nocolor_data is None:
+                _result[shear_str] = None
+                continue
+
+            # now we map color to the mbobs for that color
+            n = Namer(self._fitter.kind)
+            col = n("band_flux")
+            color_keys = [
+                self.color_key_func(nocolor_data[col][i])
+                for i in range(nocolor_data.shape[0])
+            ]
+
+            # now we remeasure the object at that mbobs
+            color_data = []
+            for i, color_key in enumerate(color_keys):
+                kdata = self._get_color_dep_mbobs_data(None, shear_bands)
+                if kdata["mcal_res"] is None or kdata["mcal_res"][shear_str] is None:
+                    continue
+
+                _medsifier = detect.CatalogMEDSifier(
+                    kdata["mcal_res"][shear_str],
+                    cat['x'][i:i+1],
+                    cat['y'][i:i+1],
+                    cat['box_size'][i:i+1],
+                )
+                mbm = _medsifier.get_multiband_meds()
+                mbobs_list = mbm.get_mbobs_list()
+
+                if color_key is not None:
+                    kwargs = dict(
+                        extra_conv_psf_list=[[
+                            self.mbobs[b][0].psf for b in range(self.nband)
+                        ]],
+                        extra_deconv_psf_list=[[
+                            self.color_dep_mbobs[color_key][b][0].psf
+                            for b in range(self.nband)
+                        ]],
+                    )
+                else:
+                    kwargs = {}
+
+                _data = self._measure(
+                    mbobs_list=mbobs_list,
+                    shear_bands=shear_bands,
+                    cat=cat[i:i+1],
+                    shear_str=shear_str,
+                    mfrac=kdata["mfrac"],
+                    bmask=kdata["bmask"],
+                    ormask=kdata["ormask"],
+                    psf_stats=kdata["psf_stats"],
+                    **kwargs,
+                )
+                if _data is not None:
+                    color_data.append(_data)
+
+            if len(color_data) > 0:
+                _result[shear_str] = np.hstack(color_data)
+            else:
+                _result[shear_str] = None
 
         return _result
 
@@ -377,7 +446,10 @@ class Metadetect(dict):
         if sbkey not in self._color_dep_mbobs_data_cache[key]:
             self._color_dep_mbobs_data_cache[key][sbkey] = {}
 
-            mbobs = self.color_dep_mbobs[key]
+            if key is None:
+                mbobs = self.mbobs
+            else:
+                mbobs = self.color_dep_mbobs[key]
 
             # fit all PSFs
             if not any("result" in mbobs[i][0].psf.meta for i in range(len(mbobs))):
@@ -419,7 +491,7 @@ class Metadetect(dict):
 
     def _measure(
         self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,
-        ormask, psf_stats
+        ormask, psf_stats, extra_conv_psf_list=None, extra_deconv_psf_list=None,
     ):
 
         t0 = time.time()
@@ -428,6 +500,8 @@ class Metadetect(dict):
             fitter=self._fitter,
             shear_bands=shear_bands,
             bmask_flags=self.get("bmask_flags", 0),
+            extra_conv_psf_list=extra_conv_psf_list,
+            extra_deconv_psf_list=extra_deconv_psf_list,
         )
 
         if res is not None:
