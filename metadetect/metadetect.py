@@ -128,13 +128,6 @@ class Metadetect(dict):
 
         self._set_fitter()
 
-        # fit all PSFs
-        try:
-            fitting.fit_all_psfs(self.mbobs, self.rng)
-            self._psf_fit_flags = 0
-        except BootPSFFailure:
-            self._psf_fit_flags = procflags.PSF_FAILURE
-
         if shear_band_combs is None:
             shear_band_combs = [
                 list(range(self.nband)),
@@ -248,10 +241,7 @@ class Metadetect(dict):
             return
 
         # we do metacal on everything so we can get fluxes for non-shear bands later
-        mcal_res = self._get_color_dep_mbobs_data(
-            None,
-            list(range(self.nband))
-        )["mcal_res"]
+        mcal_res = self._get_mbobs_data(None, list(range(self.nband)))["mcal_res"]
 
         if mcal_res is None:
             self._result = None
@@ -287,7 +277,7 @@ class Metadetect(dict):
         self._result = all_res
 
     def _go_bands(self, shear_bands, mcal_res):
-        kdata = self._get_color_dep_mbobs_data(None, shear_bands)
+        kdata = self._get_mbobs_data(None, shear_bands)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
@@ -331,7 +321,7 @@ class Metadetect(dict):
             # now we remeasure the object at that mbobs
             color_data = []
             for i, color_key in enumerate(color_keys):
-                kdata = self._get_color_dep_mbobs_data(color_key, shear_bands)
+                kdata = self._get_mbobs_data(color_key, shear_bands)
                 if kdata["mcal_res"] is None or kdata["mcal_res"][shear_str] is None:
                     continue
 
@@ -364,59 +354,65 @@ class Metadetect(dict):
 
         return _result
 
-    def _get_color_dep_mbobs_data(self, key, shear_bands):
-        if not hasattr(self, "_color_dep_mbobs_data_cache"):
-            self._color_dep_mbobs_data_cache = {}
+    def _get_mbobs_data(self, key, shear_bands):
+        logger.info("computing mbobs data: %s %s", key, shear_bands)
 
-        if key not in self._color_dep_mbobs_data_cache:
-            self._color_dep_mbobs_data_cache[key] = {}
+        if key is None:
+            mbobs = self.mbobs
+        else:
+            mbobs = self.color_dep_mbobs[key]
+            # the caching will miss cases where the input mbobs is passed as one
+            # of the color dependent ones as well
+            # thus we test if they are the same object and set the key to None if
+            # this happens
+            if mbobs is self.mbobs:
+                key = None
+
+        if not hasattr(self, "_mbobs_data_cache"):
+            logger.info("set mbobs data caches")
+            self._mbobs_data_cache = {}
+            self._mcalpsf_data_cache = {}
+
+        if key not in self._mbobs_data_cache:
+            logger.info("key %s not in mbobs data cache", key)
+            self._mbobs_data_cache[key] = {}
+            self._mcalpsf_data_cache[key] = {}
+
+            t0 = time.time()
+            try:
+                fitting.fit_all_psfs(mbobs, self.rng)
+                _psf_fit_flags = 0
+            except BootPSFFailure:
+                _psf_fit_flags = procflags.PSF_FAILURE
+            self._mcalpsf_data_cache[key]["psf_fit_flags"] = _psf_fit_flags
+            logger.info("PSF fits took %s seconds", time.time() - t0)
+
+            mcal_res = self._get_all_metacal(mbobs)
+            self._mcalpsf_data_cache[key]["mcal_res"] = mcal_res
 
         sbkey = tuple(sorted(shear_bands))
-        if sbkey not in self._color_dep_mbobs_data_cache[key]:
-            self._color_dep_mbobs_data_cache[key][sbkey] = {}
-
-            if key is None:
-                mbobs = self.mbobs
-            else:
-                mbobs = self.color_dep_mbobs[key]
-
-            # fit all PSFs
-            if not any("result" in mbobs[i][0].psf.meta for i in range(len(mbobs))):
-                try:
-                    fitting.fit_all_psfs(mbobs, self.rng)
-                    _psf_fit_flags = 0
-                except BootPSFFailure:
-                    _psf_fit_flags = procflags.PSF_FAILURE
-            else:
-                # if we have reasults, reconstruct the flags
-                flags = 0
-                for i in range(len(mbobs)):
-                    if "result" in mbobs[i][0].psf.meta:
-                        flags |= mbobs[i][0].psf.meta['result']['flags']
-                    else:
-                        flags |= procflags.PSF_FAILURE
-                if flags != 0:
-                    _psf_fit_flags = procflags.PSF_FAILURE
-                else:
-                    _psf_fit_flags = 0
-            self._color_dep_mbobs_data_cache[key][sbkey]["psf_fit_flags"] \
-                = _psf_fit_flags
+        if sbkey not in self._mbobs_data_cache[key]:
+            logger.info("shear_bands key %s not in mbobs data cache", sbkey)
+            self._mbobs_data_cache[key][sbkey] = {}
+            self._mbobs_data_cache[key][sbkey].update(
+                self._mcalpsf_data_cache[key]
+            )
 
             _mbobs = ngmix.MultiBandObsList()
             for band in shear_bands:
                 _mbobs.append(mbobs[band])
             mfrac = self._get_mfrac(_mbobs)
             ormask, bmask = self._get_ormask_and_bmask(_mbobs)
-            psf_stats = _get_psf_stats(_mbobs, _psf_fit_flags)
-            self._color_dep_mbobs_data_cache[key][sbkey]["mfrac"] = mfrac
-            self._color_dep_mbobs_data_cache[key][sbkey]["bmask"] = bmask
-            self._color_dep_mbobs_data_cache[key][sbkey]["ormask"] = ormask
-            self._color_dep_mbobs_data_cache[key][sbkey]["psf_stats"] = psf_stats
+            psf_stats = _get_psf_stats(
+                _mbobs,
+                self._mbobs_data_cache[key]["psf_fit_flags"],
+            )
+            self._mbobs_data_cache[key][sbkey]["mfrac"] = mfrac
+            self._mbobs_data_cache[key][sbkey]["bmask"] = bmask
+            self._mbobs_data_cache[key][sbkey]["ormask"] = ormask
+            self._mbobs_data_cache[key][sbkey]["psf_stats"] = psf_stats
 
-            mcal_res = self._get_all_metacal(mbobs)
-            self._color_dep_mbobs_data_cache[key][sbkey]["mcal_res"] = mcal_res
-
-        return self._color_dep_mbobs_data_cache[key][sbkey]
+        return self._mbobs_data_cache[key][sbkey]
 
     def _measure(
         self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,
@@ -601,22 +597,16 @@ class Metadetect(dict):
         """
         get the sheared versions of the observations
         """
-        # we cache this locally - may not be the best idea but here we are
-        if "__mdet_mcal_res" not in mbobs.meta:
-            t0 = time.time()
-            try:
-                odict = ngmix.metacal.get_all_metacal(
-                    mbobs,
-                    rng=self.rng,
-                    **self['metacal']
-                )
-            except BootPSFFailure:
-                odict = None
-            logger.info("metacal took %s seconds", time.time() - t0)
-
-            mbobs.meta["__mdet_mcal_res"] = odict
-
-        odict = mbobs.meta["__mdet_mcal_res"]
+        t0 = time.time()
+        try:
+            odict = ngmix.metacal.get_all_metacal(
+                mbobs,
+                rng=self.rng,
+                **self['metacal']
+            )
+        except BootPSFFailure:
+            odict = None
+        logger.info("metacal took %s seconds", time.time() - t0)
 
         if self._show and odict is not None:
             import descwl_coadd.vis

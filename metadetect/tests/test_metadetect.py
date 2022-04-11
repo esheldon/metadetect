@@ -464,9 +464,6 @@ def test_metadetect_multiband():
 
 
 def test_metadetect_with_color_is_same():
-    """
-    test full metadetection w/ multiple bands
-    """
     model = "wmom"
     nband = 3
     ntrial = 1
