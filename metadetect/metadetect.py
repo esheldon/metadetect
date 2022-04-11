@@ -405,7 +405,7 @@ class Metadetect(dict):
             ormask, bmask = self._get_ormask_and_bmask(_mbobs)
             psf_stats = _get_psf_stats(
                 _mbobs,
-                self._mbobs_data_cache[key]["psf_fit_flags"],
+                self._mbobs_data_cache[key][sbkey]["psf_fit_flags"],
             )
             self._mbobs_data_cache[key][sbkey]["mfrac"] = mfrac
             self._mbobs_data_cache[key][sbkey]["bmask"] = bmask
