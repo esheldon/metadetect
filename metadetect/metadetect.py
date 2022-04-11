@@ -104,7 +104,8 @@ class Metadetect(dict):
         mbobs.
     color_key_func: function, optional
         If given, a function that computes a color or tuple of colors to key the
-        `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs.
+        `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs. If
+        this function returns None, the PSF from the original observation is used.
     color_dep_mbobs: dict of mbobs, optional
         A dictionary of color-dependently rendered observations of the mbobs for use
         in color-dependent metadetect.

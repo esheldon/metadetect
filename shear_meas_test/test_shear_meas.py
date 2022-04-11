@@ -185,8 +185,8 @@ def make_sim_color(
     base_psf = galsim.Gaussian(fwhm=0.9)
     # this dict holds the PSFs as a function of color (c0 or c1) and band (index 0 or 1)
     psfs = {
-        "c0": [galsim.Gaussian(fwhm=0.8), galsim.Gaussian(fwhm=0.95)],
-        "c1": [galsim.Gaussian(fwhm=0.85), galsim.Gaussian(fwhm=1.0)],
+        "c0": [galsim.Gaussian(fwhm=0.83), galsim.Gaussian(fwhm=0.96)],
+        "c1": [galsim.Gaussian(fwhm=0.88), galsim.Gaussian(fwhm=1.03)],
     }
     for band in range(2):
         # we render all objects with the same color at once and so loop through the
