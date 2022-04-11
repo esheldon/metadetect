@@ -431,8 +431,8 @@ def get_wavg_output_struct(nband, model, shear_bands=None):
         The model or "kind" of fitter
     shear_bands : list of int, optional
         A list of indices into each mbobs that denotes which band is used for shear.
-        If given, these are added to the output as a shear_bands field. Default does
-        not add this field.
+        If given, these are added to the output as a shear_bands field. If not given,
+        this field is left empty.
 
     Returns
     -------
