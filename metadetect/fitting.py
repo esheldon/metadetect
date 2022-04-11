@@ -291,7 +291,7 @@ def _combine_fit_results_wavg(
         or tot_nband != nband + nonshear_nband
         or not all(b == tot_nband for b in blens)
     ):
-        if nband == 0:
+        if nband == 0 or tot_nband == 0:
             psf_flags = procflags.MISSING_BAND
             mdet_flags = procflags.MISSING_BAND
             flux_flags = [procflags.MISSING_BAND] * tot_nband
