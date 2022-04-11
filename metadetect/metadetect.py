@@ -143,8 +143,6 @@ class Metadetect(dict):
         self.update(config)
         assert 'metacal' in self, \
             'metacal setting must be present in config'
-        assert 'sx' in self, \
-            'sx setting must be present in config'
         assert 'meds' in self, \
             'meds setting must be present in config'
         self['nodet_flags'] = self.get('nodet_flags', 0)
@@ -548,7 +546,7 @@ class Metadetect(dict):
                     y=newres["sx_row"],
                     box_sizes=cat["box_size"],
                     obs=obs,
-                    fwhm=self.get("mfrac_fwhm", None),
+                    fwhm=self.get("mfrac_fwhm", self["weight"]["fwhm"]),
                 )
 
                 newres["mfrac_noshear"] = measure_mfrac(
@@ -557,7 +555,7 @@ class Metadetect(dict):
                     y=newres["sx_row_noshear"],
                     box_sizes=cat["box_size"],
                     obs=obs,
-                    fwhm=self.get("mfrac_fwhm", None),
+                    fwhm=self.get("mfrac_fwhm", self["weight"]["fwhm"]),
                 )
             else:
                 newres["mfrac"] = 0
@@ -572,7 +570,7 @@ class Metadetect(dict):
         t0 = time.time()
         medsifier = detect.MEDSifier(
             mbobs=mbobs,
-            sx_config=self['sx'],
+            sx_config=self.get('sx', None),
             meds_config=self['meds'],
             nodet_flags=self['nodet_flags'],
         )
