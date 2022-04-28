@@ -125,6 +125,14 @@ class Metadetect(dict):
 
         self.color_key_func = color_key_func
         self.color_dep_mbobs = color_dep_mbobs
+        if (
+            (color_dep_mbobs is not None and color_key_func is None)
+            or
+            (color_dep_mbobs is None and color_key_func is not None)
+        ):
+            raise RuntimeError(
+                "You must both `color_dep_mbobs` and `color_key_func`!"
+            )
 
         self._set_fitter()
 
