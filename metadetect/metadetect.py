@@ -272,6 +272,8 @@ class Metadetect(dict):
             "types", ngmix.metacal.METACAL_MINIMAL_TYPES
         ):
             if mcal_type not in all_res:
+                # this can happen if we do not detect sources for one of the
+                # metacal images
                 all_res[mcal_type] = None
 
         self._result = all_res
