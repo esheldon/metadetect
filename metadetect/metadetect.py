@@ -234,7 +234,9 @@ class Metadetect(dict):
                 if np.all((obs.bmask & self['nodet_flags']) != 0):
                     any_all_masked = True
 
-        if not np.any(mfrac < 1) or any_all_zero_weight or any_all_masked:
+        # if the there are no pixels with mfrac < 1 or it is all zero weight
+        # or it is all masked, we cannot measure anything so set result to None
+        if (not np.any(mfrac < 1)) or any_all_zero_weight or any_all_masked:
             self._result = None
             return
 
