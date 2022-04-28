@@ -210,12 +210,10 @@ def measure(
             )
 
             # TODO do something with bmask_flags?
-            # TODO implement nonshear_mbobs
             this_res = fit_mbobs_wavg(
                 mbobs=mbobs,
                 fitter=fitter,
                 bmask_flags=0,
-                nonshear_mbobs=None,
             )
         except LengthError as err:
             # This is raised when a bbox hits an edge

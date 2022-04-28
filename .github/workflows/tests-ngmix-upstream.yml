@@ -11,7 +11,7 @@ jobs:
     name: tests-ngmix-upstream
     strategy:
       matrix:
-        pyver: [3.7, 3.8, 3.9]
+        pyver: ["3.8", "3.9", "3.10"]
 
     runs-on: "ubuntu-latest"
 
@@ -29,13 +29,15 @@ jobs:
           channels: conda-forge,defaults
           channel-priority: strict
           show-channel-urls: true
+          miniforge-version: latest
+          miniforge-variant: Mambaforge
 
       - name: configure conda and install code
         shell: bash -l {0}
         run: |
           conda config --set always_yes yes
-          conda install --quiet --yes --file requirements.txt
-          conda install --quiet --yes --file dev-requirements.txt
+          mamba install --quiet --yes --file requirements.txt
+          mamba install --quiet --yes --file dev-requirements.txt
 
           python -m pip install -e .
 
@@ -52,6 +54,9 @@ jobs:
         run: |
           # don't run metadetect/lsst/tests
           pytest -v -n 4 metadetect/tests
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-50]
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[ksigma-1000000.0-7-50]
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[pgauss-1000000.0-7-50]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_timing --log-cli-level=info
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[wmom-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[ksigma-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas[pgauss-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_color[wmom-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_color[pgauss-1000000.0-7-64]
