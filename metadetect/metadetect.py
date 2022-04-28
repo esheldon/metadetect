@@ -169,7 +169,7 @@ class Metadetect(dict):
 
     def _get_mfrac(self, mbobs):
         """
-        set the masked fraction image, averaged over all bands
+        get the masked fraction image, averaged over all bands
         """
         wgts = []
         mfrac = np.zeros_like(mbobs[0][0].image)
