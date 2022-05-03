@@ -18,10 +18,12 @@
 - Code can now make multiple shear measurements with different combinations of 
   bands in a single pass.
 - Code can now handle color-dependent PSF models.
+- Code now keeps T flags.
 
 ### changed
 
 - We no longer flag shears with |g| >= 1.
+- Flags for band fluxes are now kept per band.
 
 
 ## 0.6.2 - 2022-01-21
