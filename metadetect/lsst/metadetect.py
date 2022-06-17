@@ -311,6 +311,8 @@ def get_fitter(config, rng=None):
             fitter=fitter_obj, guesser=guesser,
             ntry=2,
         )
+        # TODO is there a better way?
+        fitter.kind = 'am'
 
     elif meas_type == 'em':
         fitter = None

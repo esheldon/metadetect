@@ -11,6 +11,7 @@ DEFAULT_STAMP_SIZES = {
     'wmom': 32,
     'ksigma': 64,
     'pgauss': 49,
+    'am': 49,
 }
 
 # threshold for detection
