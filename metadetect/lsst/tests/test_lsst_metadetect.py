@@ -213,7 +213,8 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
 
     assert np.any(np.isnan(data[n('g')][wlowT]))
     for field in data.dtype.names:
-        assert np.all(np.isfinite(data[field][wgood])), field
+        if field != "shear_bands":
+            assert np.all(np.isfinite(data[field][wgood])), field
 
 
 def test_lsst_metadetect_mfrac_ormask(show=False):

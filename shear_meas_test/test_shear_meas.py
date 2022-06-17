@@ -4,7 +4,7 @@ import numpy as np
 import ngmix
 import galsim
 import metadetect
-import tqdm
+from esutil.pbar import PBar
 import joblib
 
 import pytest
@@ -146,6 +146,132 @@ def make_sim(
     return mbobs
 
 
+def make_sim_color(
+    *,
+    seed,
+    g1,
+    g2,
+    dim=251,
+    buff=34,
+    scale=0.25,
+    dens=100,
+    ngrid=7,
+    snr=1e6,
+):
+    rng = np.random.RandomState(seed=seed)
+
+    half_loc = (dim-buff*2)*scale/2
+
+    if ngrid is None:
+        area_arcmin2 = ((dim - buff*2)*scale/60)**2
+        nobj = int(dens * area_arcmin2)
+        x = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+        y = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+    else:
+        half_ngrid = (ngrid-1)/2
+        x, y = np.meshgrid(np.arange(ngrid), np.arange(ngrid))
+        x = (x.ravel() - half_ngrid)/half_ngrid * half_loc
+        y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
+        nobj = x.shape[0]
+
+    cen = (dim-1)/2
+    psf_dim = 53
+    psf_cen = (psf_dim-1)/2
+    us = rng.uniform(low=-scale, high=scale, size=nobj)
+    vs = rng.uniform(low=-scale, high=scale, size=nobj)
+    colors = rng.randint(low=0, high=2, size=nobj)
+
+    mbobs = ngmix.MultiBandObsList()
+    base_psf = galsim.Gaussian(fwhm=0.9)
+    # this dict holds the PSFs as a function of color (c0 or c1) and band (index 0 or 1)
+    psfs = {
+        "c0": [galsim.Gaussian(fwhm=0.83), galsim.Gaussian(fwhm=0.96)],
+        "c1": [galsim.Gaussian(fwhm=0.88), galsim.Gaussian(fwhm=1.03)],
+    }
+    for band in range(2):
+        # we render all objects with the same color at once and so loop through the
+        # colors here
+        for color in range(2):
+            gals = []
+            psf = psfs["c%d" % color][band]
+            for ind in range(nobj):
+                # we only render objects at this color
+                if colors[ind] != color:
+                    continue
+
+                # the object should be brighter in one band than the other
+                # brighter in band 0 is c0 and thew opposite is c1
+                if colors[ind] == band:
+                    flux = 0.8
+                else:
+                    flux = 0.2
+
+                u = us[ind] + x[ind]
+                v = vs[ind] + y[ind]
+                gals.append(
+                    flux * galsim.Exponential(half_light_radius=0.5).shift(u, v)
+                )
+            gals = galsim.Add(gals)
+            gals = gals.shear(g1=g1, g2=g2)
+            gals = galsim.Convolve([gals, psf])
+
+            if color == 0:
+                im = gals.drawImage(nx=dim, ny=dim, scale=scale).array
+            else:
+                im += gals.drawImage(nx=dim, ny=dim, scale=scale).array
+
+        psf_im = base_psf.drawImage(nx=psf_dim, ny=psf_dim, scale=scale).array
+
+        nse = (
+            np.sqrt(np.sum(
+                galsim.Convolve([
+                    base_psf,
+                    galsim.Exponential(half_light_radius=0.5),
+                ]).drawImage(scale=0.25).array**2)
+            )
+            / snr
+        )
+
+        im += rng.normal(size=im.shape, scale=nse)
+        wgt = np.ones_like(im) / nse**2
+        jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
+        psf_jac = ngmix.DiagonalJacobian(scale=scale, row=psf_cen, col=psf_cen)
+
+        obs = ngmix.Observation(
+            image=im,
+            weight=wgt,
+            jacobian=jac,
+            ormask=np.zeros_like(im, dtype=np.int32),
+            bmask=np.zeros_like(im, dtype=np.int32),
+            psf=ngmix.Observation(
+                image=psf_im,
+                jacobian=psf_jac,
+            ),
+        )
+        obslist = ngmix.ObsList()
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    # these are the observations with the correct PSFs for a given color
+    color_dep_mbobs = {
+        "c0": mbobs.copy(),
+        "c1": mbobs.copy(),
+    }
+    for color in range(2):
+        for band in range(2):
+            psf = psfs["c%d" % color][band]
+            psf_im = psf.drawImage(nx=psf_dim, ny=psf_dim, scale=scale).array
+            psf_jac = ngmix.DiagonalJacobian(scale=scale, row=psf_cen, col=psf_cen)
+
+            psf = ngmix.Observation(
+                image=psf_im,
+                jacobian=psf_jac,
+            )
+            color_dep_mbobs["c%d" % color][band][0].psf = psf
+
+    return mbobs, color_dep_mbobs
+
+
 def _shear_cuts(arr, model):
     if model == "wmom":
         tmin = 1.2
@@ -188,7 +314,7 @@ def _bootstrap_stat(d1, d2, func, seed, nboot=500):
     dim = d1.shape[0]
     rng = np.random.RandomState(seed=seed)
     stats = []
-    for _ in tqdm.trange(nboot, leave=False):
+    for _ in range(nboot):
         ind = rng.choice(dim, size=dim, replace=True)
         stats.append(func(d1[ind], d2[ind]))
     return stats
@@ -237,16 +363,49 @@ def run_sim(seed, mdet_seed, model, **kwargs):
     return _meas_shear_data(_pres, model), _meas_shear_data(_mres, model)
 
 
+def run_sim_color(seed, mdet_seed, model, **kwargs):
+    # if an object is bright in band 0 it is c0, otherwise it is c1
+    def _color_key_func(fluxes):
+        if fluxes[0] > fluxes[1]:
+            return "c0"
+        else:
+            return "c1"
+
+    mbobs_p, color_dep_mbobs_p = make_sim_color(seed=seed, g1=0.02, g2=0.0, **kwargs)
+    cfg = copy.deepcopy(TEST_METADETECT_CONFIG)
+    cfg["model"] = model
+    _pres = metadetect.do_metadetect(
+        copy.deepcopy(cfg),
+        mbobs_p,
+        np.random.RandomState(seed=mdet_seed),
+        color_dep_mbobs=color_dep_mbobs_p,
+        color_key_func=_color_key_func,
+    )
+    if _pres is None:
+        return None
+
+    mbobs_m, color_dep_mbobs_m = make_sim_color(seed=seed, g1=-0.02, g2=0.0, **kwargs)
+    _mres = metadetect.do_metadetect(
+        copy.deepcopy(cfg),
+        mbobs_m,
+        np.random.RandomState(seed=mdet_seed),
+        color_dep_mbobs=color_dep_mbobs_m,
+        color_key_func=_color_key_func,
+    )
+    if _mres is None:
+        return None
+
+    return _meas_shear_data(_pres, model), _meas_shear_data(_mres, model)
+
+
 @pytest.mark.parametrize(
     'model,snr,ngrid,ntrial', [
-        ("wmom", 1e6, 7, 50),
-        ("ksigma", 1e6, 7, 50),
-        ("pgauss", 1e6, 7, 50),
-        ("wmom", 1e6, None, 10000),
+        ("wmom", 1e6, 7, 64),
+        ("pgauss", 1e6, 7, 64),
     ]
 )
-def test_shear_meas(model, snr, ngrid, ntrial):
-    nsub = max(ntrial // 100, 50)
+def test_shear_meas_color(model, snr, ngrid, ntrial):
+    nsub = max(ntrial // 100, 8)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
     seeds = rng.randint(low=1, high=2**29, size=ntrial)
@@ -259,42 +418,44 @@ def test_shear_meas(model, snr, ngrid, ntrial):
     pres = []
     mres = []
     loc = 0
-    for itr in tqdm.trange(nitr):
-        jobs = [
-            joblib.delayed(run_sim)(
-                seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
+    with joblib.Parallel(n_jobs=-1, verbose=100, backend='loky') as par:
+        for itr in PBar(range(nitr)):
+            jobs = [
+                joblib.delayed(run_sim_color)(
+                    seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
+                )
+                for i in range(nsub)
+            ]
+            print("\n", end="", flush=True)
+            outputs = par(jobs)
+
+            for out in outputs:
+                if out is None:
+                    continue
+                pres.append(out[0])
+                mres.append(out[1])
+            loc += nsub
+
+            m, merr, c, cerr = boostrap_m_c(
+                np.concatenate(pres),
+                np.concatenate(mres),
             )
-            for i in range(nsub)
-        ]
-        outputs = joblib.Parallel(n_jobs=-1, verbose=100, backend='loky')(jobs)
-
-        for out in outputs:
-            if out is None:
-                continue
-            pres.append(out[0])
-            mres.append(out[1])
-        loc += nsub
-
-        m, merr, c, cerr = boostrap_m_c(
-            np.concatenate(pres),
-            np.concatenate(mres),
-        )
-        print(
-            (
-                "\n"
-                "nsims: %d\n"
-                "m [1e-3, 3sigma]: %s +/- %s\n"
-                "c [1e-5, 3sigma]: %s +/- %s\n"
-                "\n"
-            ) % (
-                len(pres),
-                m/1e-3,
-                3*merr/1e-3,
-                c/1e-5,
-                3*cerr/1e-5,
-            ),
-            flush=True,
-        )
+            print(
+                (
+                    "\n"
+                    "nsims: %d\n"
+                    "m [1e-3, 3sigma]: %s +/- %s\n"
+                    "c [1e-5, 3sigma]: %s +/- %s\n"
+                    "\n"
+                ) % (
+                    len(pres),
+                    m/1e-3,
+                    3*merr/1e-3,
+                    c/1e-5,
+                    3*cerr/1e-5,
+                ),
+                flush=True,
+            )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial, flush=True)
@@ -305,7 +466,7 @@ def test_shear_meas(model, snr, ngrid, ntrial):
 
     print(
         (
-            "\n\nm [1e-3, 3sigma]: %s +/- %s"
+            "m [1e-3, 3sigma]: %s +/- %s"
             "\nc [1e-5, 3sigma]: %s +/- %s"
         ) % (
             m/1e-3,
@@ -318,3 +479,107 @@ def test_shear_meas(model, snr, ngrid, ntrial):
 
     assert np.abs(m) < max(1e-3, 3*merr)
     assert np.abs(c) < 3*cerr
+
+
+@pytest.mark.parametrize(
+    'model,snr,ngrid,ntrial', [
+        ("wmom", 1e6, 7, 64),
+        ("ksigma", 1e6, 7, 64),
+        ("pgauss", 1e6, 7, 64),
+        # this test takes ~3 hours on github actions so we only run it once and not
+        # with color
+        ("wmom", 1e6, None, 10240),
+    ]
+)
+def test_shear_meas(model, snr, ngrid, ntrial):
+    nsub = max(ntrial // 128, 8)
+    nitr = ntrial // nsub
+    rng = np.random.RandomState(seed=116)
+    seeds = rng.randint(low=1, high=2**29, size=ntrial)
+    mdet_seeds = rng.randint(low=1, high=2**29, size=ntrial)
+
+    tm0 = time.time()
+
+    print("")
+
+    pres = []
+    mres = []
+    loc = 0
+    with joblib.Parallel(n_jobs=-1, verbose=100, backend='loky') as par:
+        for itr in PBar(range(nitr)):
+            jobs = [
+                joblib.delayed(run_sim)(
+                    seeds[loc+i], mdet_seeds[loc+i], model, snr=snr, ngrid=ngrid,
+                )
+                for i in range(nsub)
+            ]
+            print("\n", end="", flush=True)
+            outputs = par(jobs)
+
+            for out in outputs:
+                if out is None:
+                    continue
+                pres.append(out[0])
+                mres.append(out[1])
+            loc += nsub
+
+            m, merr, c, cerr = boostrap_m_c(
+                np.concatenate(pres),
+                np.concatenate(mres),
+            )
+            print(
+                (
+                    "\n"
+                    "nsims: %d\n"
+                    "m [1e-3, 3sigma]: %s +/- %s\n"
+                    "c [1e-5, 3sigma]: %s +/- %s\n"
+                    "\n"
+                ) % (
+                    len(pres),
+                    m/1e-3,
+                    3*merr/1e-3,
+                    c/1e-5,
+                    3*cerr/1e-5,
+                ),
+                flush=True,
+            )
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial, flush=True)
+
+    pres = np.concatenate(pres)
+    mres = np.concatenate(mres)
+    m, merr, c, cerr = boostrap_m_c(pres, mres)
+
+    print(
+        (
+            "m [1e-3, 3sigma]: %s +/- %s"
+            "\nc [1e-5, 3sigma]: %s +/- %s"
+        ) % (
+            m/1e-3,
+            3*merr/1e-3,
+            c/1e-5,
+            3*cerr/1e-5,
+        ),
+        flush=True,
+    )
+
+    assert np.abs(m) < max(1e-3, 3*merr)
+    assert np.abs(c) < 3*cerr
+
+
+@pytest.mark.parametrize(
+    'model,snr,ngrid', [
+        ("wmom", 1e6, 7),
+        ("ksigma", 1e6, 7),
+        ("pgauss", 1e6, 7),
+    ]
+)
+def test_shear_meas_timing(model, snr, ngrid):
+    rng = np.random.RandomState(seed=116)
+    seeds = rng.randint(low=1, high=2**29, size=1)
+    mdet_seeds = rng.randint(low=1, high=2**29, size=1)
+
+    run_sim(
+        seeds[0], mdet_seeds[0], model, snr=snr, ngrid=ngrid,
+    )
