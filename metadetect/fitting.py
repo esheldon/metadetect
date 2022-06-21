@@ -133,6 +133,9 @@ def fit_mbobs_wavg(
     if shear_bands is None:
         shear_bands = list(range(nband))
 
+    if fitter.kind == 'am':
+        assert len(mbobs) == 1, 'Use only one band for adaptive moments'
+
     for band in range(nband):
         all_is_shear_band.append(True if band in shear_bands else False)
         fres = _fit_obslist(
@@ -212,6 +215,12 @@ def _fit_obs(
         res["wgt"] = np.median(obs.weight[obs.weight > 0])
         res["obj_res"] = fitter.go(obs)
         res["psf_res"] = fitter.go(obs.psf, **psf_go_kwargs)
+
+        if fitter.kind == 'am':
+            res["obj_res"]["mom"] = res["obj_res"]["sums"]
+            res["obj_res"]["mom_cov"] = res["obj_res"]["sums_cov"]
+            res["psf_res"]["mom"] = res["psf_res"]["sums"]
+            res["psf_res"]["mom_cov"] = res["psf_res"]["sums_cov"]
 
         if res["obj_res"]["flags"] != 0:
             logger.debug("per band fitter failed: %s" % res["obj_res"]['flagstr'])
