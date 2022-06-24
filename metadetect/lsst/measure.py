@@ -219,11 +219,11 @@ def measure(
             # This is raised when a bbox hits an edge
             LOG.debug('%s', err)
             flags = EDGE_HIT
-        except AllZeroWeight as err:
+        except AllZeroWeightError as err:
             # failure creating some observation due to zero weights
             LOG.info('%s', err)
             flags = ZERO_WEIGHTS
-        except CentroidFail as err:
+        except CentroidFailError as err:
             # failure in the center finding
             LOG.info(str(err))
             flags = CENTROID_FAILURE
@@ -306,14 +306,14 @@ def extract_obs(exp, source):
     --------
     obs: ngmix.Observation
         The Observation unless all the weight are zero, in which
-        case AllZeroWeight is raised
+        case AllZeroWeightError is raised
     """
 
     im = exp.image.array
 
     wt = _extract_weight(exp)
     if np.all(wt <= 0):
-        raise AllZeroWeight('all weights <= 0')
+        raise AllZeroWeightError('all weights <= 0')
 
     bmask = exp.mask.array
     jacob = _extract_jacobian_at_source(
@@ -720,7 +720,7 @@ class MissingDataError(Exception):
         return repr(self.value)
 
 
-class AllZeroWeight(Exception):
+class AllZeroWeightError(Exception):
     """
     Some number was out of range
     """
@@ -733,7 +733,7 @@ class AllZeroWeight(Exception):
         return repr(self.value)
 
 
-class CentroidFail(Exception):
+class CentroidFailError(Exception):
     """
     Some number was out of range
     """
