@@ -321,9 +321,15 @@ def get_fitter(config, rng=None):
         if meas_type == 'wmom':
             fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
         elif meas_type == 'ksigma':
-            fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
+            fitter = ngmix.ksigmamom.KSigmaMom(
+                fwhm=fwhm,
+                fwhm_smooth=config['weight']['fwhm_smooth'],
+            )
         elif meas_type == 'pgauss':
-            fitter = ngmix.prepsfmom.PGaussMom(fwhm=fwhm)
+            fitter = ngmix.prepsfmom.PGaussMom(
+                fwhm=fwhm,
+                fwhm_smooth=config['weight']['fwhm_smooth'],
+            )
         else:
             raise ValueError("bad meas_type: '%s'" % meas_type)
 
