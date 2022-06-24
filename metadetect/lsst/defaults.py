@@ -6,6 +6,7 @@ DEFAULT_WEIGHT_FWHMS = {
     'ksigma': 2.0,
     'pgauss': 2.0,
 }
+DEFAULT_FWHM_SMOOTH = 0
 
 DEFAULT_STAMP_SIZES = {
     'wmom': 32,

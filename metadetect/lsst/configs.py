@@ -3,6 +3,7 @@ from copy import deepcopy
 from .defaults import (
     DEFAULT_MDET_CONFIG,
     DEFAULT_WEIGHT_FWHMS,
+    DEFAULT_FWHM_SMOOTH,
     DEFAULT_STAMP_SIZES,
 )
 
@@ -54,6 +55,7 @@ def _fill_config(config):
     if meas_type != 'am':
         if 'weight' not in config or config['weight'] is None:
             config['weight'] = get_default_weight_config(meas_type)
+        _verify_weight_config(config['weight'])
 
     # note we allow ngmix.metacal.get_all_metacal to do its
     # own verification
@@ -66,7 +68,12 @@ def get_default_weight_config(meas_type):
     get the default weight function configuration based
     on the measurement type
     """
-    return {'fwhm': get_default_weight_fwhm(meas_type)}
+    weight_config = {'fwhm': get_default_weight_fwhm(meas_type)}
+
+    if meas_type in ('pgauss', 'ksigma'):
+        weight_config['fwhm_smooth'] = DEFAULT_FWHM_SMOOTH
+
+    return weight_config
 
 
 def get_default_stamp_size(meas_type):
@@ -119,6 +126,16 @@ def _verify_detect_config(config):
     )
 
     _check_keywords(config=config, allowed_keys=['thresh'], name=name)
+
+
+def _verify_weight_config(config):
+
+    name = 'weight'
+    _check_required_keywords(
+        config=config, required_keys=['fwhm'], name=name,
+    )
+
+    _check_keywords(config=config, allowed_keys=['fwhm', 'fwhm_smooth'], name=name)
 
 
 def _check_required_keywords(config, required_keys, name):

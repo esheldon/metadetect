@@ -7,9 +7,10 @@ of the metacal sub config
 import pytest
 
 from metadetect.lsst.configs import get_config
+from metadetect.lsst.defaults import DEFAULT_FWHM_SMOOTH
 
 
-def test_config_smoke():
+def test_configs_smoke():
     config = get_config()
 
     # make sure the default is verified
@@ -17,6 +18,38 @@ def test_config_smoke():
 
     with pytest.raises(ValueError):
         get_config({'blah': 3})
+
+
+@pytest.mark.parametrize('meas_type', ['am', 'wmom', 'gauss', 'coellip3'])
+def get_weight_config(meas_type):
+    inconfig = {}
+
+    # make sure the default is verified
+    get_config(inconfig)
+
+    inconfig = {
+        'meas_type': meas_type,
+    }
+    get_config(inconfig)
+
+    fwhm = 1.2
+    fwhm_smooth = 0.8
+    for wtc in [{'fwhm': fwhm}, {'fwhm': fwhm, 'fwhm_smooth': fwhm_smooth}]:
+        inconfig = {
+            'meas_type': meas_type,
+            'weight': wtc,
+        }
+        config = get_config(inconfig)
+        assert config['weight']['fwhm'] == fwhm
+
+        for key in wtc:
+            assert config['weight'][key] == wtc[key]
+
+        if 'fwhm_smooth' not in wtc:
+            assert config['weight']['fwhm_smooth'] == DEFAULT_FWHM_SMOOTH
+
+    with pytest.raises(ValueError):
+        get_config({'weight': {'blah': 3}})
 
 
 @pytest.mark.parametrize('model', ['am', 'wmom', 'gauss', 'coellip3'])
