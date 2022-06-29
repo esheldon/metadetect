@@ -9,6 +9,8 @@ import itertools
 
 import pytest
 
+from packaging import version
+import ngmix
 import numpy as np
 
 from .. import detect
@@ -372,6 +374,46 @@ def test_metadetect_nodet_flags_some(model):
 
         res = metadetect.do_metadetect(config, mbobs, rng)
         assert res is None
+
+
+@pytest.mark.skipif(
+    version.parse(ngmix.__version__) < version.parse("2.1.0"),
+    reason="ngmix version 2.1.0 or greater is needed for smoothing prepsf moments",
+)
+@pytest.mark.parametrize("model", ["pgauss", "ksigma"])
+def test_metadetect_fitter_fwhm_smooth(model):
+    nband = 3
+    rng = np.random.RandomState(seed=116)
+
+    sim = Sim(rng, config={"nband": nband})
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+    config["weight"]["fwhm"] = 1.2
+
+    config["weight"]["fwhm_smooth"] = 0
+    mbobs = sim.get_mbobs()
+    res = metadetect.do_metadetect(
+        config, mbobs, rng,
+    )
+
+    config["weight"]["fwhm_smooth"] = 0.8
+    mbobs = sim.get_mbobs()
+    res_smooth = metadetect.do_metadetect(
+        config, mbobs, rng,
+    )
+
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        msk = res[shear]["flags"] == 0
+        msk_smooth = res_smooth[shear]["flags"] == 0
+        assert (
+            np.mean(res_smooth[shear][model + "_T"][msk_smooth])
+            > np.mean(res[shear][model + "_T"][msk])
+        )
+        assert (
+            np.mean(res_smooth[shear][model + "_g_cov"][msk_smooth, 0, 0])
+            < np.mean(res[shear][model + "_g_cov"][msk, 0, 0])
+        )
 
 
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
