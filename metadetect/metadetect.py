@@ -208,17 +208,22 @@ class Metadetect(dict):
         """
         self['model'] = self.get('model', 'wmom')
 
+        if "fwhm_smooth" in self["weight"]:
+            kwargs = {"fwhm_smooth": self["weight"]["fwhm_smooth"]}
+        else:
+            kwargs = {}
+
         if self['model'] == 'wmom':
             self._fitter = ngmix.gaussmom.GaussMom(fwhm=self["weight"]["fwhm"])
         elif self['model'] == 'ksigma':
             self._fitter = ngmix.prepsfmom.KSigmaMom(
                 fwhm=self["weight"]["fwhm"],
-                fwhm_smooth=self["weight"]["fwhm_smooth"],
+                **kwargs,
             )
         elif self['model'] == "pgauss":
             self._fitter = ngmix.prepsfmom.PGaussMom(
                 fwhm=self["weight"]["fwhm"],
-                fwhm_smooth=self["weight"]["fwhm_smooth"],
+                **kwargs,
             )
         else:
             raise ValueError("bad model: '%s'" % self['model'])
