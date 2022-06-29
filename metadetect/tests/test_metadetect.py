@@ -386,19 +386,19 @@ def test_metadetect_fitter_fwhm_smooth(model):
     rng = np.random.RandomState(seed=116)
 
     sim = Sim(rng, config={"nband": nband})
+    mbobs = sim.get_mbobs()
+
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = model
     config["weight"]["fwhm"] = 1.2
 
     config["weight"]["fwhm_smooth"] = 0
-    mbobs = sim.get_mbobs()
     res = metadetect.do_metadetect(
         config, mbobs, rng,
     )
 
     config["weight"]["fwhm_smooth"] = 0.8
-    mbobs = sim.get_mbobs()
     res_smooth = metadetect.do_metadetect(
         config, mbobs, rng,
     )
