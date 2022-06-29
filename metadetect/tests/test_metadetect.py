@@ -393,15 +393,20 @@ def test_metadetect_fitter_fwhm_smooth(model):
     config["model"] = model
     config["weight"]["fwhm"] = 1.2
 
-    config["weight"]["fwhm_smooth"] = 0
-    res = metadetect.do_metadetect(
+    md = metadetect.Metadetect(
         config, mbobs, rng,
     )
+    md.go()
+    res = md.result
+    assert md._fitter.fwhm_smooth == 0
 
     config["weight"]["fwhm_smooth"] = 0.8
-    res_smooth = metadetect.do_metadetect(
+    md = metadetect.Metadetect(
         config, mbobs, rng,
     )
+    md.go()
+    res_smooth = md.result
+    assert md._fitter.fwhm_smooth == 0.8
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
         msk = res[shear]["flags"] == 0
