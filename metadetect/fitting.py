@@ -223,7 +223,7 @@ def _fit_obs(
 
 
 def _sum_bands_wavg(
-    *, all_res, all_is_shear_band, all_wgts, all_flags,
+    *, all_res, all_is_shear_band, all_wgts, all_flags, all_flux_weights,
 ):
     tot_nband = len(all_res)
     raw_mom = np.zeros(6, dtype=np.float64)
@@ -232,8 +232,8 @@ def _sum_bands_wavg(
     used_shear_bands = [False] * tot_nband
     final_flags = 0
 
-    for iband, (wgt, res, issb, flags) in enumerate(zip(
-        all_wgts, all_res, all_is_shear_band, all_flags
+    for iband, (wgt, res, issb, flags, flux_wgt) in enumerate(zip(
+        all_wgts, all_res, all_is_shear_band, all_flags, all_flux_weights
     )):
         if issb:
             # the input flags mark very basic failures and are ORed across all bands
@@ -246,13 +246,15 @@ def _sum_bands_wavg(
             elif "mom" not in res or "mom_cov" not in res:
                 final_flags |= procflags.NOMOMENTS_FAILURE
 
-            if wgt <= 0:
+            if wgt <= 0 or flux_wgt is None or flux_wgt <= 0:
                 final_flags |= procflags.ZERO_WEIGHTS
 
+            _wgt = wgt * flux_wgt
+
             if res is not None and "mom" in res and "mom_cov" in res:
-                raw_mom += (wgt * res["mom"])
-                raw_mom_cov += (wgt**2 * res["mom_cov"])
-                wgt_sum += wgt
+                raw_mom += (_wgt * res["mom"])
+                raw_mom_cov += (_wgt**2 * res["mom_cov"])
+                wgt_sum += _wgt
                 used_shear_bands[iband] = True
 
     # make sure we flag missing data or all zero weight sums
@@ -313,6 +315,7 @@ def _combine_fit_results_wavg(
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
+            all_flux_weights=[1] * len(all_res),
         )
 
         (
@@ -326,6 +329,16 @@ def _combine_fit_results_wavg(
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
+            all_flux_weights=[
+                gres["flux"]
+                if (
+                    "flux" in gres
+                    and "flux_flags" in gres
+                    and gres["flux_flags"] == 0
+                )
+                else None
+                for gres in all_res
+            ],
         )
 
         if (
