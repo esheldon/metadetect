@@ -249,7 +249,10 @@ def _sum_bands_wavg(
             if wgt <= 0 or flux_wgt is None or flux_wgt <= 0:
                 final_flags |= procflags.ZERO_WEIGHTS
 
-            _wgt = wgt * flux_wgt
+            if flux_wgt is not None:
+                _wgt = wgt * flux_wgt
+            else:
+                _wgt = wgt
 
             if res is not None and "mom" in res and "mom_cov" in res:
                 raw_mom += (_wgt * res["mom"])
