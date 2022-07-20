@@ -11,6 +11,7 @@ from ..fitting import (
     _combine_fit_results_wavg,
     symmetrize_obs_weights,
     fit_all_psfs,
+    _sum_bands_wavg,
 )
 from .. import procflags
 
@@ -1018,6 +1019,114 @@ def test_fitting_combine_fit_results_wavg_flagging(
     ), purpose
     if data["psf_flags"][0] != 0:
         assert (data[model + "_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
+
+
+@pytest.mark.parametrize("mom_norm", [None, [0.3, 0.9, 0.8, 0.6]])
+def test_fitting_sum_bands_wavg_weighting(mom_norm):
+    all_is_shear_band = [True, True]
+    all_res = [
+        dict(
+            mom=np.ones(6) * 3,
+            mom_cov=np.diag(np.ones(6)) * 3.1,
+        ),
+        dict(
+            mom=np.ones(6) * 7,
+            mom_cov=np.diag(np.ones(6)) * 7.1,
+        ),
+    ]
+    all_wgts = [0.2, 0.5]
+    all_flags = [0, 0]
+    all_wgt_res = [
+        dict(
+            mom=np.ones(6) * 6,
+            mom_cov=np.diag(np.ones(6)) * 6.1,
+        ),
+        dict(
+            mom=np.ones(6) * 2,
+            mom_cov=np.diag(np.ones(6)) * 2.1,
+        ),
+    ]
+
+    if mom_norm is not None:
+        all_res[0]["mom_norm"] = mom_norm[0]
+        all_res[1]["mom_norm"] = mom_norm[1]
+        all_wgt_res[0]["mom_norm"] = mom_norm[2]
+        all_wgt_res[1]["mom_norm"] = mom_norm[3]
+
+    # return value is
+    # raw_mom, raw_mom_cov, wgt_sum, final_flags, used_shear_bands,
+    # flux, flux_var, flux_wgt_sum
+    sums_wgt = _sum_bands_wavg(
+        all_res=all_res,
+        all_is_shear_band=all_is_shear_band,
+        all_wgts=all_wgts,
+        all_flags=all_flags,
+        all_wgt_res=all_wgt_res,
+    )
+    if mom_norm is None:
+        fac0 = 6/3
+        fac1 = 2/7
+    else:
+        fac0 = (6 / mom_norm[2]) / (3 / mom_norm[0])
+        fac1 = (2 / mom_norm[3]) / (7 / mom_norm[1])
+
+    assert sums_wgt[2] == (0.2 * fac0 + 0.5 * fac1)
+    if mom_norm is None:
+        np.testing.assert_allclose(
+            sums_wgt[0],
+            [0.2 * 3 * fac0 + 0.5 * 7 * fac1] * 6
+        )
+    else:
+        np.testing.assert_allclose(
+            sums_wgt[0],
+            [0.2 * 3 * fac0 / mom_norm[0] + 0.5 * 7 * fac1 / mom_norm[1]] * 6
+        )
+    if mom_norm is None:
+        np.testing.assert_allclose(
+            np.diag(sums_wgt[1]),
+            [0.2**2 * 3.1 * fac0**2 + 0.5**2 * 7.1 * fac1**2] * 6
+        )
+    else:
+        np.testing.assert_allclose(
+            np.diag(sums_wgt[1]),
+            [
+                0.2**2 * 3.1 * fac0**2 / mom_norm[0]**2
+                + 0.5**2 * 7.1 * fac1**2 / mom_norm[1]**2
+            ] * 6
+        )
+
+    sums = _sum_bands_wavg(
+        all_res=all_res,
+        all_is_shear_band=all_is_shear_band,
+        all_wgts=all_wgts,
+        all_flags=all_flags,
+        all_wgt_res=None,
+    )
+    assert sums[2] == 0.7
+    if mom_norm is None:
+        np.testing.assert_allclose(
+            sums[0],
+            [0.2 * 3 + 0.5 * 7] * 6
+        )
+    else:
+        np.testing.assert_allclose(
+            sums[0],
+            [0.2 * 3 / mom_norm[0] + 0.5 * 7 / mom_norm[1]] * 6
+        )
+    if mom_norm is None:
+        np.testing.assert_allclose(
+            np.diag(sums[1]),
+            [0.2**2 * 3.1 + 0.5**2 * 7.1] * 6
+        )
+    else:
+        np.testing.assert_allclose(
+            np.diag(sums[1]),
+            [0.2**2 * 3.1 / mom_norm[0]**2 + 0.5**2 * 7.1 / mom_norm[1]**2] * 6
+        )
+
+    # everything but the moments should be the same
+    for i in range(3, len(sums)):
+        assert sums[i] == sums_wgt[i], (i, sums[i])
 
 
 def test_fitting_symmetrize_obs_weights_all_zero():

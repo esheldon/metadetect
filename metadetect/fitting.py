@@ -233,6 +233,7 @@ def _sum_bands_wavg(
     final_flags = 0
     flux = 0.0
     flux_var = 0.0
+    flux_wgt_sum = 0.0
 
     for iband, (wgt, res, issb, flags) in enumerate(zip(
         all_wgts, all_res, all_is_shear_band, all_flags
@@ -295,18 +296,24 @@ def _sum_bands_wavg(
             _wgt = wgt * flux_mom_ratio
 
             if res is not None and "mom" in res and "mom_cov" in res:
-                flux += (_wgt * res["mom"][5])
-                flux_var += (_wgt**2 * res["mom_cov"][5, 5])
+                flux += (wgt * res["mom"][5])
+                flux_var += (wgt**2 * res["mom_cov"][5, 5])
+                flux_wgt_sum += wgt
+
                 raw_mom += (_wgt * res["mom"] / mom_scale)
                 raw_mom_cov += (_wgt**2 * res["mom_cov"] / mom_scale / mom_scale)
                 wgt_sum += _wgt
+
                 used_shear_bands[iband] = True
 
     # make sure we flag missing data or all zero weight sums
     if sum(used_shear_bands) > 0 and wgt_sum <= 0:
         final_flags |= procflags.ZERO_WEIGHTS
 
-    return raw_mom, raw_mom_cov, wgt_sum, final_flags, used_shear_bands, flux, flux_var
+    return (
+        raw_mom, raw_mom_cov, wgt_sum, final_flags, used_shear_bands,
+        flux, flux_var, flux_wgt_sum
+    )
 
 
 def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var):
@@ -376,6 +383,7 @@ def _combine_fit_results_wavg(
             used_shear_bands,
             raw_flux,
             raw_flux_var,
+            flux_wgt_sum,
         ) = _sum_bands_wavg(
             all_res=all_res,
             all_is_shear_band=all_is_shear_band,
@@ -392,6 +400,7 @@ def _combine_fit_results_wavg(
             psf_used_shear_bands,
             psf_raw_flux,
             psf_raw_flux_var,
+            psf_flux_wgt_sum
         ) = _sum_bands_wavg(
             all_res=all_psf_res,
             all_is_shear_band=all_is_shear_band,
@@ -439,8 +448,8 @@ def _combine_fit_results_wavg(
     if psf_flags == 0:
         psf_raw_mom /= psf_wgt_sum
         psf_raw_mom_cov /= (psf_wgt_sum**2)
-        psf_raw_flux /= psf_wgt_sum
-        psf_raw_flux_var /= (psf_wgt_sum**2)
+        psf_raw_flux /= psf_flux_wgt_sum
+        psf_raw_flux_var /= (psf_flux_wgt_sum**2)
 
         psf_momres = _make_mom_res(
             raw_mom=psf_raw_mom,
@@ -456,8 +465,8 @@ def _combine_fit_results_wavg(
     if mdet_flags == 0:
         raw_mom /= wgt_sum
         raw_mom_cov /= (wgt_sum**2)
-        raw_flux /= wgt_sum
-        raw_flux_var /= (wgt_sum**2)
+        raw_flux /= flux_wgt_sum
+        raw_flux_var /= (flux_wgt_sum**2)
 
         momres = _make_mom_res(
             raw_mom=raw_mom,
