@@ -650,8 +650,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
         ),
-        [],
         ["MISSING_BAND"],
+        ["MISSING_BAND", "PSF_FAILURE"],
         [["MISSING_BAND"], [], [], []],
     ),
     (
@@ -830,8 +830,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
         ),
-        [],
         ["NOMOMENTS_FAILURE"],
+        ["NOMOMENTS_FAILURE", "PSF_FAILURE"],
         [[]] * 4,
     ),
     (
@@ -854,8 +854,8 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
         ),
-        [],
         ["NOMOMENTS_FAILURE"],
+        ["NOMOMENTS_FAILURE", "PSF_FAILURE"],
         [[]] * 4,
     ),
     (
@@ -892,7 +892,7 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "mom_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
-                {"mom": np.diag(np.ones(6))}
+                {"mom": np.ones(6)}
             ] + [
                 {"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}
             ] * 3,

@@ -223,7 +223,7 @@ def _fit_obs(
 
 
 def _sum_bands_wavg(
-    *, all_res, all_is_shear_band, all_wgts, all_flags, all_flux_weights,
+    *, all_res, all_is_shear_band, all_wgts, all_flags, all_wgt_res,
 ):
     tot_nband = len(all_res)
     raw_mom = np.zeros(6, dtype=np.float64)
@@ -232,27 +232,53 @@ def _sum_bands_wavg(
     used_shear_bands = [False] * tot_nband
     final_flags = 0
 
-    for iband, (wgt, res, issb, flags, flux_wgt) in enumerate(zip(
-        all_wgts, all_res, all_is_shear_band, all_flags, all_flux_weights
+    for iband, (wgt, res, issb, flags) in enumerate(zip(
+        all_wgts, all_res, all_is_shear_band, all_flags
     )):
+        if all_wgt_res is not None:
+            wgt_res = all_wgt_res[iband]
+        else:
+            wgt_res = None
+
         if issb:
             # the input flags mark very basic failures and are ORed across all bands
             # these are things like missing and or all zero-weight data, edges, etc.
             final_flags |= flags
 
             # we mark missing data or moments for PSF and objects separately
-            if res is None:
+            if res is None or (all_wgt_res is not None and wgt_res is None):
                 final_flags |= procflags.MISSING_BAND
-            elif "mom" not in res or "mom_cov" not in res:
+            elif (
+                ("mom" not in res or "mom_cov" not in res)
+                or (
+                    all_wgt_res is not None and wgt_res is not None and (
+                        "mom" not in wgt_res or "mom_cov" not in wgt_res
+                    )
+                )
+            ):
                 final_flags |= procflags.NOMOMENTS_FAILURE
 
-            if wgt <= 0 or flux_wgt is None or flux_wgt <= 0:
+            if (
+                all_wgt_res is not None
+                and wgt_res is not None
+                and res is not None
+                and "mom" in res
+                and "mom" in wgt_res
+            ):
+                if wgt_res["mom"][5] != 0 and res["mom"][5] != 0:
+                    flux_mom_ratio = wgt_res["mom"][5] / res["mom"][5]
+                else:
+                    flux_mom_ratio = 1.0
+                    final_flags |= procflags.ZERO_WEIGHTS
+            else:
+                # we do not flag zero weight here since this is a missing band
+                # or missign moments or no flux weighting
+                flux_mom_ratio = 1.0
+
+            if wgt <= 0:
                 final_flags |= procflags.ZERO_WEIGHTS
 
-            if flux_wgt is not None:
-                _wgt = wgt * flux_wgt
-            else:
-                _wgt = wgt
+            _wgt = wgt * flux_mom_ratio
 
             if res is not None and "mom" in res and "mom_cov" in res:
                 raw_mom += (_wgt * res["mom"])
@@ -318,7 +344,7 @@ def _combine_fit_results_wavg(
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
-            all_flux_weights=[1] * len(all_res),
+            all_wgt_res=None,
         )
 
         (
@@ -332,17 +358,7 @@ def _combine_fit_results_wavg(
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
-            all_flux_weights=[
-                gres["flux"]
-                if (
-                    gres is not None
-                    and "flux" in gres
-                    and "flux_flags" in gres
-                    and gres["flux_flags"] == 0
-                )
-                else None
-                for gres in all_res
-            ],
+            all_wgt_res=all_res,
         )
 
         if (
