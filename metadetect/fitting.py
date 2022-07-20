@@ -296,7 +296,7 @@ def _sum_bands_wavg(
 
             if res is not None and "mom" in res and "mom_cov" in res:
                 flux += (_wgt * res["mom"][5])
-                flux_var += (_wgt**2 + res["mom_cov"][5, 5])
+                flux_var += (_wgt**2 * res["mom_cov"][5, 5])
                 raw_mom += (_wgt * res["mom"] / mom_scale)
                 raw_mom_cov += (_wgt**2 * res["mom_cov"] / mom_scale / mom_scale)
                 wgt_sum += _wgt
