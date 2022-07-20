@@ -332,7 +332,8 @@ def _combine_fit_results_wavg(
             all_flux_weights=[
                 gres["flux"]
                 if (
-                    "flux" in gres
+                    gres is not None
+                    and "flux" in gres
                     and "flux_flags" in gres
                     and gres["flux_flags"] == 0
                 )
