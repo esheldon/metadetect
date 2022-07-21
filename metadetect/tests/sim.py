@@ -176,19 +176,31 @@ class Sim(dict):
         self._psf_obs = psf_obs
 
 
-def make_mbobs_sim(seed, nband):
+def make_mbobs_sim(
+    seed, nband, simulate_star=False, noise_scale=1, band_flux_factors=None
+):
     rng = np.random.RandomState(seed=seed)
 
     dim = 35
     cen = (dim-1)/2
-    gal = galsim.Exponential(
-        half_light_radius=rng.uniform(low=0.5, high=0.7),
-    ).shear(
-        g1=rng.uniform(low=-0.1, high=0.1),
-        g2=rng.uniform(low=-0.1, high=0.1),
-    ).withFlux(
-        400
-    )
+    if simulate_star:
+        gal = galsim.Gaussian(
+            fwhm=1e-6,
+        ).shear(
+            g1=rng.uniform(low=-0.1, high=0.1),
+            g2=rng.uniform(low=-0.1, high=0.1),
+        ).withFlux(
+            400
+        )
+    else:
+        gal = galsim.Exponential(
+            half_light_radius=rng.uniform(low=0.5, high=0.7),
+        ).shear(
+            g1=rng.uniform(low=-0.1, high=0.1),
+            g2=rng.uniform(low=-0.1, high=0.1),
+        ).withFlux(
+            400
+        )
     mbobs = ngmix.MultiBandObsList()
 
     for band in range(nband):
@@ -208,10 +220,14 @@ def make_mbobs_sim(seed, nband):
         ).jacobian()
         offset = rng.uniform(low=-0.5, high=0.5, size=2)
 
-        obj = galsim.Convolve([gal, psf])
+        if band_flux_factors is not None:
+            flux_factor = band_flux_factors[band]
+        else:
+            flux_factor = 1.0
+        obj = galsim.Convolve([gal * flux_factor, psf])
 
         im = obj.drawImage(nx=dim, ny=dim, wcs=gs_wcs, offset=offset).array
-        nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100)
+        nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100) * noise_scale
         im += rng.normal(size=im.shape, scale=nse)
 
         psf_im = psf.drawImage(nx=dim, ny=dim, wcs=gs_wcs).array

@@ -1185,3 +1185,33 @@ def test_fitting_symmetrize_obs_weights():
         [0, 1, 0],
     ])
     assert np.array_equal(sym_obs.weight, sym_wgt)
+
+
+def test_fitting_fit_mbobs_wavg_wmom_tratio():
+    fitter = GaussMom(1.2)
+    seed = 10
+    nband = 3
+    bmask_flags = 0
+
+    mbobs = make_mbobs_sim(
+        seed,
+        nband,
+        simulate_star=True,
+        noise_scale=1e-4,
+        band_flux_factors=[0.1, 2.0, 5.0],
+    )
+    res = fit_mbobs_wavg(mbobs=mbobs, fitter=fitter, bmask_flags=bmask_flags)
+    _print_res(res[0])
+    assert np.allclose(res["wmom_T_ratio"], 1.0)
+
+    mbobs = make_mbobs_sim(
+        seed,
+        nband,
+        simulate_star=False,
+        noise_scale=1e-4,
+        band_flux_factors=[0.1, 2.0, 5.0],
+    )
+    res = fit_mbobs_wavg(mbobs=mbobs, fitter=fitter, bmask_flags=bmask_flags)
+    _print_res(res[0])
+    assert not np.allclose(res["wmom_T_ratio"], 1.0)
+    assert res["wmom_T_ratio"][0] > 1.5
