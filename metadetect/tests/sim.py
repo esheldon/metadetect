@@ -177,12 +177,11 @@ class Sim(dict):
 
 
 def make_mbobs_sim(
-    seed, nband, simulate_star=False, noise_scale=1, band_flux_factors=None
+    seed, nband, simulate_star=False, noise_scale=1, band_flux_factors=None,
+    band_image_sizes=None,
 ):
     rng = np.random.RandomState(seed=seed)
 
-    dim = 35
-    cen = (dim-1)/2
     if simulate_star:
         gal = galsim.Gaussian(
             fwhm=1e-6,
@@ -204,6 +203,14 @@ def make_mbobs_sim(
     mbobs = ngmix.MultiBandObsList()
 
     for band in range(nband):
+        if band_image_sizes is not None:
+            dim = band_image_sizes[band]
+        else:
+            dim = 35
+        cen = (dim-1)/2
+        psf_dim = dim + 17
+        psf_cen = (psf_dim-1)/2
+
         psf = galsim.Gaussian(
             fwhm=rng.uniform(low=0.8, high=0.9),
         ).shear(
@@ -230,12 +237,12 @@ def make_mbobs_sim(
         nse = np.sqrt(np.sum(im**2)) / rng.uniform(low=10, high=100) * noise_scale
         im += rng.normal(size=im.shape, scale=nse)
 
-        psf_im = psf.drawImage(nx=dim, ny=dim, wcs=gs_wcs).array
+        psf_im = psf.drawImage(nx=psf_dim, ny=psf_dim, wcs=gs_wcs).array
         psf_obs = ngmix.Observation(
             image=psf_im,
             jacobian=ngmix.Jacobian(
-                row=cen,
-                col=cen,
+                row=psf_cen,
+                col=psf_cen,
                 wcs=gs_wcs,
             )
         )

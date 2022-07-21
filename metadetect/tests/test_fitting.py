@@ -1238,6 +1238,7 @@ def test_fitting_fit_mbobs_wavg_wmom_tratio():
         simulate_star=True,
         noise_scale=1e-4,
         band_flux_factors=[0.1, 2.0, 5.0],
+        band_image_sizes=[39, 45, 67],
     )
     res = fit_mbobs_wavg(mbobs=mbobs, fitter=fitter, bmask_flags=bmask_flags)
     _print_res(res[0])
@@ -1249,6 +1250,7 @@ def test_fitting_fit_mbobs_wavg_wmom_tratio():
         simulate_star=False,
         noise_scale=1e-4,
         band_flux_factors=[0.1, 2.0, 5.0],
+        band_image_sizes=[39, 45, 67],
     )
     res = fit_mbobs_wavg(mbobs=mbobs, fitter=fitter, bmask_flags=bmask_flags)
     _print_res(res[0])
