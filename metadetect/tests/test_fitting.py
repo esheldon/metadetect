@@ -1070,25 +1070,25 @@ def test_fitting_sum_bands_wavg_weighting(mom_norm):
         fac0 = (6 / mom_norm[2]) / (3 / mom_norm[0])
         fac1 = (2 / mom_norm[3]) / (7 / mom_norm[1])
 
-    assert sums_wgt[2] == (0.2 * fac0 + 0.5 * fac1)
+    assert sums_wgt["wgt_sum"] == (0.2 * fac0 + 0.5 * fac1)
     if mom_norm is None:
         np.testing.assert_allclose(
-            sums_wgt[0],
+            sums_wgt["raw_mom"],
             [0.2 * 3 * fac0 + 0.5 * 7 * fac1] * 6
         )
     else:
         np.testing.assert_allclose(
-            sums_wgt[0],
+            sums_wgt["raw_mom"],
             [0.2 * 3 * fac0 / mom_norm[0] + 0.5 * 7 * fac1 / mom_norm[1]] * 6
         )
     if mom_norm is None:
         np.testing.assert_allclose(
-            np.diag(sums_wgt[1]),
+            np.diag(sums_wgt["raw_mom_cov"]),
             [0.2**2 * 3.1 * fac0**2 + 0.5**2 * 7.1 * fac1**2] * 6
         )
     else:
         np.testing.assert_allclose(
-            np.diag(sums_wgt[1]),
+            np.diag(sums_wgt["raw_mom_cov"]),
             [
                 0.2**2 * 3.1 * fac0**2 / mom_norm[0]**2
                 + 0.5**2 * 7.1 * fac1**2 / mom_norm[1]**2
@@ -1102,31 +1102,31 @@ def test_fitting_sum_bands_wavg_weighting(mom_norm):
         all_flags=all_flags,
         all_wgt_res=None,
     )
-    assert sums[2] == 0.7
+    assert sums["wgt_sum"] == 0.7
     if mom_norm is None:
         np.testing.assert_allclose(
-            sums[0],
+            sums["raw_mom"],
             [0.2 * 3 + 0.5 * 7] * 6
         )
     else:
         np.testing.assert_allclose(
-            sums[0],
+            sums["raw_mom"],
             [0.2 * 3 / mom_norm[0] + 0.5 * 7 / mom_norm[1]] * 6
         )
     if mom_norm is None:
         np.testing.assert_allclose(
-            np.diag(sums[1]),
+            np.diag(sums["raw_mom_cov"]),
             [0.2**2 * 3.1 + 0.5**2 * 7.1] * 6
         )
     else:
         np.testing.assert_allclose(
-            np.diag(sums[1]),
+            np.diag(sums["raw_mom_cov"]),
             [0.2**2 * 3.1 / mom_norm[0]**2 + 0.5**2 * 7.1 / mom_norm[1]**2] * 6
         )
 
     # everything but the moments should be the same
-    for i in range(3, len(sums)):
-        assert sums[i] == sums_wgt[i], (i, sums[i])
+    for key in ["final_flags", "used_shear_bands", "flux", "flux_var", "flux_wgt_sum"]:
+        assert sums[key] == sums_wgt[key], (key, sums[key])
 
 
 def test_fitting_symmetrize_obs_weights_all_zero():

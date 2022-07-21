@@ -1,4 +1,6 @@
 import logging
+import copy
+
 import numpy as np
 
 import ngmix
@@ -225,6 +227,82 @@ def _fit_obs(
 def _sum_bands_wavg(
     *, all_res, all_is_shear_band, all_wgts, all_flags, all_wgt_res,
 ):
+    """A function to sum all of the moments across different bands for combined moments
+    estimates.
+
+    This function sums the moments together using the entires from `all_wgts`.
+
+        raw_mom = \\sum_i all_wgts[i] * all_res[i]["mom"]
+
+    If `all_wgt_res` is given, then the weights are adjust to include the ratio of the
+    flux moments between `all_wgt_res` and `all_res`:
+
+        all_wgts[i] -> all_wgts[i] * all_wgt_res[i]["mom"][5] / all_res[i]["mom"][5]
+
+    If `mom_norm` is in the results dicts in `all_res` and `all_wgt_res`, then the
+    moments fields `mom` are divided by this normalization before being averaged.
+
+    The fluxes are summed without any additional weighting beyond the entires in
+    `all_wgts`
+
+        flux = \\sum_i all_wgts[i] * all_res[i]["flux"]
+
+
+    Similar sums are carried out for the the moments covariance and the flux variance
+    with the approprtiate weights squared.
+
+    Parameters
+    ----------
+    all_res : list of dicts
+        List of the moments fit results from each band.
+    all_is_shear_band : list of bool
+        List of bools indicating if a given band is to be summed into the outputs and
+        thus used for shear.
+    all_wgts : list of floats
+        List of floats giving the total weight for each band.
+    all_flags : list of ints
+        List of ints indicating if any of the input bands are flagged for some reason.
+        These flags are ORed into the final_flags outputs.
+    all_wgt_res : list of dicts, optional
+        If not None, then additional weighting by the flux moment ratio of
+        `all_wgt_res[i]["mom"][5] / all_res[i]["mom"][5]` is applied to the weighting
+        for the moments sums. This field is used to weight the PSF moment sums by
+        the fluxes of the objects so that the band-averaged sizes of stars match the
+        band-averaged PSF size.
+
+    Returns
+    -------
+    res : dict
+        A dictionary with the following keys:
+
+            raw_mom : np.ndarray
+                The array of summed moments. You need to divide by `wgt_sum` to
+                normalize the moments properly.
+            raw_mom_cov : np.ndarray
+                The covariance of the summed moments. You need to divide by
+                `wgt_sum**2` to normalize the moments properly.
+            wgt_sum : float
+                The sum of the weights used in the moments sum. To get final moments,
+                divide `raw_mom` by `wgt_sum` and `raw_mom_cov` by `wgt_sum**2`.
+            final_flags : int
+                A final set of bit flags for the summed moments. This field marks
+                missing bands, missing moments, or zero weights. It is also ORed
+                with all of the input `all_flags` entires.
+            used_shear_bands : list of bool
+                A list of which bands were used for shear. This field can be used to
+                track if two successive calls to this function with slightly different
+                inputs end up using the same bands.
+            flux : float
+                The total flux. You must divide by `flux_wgt_sum` to get the output
+                flux.
+            flux_var : float
+                The variance in the total flux. You must divide by `flux_wgt_sum**2`
+                to get the output flux variance.
+            flux_wgt_sum : float
+                The sum of the weights used for the output flux. You need to divide
+                `flux` by `flux_wgt_sum` and `flux_var` by `flux_wgt_sum**2` to
+                normalize things properly.
+    """
     tot_nband = len(all_res)
     raw_mom = np.zeros(6, dtype=np.float64)
     raw_mom_cov = np.zeros((6, 6), dtype=np.float64)
@@ -261,10 +339,10 @@ def _sum_bands_wavg(
             ):
                 final_flags |= procflags.NOMOMENTS_FAILURE
 
-            if res is not None and "mom_norm" in res:
-                mom_scale = res["mom_norm"]
+            if res is not None and "mom_norm" in res and np.isfinite(res["mom_norm"]):
+                mom_norm = res["mom_norm"]
             else:
-                mom_scale = 1.0
+                mom_norm = 1.0
 
             if (
                 all_wgt_res is not None
@@ -274,7 +352,12 @@ def _sum_bands_wavg(
                 and "mom" in wgt_res
             ):
                 if wgt_res["mom"][5] != 0 and res["mom"][5] != 0:
-                    if "mom_norm" in res and "mom_norm" in wgt_res:
+                    if (
+                        "mom_norm" in res
+                        and np.isfinite(res["mom_norm"])
+                        and "mom_norm" in wgt_res
+                        and np.isfinite(wgt_res["mom_norm"])
+                    ):
                         flux_mom_ratio = (
                             (wgt_res["mom"][5] / wgt_res["mom_norm"])
                             /
@@ -300,8 +383,8 @@ def _sum_bands_wavg(
                 flux_var += (wgt**2 * res["mom_cov"][5, 5])
                 flux_wgt_sum += wgt
 
-                raw_mom += (_wgt * res["mom"] / mom_scale)
-                raw_mom_cov += (_wgt**2 * res["mom_cov"] / mom_scale / mom_scale)
+                raw_mom += (_wgt * res["mom"] / mom_norm)
+                raw_mom_cov += (_wgt**2 * res["mom_cov"] / mom_norm / mom_norm)
                 wgt_sum += _wgt
 
                 used_shear_bands[iband] = True
@@ -310,9 +393,15 @@ def _sum_bands_wavg(
     if sum(used_shear_bands) > 0 and wgt_sum <= 0:
         final_flags |= procflags.ZERO_WEIGHTS
 
-    return (
-        raw_mom, raw_mom_cov, wgt_sum, final_flags, used_shear_bands,
-        flux, flux_var, flux_wgt_sum
+    return dict(
+        raw_mom=raw_mom,
+        raw_mom_cov=raw_mom_cov,
+        wgt_sum=wgt_sum,
+        final_flags=final_flags,
+        used_shear_bands=used_shear_bands,
+        flux=flux,
+        flux_var=flux_var,
+        flux_wgt_sum=flux_wgt_sum,
     )
 
 
@@ -375,44 +464,28 @@ def _combine_fit_results_wavg(
         band_flux = [np.nan] * tot_nband
         band_flux_err = [np.nan] * tot_nband
     else:
-        (
-            raw_mom,
-            raw_mom_cov,
-            wgt_sum,
-            mdet_flags,
-            used_shear_bands,
-            raw_flux,
-            raw_flux_var,
-            flux_wgt_sum,
-        ) = _sum_bands_wavg(
+        sum_data = _sum_bands_wavg(
             all_res=all_res,
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
             all_wgt_res=None,
         )
+        mdet_flags = copy.copy(sum_data["final_flags"])
 
-        (
-            psf_raw_mom,
-            psf_raw_mom_cov,
-            psf_wgt_sum,
-            psf_flags,
-            psf_used_shear_bands,
-            psf_raw_flux,
-            psf_raw_flux_var,
-            psf_flux_wgt_sum
-        ) = _sum_bands_wavg(
+        psf_sum_data = _sum_bands_wavg(
             all_res=all_psf_res,
             all_is_shear_band=all_is_shear_band,
             all_wgts=all_wgts,
             all_flags=all_flags,
             all_wgt_res=all_res,
         )
+        psf_flags = copy.copy(psf_sum_data["final_flags"])
 
         if (
-            mdet_flags == 0
-            and psf_flags == 0
-            and used_shear_bands != psf_used_shear_bands
+            sum_data["final_flags"] == 0
+            and psf_sum_data["final_flags"] == 0
+            and sum_data["used_shear_bands"] != psf_sum_data["used_shear_bands"]
         ):
             psf_flags |= procflags.INCONSISTENT_BANDS
             mdet_flags |= procflags.INCONSISTENT_BANDS
@@ -446,10 +519,10 @@ def _combine_fit_results_wavg(
             flux_flags.append(_flux_flags)
 
     if psf_flags == 0:
-        psf_raw_mom /= psf_wgt_sum
-        psf_raw_mom_cov /= (psf_wgt_sum**2)
-        psf_raw_flux /= psf_flux_wgt_sum
-        psf_raw_flux_var /= (psf_flux_wgt_sum**2)
+        psf_raw_mom = psf_sum_data["raw_mom"] / psf_sum_data["wgt_sum"]
+        psf_raw_mom_cov = psf_sum_data["raw_mom_cov"] / (psf_sum_data["wgt_sum"]**2)
+        psf_raw_flux = psf_sum_data["flux"] / psf_sum_data["flux_wgt_sum"]
+        psf_raw_flux_var = psf_sum_data["flux_var"] / (psf_sum_data["flux_wgt_sum"]**2)
 
         psf_momres = _make_mom_res(
             raw_mom=psf_raw_mom,
@@ -463,10 +536,10 @@ def _combine_fit_results_wavg(
         data["psf_T"] = psf_momres['T']
 
     if mdet_flags == 0:
-        raw_mom /= wgt_sum
-        raw_mom_cov /= (wgt_sum**2)
-        raw_flux /= flux_wgt_sum
-        raw_flux_var /= (flux_wgt_sum**2)
+        raw_mom = sum_data["raw_mom"] / sum_data["wgt_sum"]
+        raw_mom_cov = sum_data["raw_mom_cov"] / (sum_data["wgt_sum"]**2)
+        raw_flux = sum_data["flux"] / sum_data["flux_wgt_sum"]
+        raw_flux_var = sum_data["flux_var"] / (sum_data["flux_wgt_sum"]**2)
 
         momres = _make_mom_res(
             raw_mom=raw_mom,
