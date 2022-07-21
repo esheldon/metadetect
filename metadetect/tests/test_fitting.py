@@ -12,6 +12,7 @@ from ..fitting import (
     symmetrize_obs_weights,
     fit_all_psfs,
     _sum_bands_wavg,
+    MOMNAME,
 )
 from .. import procflags
 
@@ -447,10 +448,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 1,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 1,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 1,
             all_is_shear_band=[True],
             all_wgts=[1],
             all_flags=[0],
@@ -466,10 +469,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -485,10 +490,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 2,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 1,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 1,
             all_is_shear_band=[True],
             all_wgts=[1],
             all_flags=[0],
@@ -504,10 +511,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 2,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 2,
             all_is_shear_band=[True],
             all_wgts=[1],
             all_flags=[0],
@@ -523,10 +532,10 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
+            all_psf_res=[{MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}],
             all_is_shear_band=[True],
             all_wgts=[1, 1],
             all_flags=[0],
@@ -542,10 +551,10 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
+            all_psf_res=[{MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}],
             all_is_shear_band=[True],
             all_wgts=[1],
             all_flags=[0, 0],
@@ -561,10 +570,10 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}],
+            all_psf_res=[{MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}],
             all_is_shear_band=[True, False],
             all_wgts=[1],
             all_flags=[0, 0],
@@ -580,10 +589,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[1, 0, 0, 0],
@@ -599,16 +610,18 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 1,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] + [{
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -624,10 +637,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[0, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -643,10 +658,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -662,10 +679,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 0],
             all_flags=[0, 0, 0, 0],
@@ -681,10 +700,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 1],
@@ -700,18 +721,20 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3 + [
                 {
                     "flux_flags": 1,
                     "flux": 1,
                     "flux_err": 1,
-                    "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                    "mom_cov": np.diag(np.ones(6))
+                    MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                    MOMNAME+"_cov": np.diag(np.ones(6))
                 }
             ],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -727,10 +750,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3 + [None],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -746,15 +771,17 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux_flags": 0,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -770,15 +797,17 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux_flags": 0,
                 "flux": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -794,15 +823,17 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3 + [{
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }],
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -818,15 +849,17 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] + [{
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -842,15 +875,17 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1])
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1])
             }] + [{
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 3,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 4,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 4,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
             all_flags=[0, 0, 0, 0],
@@ -866,13 +901,13 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
-                {"mom_cov": np.diag(np.ones(6))}
+                {MOMNAME+"_cov": np.diag(np.ones(6))}
             ] + [
-                {"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
             ] * 3,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
@@ -889,13 +924,13 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
-                {"mom": np.ones(6)}
+                {MOMNAME: np.ones(6)}
             ] + [
-                {"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
             ] * 3,
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
@@ -912,13 +947,13 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
-                {"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
             ] * 3 + [
-                {"mom_cov": np.diag(np.ones(6))}
+                {MOMNAME+"_cov": np.diag(np.ones(6))}
             ],
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
@@ -935,13 +970,13 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 4,
             all_psf_res=[
-                {"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
             ] * 3 + [
-                {"mom": np.diag(np.ones(6))}
+                {MOMNAME: np.diag(np.ones(6))}
             ],
             all_is_shear_band=[True, True, False, False],
             all_wgts=[1, 1, 1, 1],
@@ -958,10 +993,12 @@ def test_fitting_fit_mbobs_wavg_flagging_combined():
                 "flux_flags": 0,
                 "flux": 1,
                 "flux_err": 1,
-                "mom": np.array([0, 0, 0.5, 0.5, 1, 1]),
-                "mom_cov": np.diag(np.ones(6))
+                MOMNAME: np.array([0, 0, 0.5, 0.5, 1, 1]),
+                MOMNAME+"_cov": np.diag(np.ones(6))
             }] * 5,
-            all_psf_res=[{"mom": np.ones(6), "mom_cov": np.diag(np.ones(6))}] * 5,
+            all_psf_res=[
+                {MOMNAME: np.ones(6), MOMNAME+"_cov": np.diag(np.ones(6))}
+            ] * 5,
             all_is_shear_band=[True, True, True, False, False],
             all_wgts=[-1, 1, 0, 1, 1],
             all_flags=[0, 0, 0, 0, 0],
@@ -1025,33 +1062,33 @@ def test_fitting_combine_fit_results_wavg_flagging(
 def test_fitting_sum_bands_wavg_weighting(mom_norm):
     all_is_shear_band = [True, True]
     all_res = [
-        dict(
-            mom=np.ones(6) * 3,
-            mom_cov=np.diag(np.ones(6)) * 3.1,
-        ),
-        dict(
-            mom=np.ones(6) * 7,
-            mom_cov=np.diag(np.ones(6)) * 7.1,
-        ),
+        {
+            MOMNAME: np.ones(6) * 3,
+            MOMNAME+"_cov": np.diag(np.ones(6)) * 3.1,
+        },
+        {
+            MOMNAME: np.ones(6) * 7,
+            MOMNAME+"_cov": np.diag(np.ones(6)) * 7.1,
+        },
     ]
     all_wgts = [0.2, 0.5]
     all_flags = [0, 0]
     all_wgt_res = [
-        dict(
-            mom=np.ones(6) * 6,
-            mom_cov=np.diag(np.ones(6)) * 6.1,
-        ),
-        dict(
-            mom=np.ones(6) * 2,
-            mom_cov=np.diag(np.ones(6)) * 2.1,
-        ),
+        {
+            MOMNAME: np.ones(6) * 6,
+            MOMNAME + "_cov": np.diag(np.ones(6)) * 6.1,
+        },
+        {
+            MOMNAME: np.ones(6) * 2,
+            MOMNAME+"_cov": np.diag(np.ones(6)) * 2.1,
+        },
     ]
 
     if mom_norm is not None:
-        all_res[0]["mom_norm"] = mom_norm[0]
-        all_res[1]["mom_norm"] = mom_norm[1]
-        all_wgt_res[0]["mom_norm"] = mom_norm[2]
-        all_wgt_res[1]["mom_norm"] = mom_norm[3]
+        all_res[0][MOMNAME+"_norm"] = mom_norm[0]
+        all_res[1][MOMNAME+"_norm"] = mom_norm[1]
+        all_wgt_res[0][MOMNAME+"_norm"] = mom_norm[2]
+        all_wgt_res[1][MOMNAME+"_norm"] = mom_norm[3]
 
     # return value is
     # raw_mom, raw_mom_cov, wgt_sum, final_flags, used_shear_bands,

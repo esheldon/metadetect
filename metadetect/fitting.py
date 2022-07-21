@@ -6,6 +6,7 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 from ngmix.moments import make_mom_result
+from pkg_resources import parse_version
 
 from .util import Namer
 from . import procflags
@@ -13,6 +14,12 @@ from . import procflags
 MAX_NUM_SHEAR_BANDS = 6
 
 logger = logging.getLogger(__name__)
+
+
+if parse_version(ngmix.__version__) < parse_version("2.1.0"):
+    MOMNAME = "mom"
+else:
+    MOMNAME = "sums"
 
 
 def get_coellip_ngauss(name):
@@ -232,12 +239,12 @@ def _sum_bands_wavg(
 
     This function sums the moments together using the entires from `all_wgts`.
 
-        raw_mom = \\sum_i all_wgts[i] * all_res[i]["mom"]
+        raw_mom = \\sum_i all_wgts[i] * all_res[i]["sums"]
 
     If `all_wgt_res` is given, then the weights are adjust to include the ratio of the
     flux moments between `all_wgt_res` and `all_res`:
 
-        all_wgts[i] -> all_wgts[i] * all_wgt_res[i]["mom"][5] / all_res[i]["mom"][5]
+        all_wgts[i] -> all_wgts[i] * all_wgt_res[i]["sums"][5] / all_res[i]["sums"][5]
 
     If `mom_norm` is in the results dicts in `all_res` and `all_wgt_res`, then the
     moments fields `mom` are divided by this normalization before being averaged.
@@ -265,7 +272,7 @@ def _sum_bands_wavg(
         These flags are ORed into the final_flags outputs.
     all_wgt_res : list of dicts, optional
         If not None, then additional weighting by the flux moment ratio of
-        `all_wgt_res[i]["mom"][5] / all_res[i]["mom"][5]` is applied to the weighting
+        `all_wgt_res[i]["sums"][5] / all_res[i]["sums"][5]` is applied to the weighting
         for the moments sums. This field is used to weight the PSF moment sums by
         the fluxes of the objects so that the band-averaged sizes of stars match the
         band-averaged PSF size.
@@ -330,17 +337,21 @@ def _sum_bands_wavg(
             if res is None or (all_wgt_res is not None and wgt_res is None):
                 final_flags |= procflags.MISSING_BAND
             elif (
-                ("mom" not in res or "mom_cov" not in res)
+                (MOMNAME not in res or MOMNAME+"_cov" not in res)
                 or (
                     all_wgt_res is not None and wgt_res is not None and (
-                        "mom" not in wgt_res or "mom_cov" not in wgt_res
+                        MOMNAME not in wgt_res or MOMNAME+"_cov" not in wgt_res
                     )
                 )
             ):
                 final_flags |= procflags.NOMOMENTS_FAILURE
 
-            if res is not None and "mom_norm" in res and np.isfinite(res["mom_norm"]):
-                mom_norm = res["mom_norm"]
+            if (
+                res is not None
+                and MOMNAME+"_norm" in res
+                and np.isfinite(res[MOMNAME+"_norm"])
+            ):
+                mom_norm = res[MOMNAME+"_norm"]
             else:
                 mom_norm = 1.0
 
@@ -348,23 +359,23 @@ def _sum_bands_wavg(
                 all_wgt_res is not None
                 and wgt_res is not None
                 and res is not None
-                and "mom" in res
-                and "mom" in wgt_res
+                and MOMNAME in res
+                and MOMNAME in wgt_res
             ):
-                if wgt_res["mom"][5] != 0 and res["mom"][5] != 0:
+                if wgt_res[MOMNAME][5] != 0 and res[MOMNAME][5] != 0:
                     if (
-                        "mom_norm" in res
-                        and np.isfinite(res["mom_norm"])
-                        and "mom_norm" in wgt_res
-                        and np.isfinite(wgt_res["mom_norm"])
+                        MOMNAME+"_norm" in res
+                        and np.isfinite(res[MOMNAME+"_norm"])
+                        and MOMNAME+"_norm" in wgt_res
+                        and np.isfinite(wgt_res[MOMNAME+"_norm"])
                     ):
                         flux_mom_ratio = (
-                            (wgt_res["mom"][5] / wgt_res["mom_norm"])
+                            (wgt_res[MOMNAME][5] / wgt_res[MOMNAME+"_norm"])
                             /
-                            (res["mom"][5] / res["mom_norm"])
+                            (res[MOMNAME][5] / res[MOMNAME+"_norm"])
                         )
                     else:
-                        flux_mom_ratio = wgt_res["mom"][5] / res["mom"][5]
+                        flux_mom_ratio = wgt_res[MOMNAME][5] / res[MOMNAME][5]
                 else:
                     flux_mom_ratio = 1.0
                     final_flags |= procflags.ZERO_WEIGHTS
@@ -378,13 +389,13 @@ def _sum_bands_wavg(
 
             _wgt = wgt * flux_mom_ratio
 
-            if res is not None and "mom" in res and "mom_cov" in res:
-                flux += (wgt * res["mom"][5])
-                flux_var += (wgt**2 * res["mom_cov"][5, 5])
+            if res is not None and MOMNAME in res and MOMNAME+"_cov" in res:
+                flux += (wgt * res[MOMNAME][5])
+                flux_var += (wgt**2 * res[MOMNAME+"_cov"][5, 5])
                 flux_wgt_sum += wgt
 
-                raw_mom += (_wgt * res["mom"] / mom_norm)
-                raw_mom_cov += (_wgt**2 * res["mom_cov"] / mom_norm / mom_norm)
+                raw_mom += (_wgt * res[MOMNAME] / mom_norm)
+                raw_mom_cov += (_wgt**2 * res[MOMNAME+"_cov"] / mom_norm / mom_norm)
                 wgt_sum += _wgt
 
                 used_shear_bands[iband] = True
