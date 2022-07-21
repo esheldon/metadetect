@@ -1107,7 +1107,7 @@ def test_fitting_sum_bands_wavg_weighting(mom_norm):
         fac0 = (6 / mom_norm[2]) / (3 / mom_norm[0])
         fac1 = (2 / mom_norm[3]) / (7 / mom_norm[1])
 
-    assert sums_wgt["wgt_sum"] == (0.2 * fac0 + 0.5 * fac1)
+    assert sums_wgt["wgt_sum"] == 0.7
     if mom_norm is None:
         np.testing.assert_allclose(
             sums_wgt["raw_mom"],
@@ -1162,7 +1162,9 @@ def test_fitting_sum_bands_wavg_weighting(mom_norm):
         )
 
     # everything but the moments should be the same
-    for key in ["final_flags", "used_shear_bands", "flux", "flux_var", "flux_wgt_sum"]:
+    for key in [
+        "wgt_sum", "final_flags", "used_shear_bands", "flux", "flux_var",
+    ]:
         assert sums[key] == sums_wgt[key], (key, sums[key])
 
 

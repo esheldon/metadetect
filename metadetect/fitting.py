@@ -300,15 +300,11 @@ def _sum_bands_wavg(
                 track if two successive calls to this function with slightly different
                 inputs end up using the same bands.
             flux : float
-                The total flux. You must divide by `flux_wgt_sum` to get the output
+                The total flux. You must divide by `wgt_sum` to get the output
                 flux.
             flux_var : float
-                The variance in the total flux. You must divide by `flux_wgt_sum**2`
+                The variance in the total flux. You must divide by `wgt_sum**2`
                 to get the output flux variance.
-            flux_wgt_sum : float
-                The sum of the weights used for the output flux. You need to divide
-                `flux` by `flux_wgt_sum` and `flux_var` by `flux_wgt_sum**2` to
-                normalize things properly.
     """
     tot_nband = len(all_res)
     raw_mom = np.zeros(6, dtype=np.float64)
@@ -318,7 +314,6 @@ def _sum_bands_wavg(
     final_flags = 0
     flux = 0.0
     flux_var = 0.0
-    flux_wgt_sum = 0.0
 
     for iband, (wgt, res, issb, flags) in enumerate(zip(
         all_wgts, all_res, all_is_shear_band, all_flags
@@ -387,15 +382,29 @@ def _sum_bands_wavg(
             if wgt <= 0:
                 final_flags |= procflags.ZERO_WEIGHTS
 
-            _wgt = wgt * flux_mom_ratio
-
             if res is not None and MOMNAME in res and MOMNAME+"_cov" in res:
                 flux += (wgt * res[MOMNAME][5])
                 flux_var += (wgt**2 * res[MOMNAME+"_cov"][5, 5])
-                flux_wgt_sum += wgt
 
-                raw_mom += (_wgt * res[MOMNAME] / mom_norm)
-                raw_mom_cov += (_wgt**2 * res[MOMNAME+"_cov"] / mom_norm / mom_norm)
+                # there are a few factors here
+                # wgt - the averaging weight for the moments
+                # flux_mom_ratio - the ratio of the flux in wgt_res to res
+                #  This factor used to properly weight PSF model averages for objects
+                #  since the sums are actually things like flux * T. So for the PSF T
+                #  we actually average
+                #    flux_mom_ratio * sums[4] = (object flux/psf flux) * (psf_flux * T)
+                #  since sums[4] = flux * T.
+                # mom_norm - sum of the moments weight function
+                #  This factor removes the moments dependence on area of the stamp.
+                # The flux averages above do not get these factors since we want the
+                # weight function to peak at 1 for flux measurements (and only care
+                # about the object).
+
+                raw_mom += (wgt * flux_mom_ratio / mom_norm * res[MOMNAME])
+                raw_mom_cov += (
+                    (wgt * flux_mom_ratio / mom_norm)**2
+                    * res[MOMNAME+"_cov"]
+                )
                 wgt_sum += wgt
 
                 used_shear_bands[iband] = True
@@ -412,7 +421,6 @@ def _sum_bands_wavg(
         used_shear_bands=used_shear_bands,
         flux=flux,
         flux_var=flux_var,
-        flux_wgt_sum=flux_wgt_sum,
     )
 
 
@@ -532,8 +540,8 @@ def _combine_fit_results_wavg(
     if psf_flags == 0:
         psf_raw_mom = psf_sum_data["raw_mom"] / psf_sum_data["wgt_sum"]
         psf_raw_mom_cov = psf_sum_data["raw_mom_cov"] / (psf_sum_data["wgt_sum"]**2)
-        psf_raw_flux = psf_sum_data["flux"] / psf_sum_data["flux_wgt_sum"]
-        psf_raw_flux_var = psf_sum_data["flux_var"] / (psf_sum_data["flux_wgt_sum"]**2)
+        psf_raw_flux = psf_sum_data["flux"] / psf_sum_data["wgt_sum"]
+        psf_raw_flux_var = psf_sum_data["flux_var"] / (psf_sum_data["wgt_sum"]**2)
 
         psf_momres = _make_mom_res(
             raw_mom=psf_raw_mom,
@@ -549,8 +557,8 @@ def _combine_fit_results_wavg(
     if mdet_flags == 0:
         raw_mom = sum_data["raw_mom"] / sum_data["wgt_sum"]
         raw_mom_cov = sum_data["raw_mom_cov"] / (sum_data["wgt_sum"]**2)
-        raw_flux = sum_data["flux"] / sum_data["flux_wgt_sum"]
-        raw_flux_var = sum_data["flux_var"] / (sum_data["flux_wgt_sum"]**2)
+        raw_flux = sum_data["flux"] / sum_data["wgt_sum"]
+        raw_flux_var = sum_data["flux_var"] / (sum_data["wgt_sum"]**2)
 
         momres = _make_mom_res(
             raw_mom=raw_mom,
