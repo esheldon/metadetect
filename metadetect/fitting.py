@@ -357,7 +357,7 @@ def _sum_bands_wavg(
                 and MOMNAME in res
                 and MOMNAME in wgt_res
             ):
-                if wgt_res[MOMNAME][5] != 0 and res[MOMNAME][5] != 0:
+                if res[MOMNAME][5] != 0:
                     if (
                         MOMNAME+"_norm" in res
                         and np.isfinite(res[MOMNAME+"_norm"])
