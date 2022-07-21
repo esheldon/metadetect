@@ -364,11 +364,16 @@ def _sum_bands_wavg(
                         and MOMNAME+"_norm" in wgt_res
                         and np.isfinite(wgt_res[MOMNAME+"_norm"])
                     ):
-                        flux_mom_ratio = (
-                            (wgt_res[MOMNAME][5] / wgt_res[MOMNAME+"_norm"])
-                            /
-                            (res[MOMNAME][5] / res[MOMNAME+"_norm"])
-                        )
+                        if wgt_res[MOMNAME+"_norm"] == 0:
+                            flux_mom_ratio = 1.0
+                            final_flags |= procflags.ZERO_WEIGHTS
+                        else:
+                            flux_mom_ratio = (
+                                wgt_res[MOMNAME][5]
+                                / wgt_res[MOMNAME+"_norm"]
+                                / res[MOMNAME][5]
+                                * res[MOMNAME+"_norm"]
+                            )
                     else:
                         flux_mom_ratio = wgt_res[MOMNAME][5] / res[MOMNAME][5]
                 else:
