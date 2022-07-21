@@ -396,7 +396,7 @@ def _sum_bands_wavg(
 
                 raw_mom += (_wgt * res[MOMNAME] / mom_norm)
                 raw_mom_cov += (_wgt**2 * res[MOMNAME+"_cov"] / mom_norm / mom_norm)
-                wgt_sum += _wgt
+                wgt_sum += wgt
 
                 used_shear_bands[iband] = True
 
