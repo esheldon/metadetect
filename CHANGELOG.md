@@ -12,6 +12,10 @@
 
 # 0.8.0 - 2022-07-22
 
+### added
+
+ - Added adaptive moments to LSST metadetect.
+
 ### changed
 
 - Changed code to detect ngmix versions and use the correct momments name (`mom` vs `sums`)
