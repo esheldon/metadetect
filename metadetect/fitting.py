@@ -203,6 +203,7 @@ def _fit_obs(
             # we only use no_psf if smoothing is zero
             if fitter.fwhm_smooth > 0:
                 psf_go_kwargs = {}
+                obs.psf.psf = obs.psf.copy()
             else:
                 psf_go_kwargs = {"no_psf": True}
         else:
