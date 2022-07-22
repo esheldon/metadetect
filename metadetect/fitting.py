@@ -225,12 +225,6 @@ def _fit_obs(
         res["obj_res"] = fitter.go(obs)
         res["psf_res"] = fitter.go(obs.psf, **psf_go_kwargs)
 
-        if fitter.kind == 'am':
-            res["obj_res"]["mom"] = res["obj_res"]["sums"]
-            res["obj_res"]["mom_cov"] = res["obj_res"]["sums_cov"]
-            res["psf_res"]["mom"] = res["psf_res"]["sums"]
-            res["psf_res"]["mom_cov"] = res["psf_res"]["sums_cov"]
-
         if res["obj_res"]["flags"] != 0:
             logger.debug("per band fitter failed: %s" % res["obj_res"]['flagstr'])
 

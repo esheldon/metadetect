@@ -168,6 +168,35 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+def test_lsst_metadetect_am():
+    rng = np.random.RandomState(seed=882)
+
+    # only single band for am currently
+    bands = ['i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    meas_type = 'am'
+    config = {'meas_type': meas_type}
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    gname = f'{meas_type}_g'
+    flux_name = f'{meas_type}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ('noshear', '1p', '1m'):
+        # 5x5 grid
+        assert res[shear].size == 25
+
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        assert len(res[shear][flux_name].shape) == len(bands)
+        with pytest.raises(TypeError):
+            len(res[shear][flux_name][0])
+
+
 def test_lsst_metadetect_fullcoadd_smoke():
     rng = np.random.RandomState(seed=116)
 
