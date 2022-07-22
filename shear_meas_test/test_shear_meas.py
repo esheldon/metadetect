@@ -491,7 +491,7 @@ def test_shear_meas_color(model, snr, ngrid, ntrial):
         ("wmom", 1e6, None, 10240),
     ]
 )
-def test_shear_meas(model, snr, ngrid, ntrial):
+def test_shear_meas_simple(model, snr, ngrid, ntrial):
     nsub = max(ntrial // 128, 8)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)

@@ -6,16 +6,21 @@
 
 ### changed
 
+- Changed code to detect ngmix versions and use the correct momments name (`mom` vs `sums`)
+  for ngmix version less than 2.1 or greater than equal to 2.1.
+
 ### removed
 
 ### fixed
 
+- Fixed bug where flux weighting was not applied to the PSF moments causing a weird
+  stellar locus for weighted moments.
 
 ## 0.7.0 - 2022-05-03
 
 ### added
 
-- Code can now make multiple shear measurements with different combinations of 
+- Code can now make multiple shear measurements with different combinations of
   bands in a single pass.
 - Code can now handle color-dependent PSF models.
 - Code now keeps T flags.
