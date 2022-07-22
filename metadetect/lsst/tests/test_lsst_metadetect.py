@@ -17,6 +17,8 @@ from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 import lsst.afw.image as afw_image
 
+ngmix_v = float(ngmix.__version__[:3])
+
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
@@ -127,6 +129,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.skipif(ngmix_v < 2.1, reason="requires ngmix 2.1 or higher")
 @pytest.mark.parametrize('meas_type', ['wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('fwhm_smooth', [None, 1.2])
 def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
