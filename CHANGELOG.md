@@ -12,16 +12,10 @@
 
 # 0.8.0 - 2022-07-22
 
-## unreleased
-
-### added
-
 ### changed
 
 - Changed code to detect ngmix versions and use the correct momments name (`mom` vs `sums`)
   for ngmix version less than 2.1 or greater than equal to 2.1.
-
-### removed
 
 ### fixed
 
