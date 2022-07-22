@@ -10,6 +10,13 @@
 
 ### fixed
 
+## 0.8.1 - 2022-07-22
+
+### fixed
+
+ - Fixed bug where with smoothing the prePSF moments for PSFs need to be measured
+   with the smoothing kernel applied.
+
 ## 0.8.0 - 2022-07-22
 
 ### added

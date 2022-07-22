@@ -198,7 +198,15 @@ def _fit_obs(
     bmask_flags,
 ):
     if isinstance(fitter, ngmix.prepsfmom.PrePSFMom):
-        psf_go_kwargs = {"no_psf": True}
+        if MOMNAME == "sums":
+            # ngmix with smoothing
+            # we only use no_psf if smoothing is zero
+            if fitter.fwhm_smooth > 0:
+                psf_go_kwargs = {}
+            else:
+                psf_go_kwargs = {"no_psf": True}
+        else:
+            psf_go_kwargs = {"no_psf": True}
     else:
         psf_go_kwargs = {}
 
