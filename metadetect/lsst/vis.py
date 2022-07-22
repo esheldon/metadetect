@@ -74,7 +74,7 @@ def show_mbexp(
         import scarlet
         from astropy.visualization.lupton_rgb import AsinhMapping
 
-        timage = image[:3, :, :]
+        timage = image[:3, :, :].clip(min=0)
 
         asinh = AsinhMapping(
             minimum=0,

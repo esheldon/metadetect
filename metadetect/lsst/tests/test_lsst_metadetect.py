@@ -9,12 +9,15 @@ import logging
 import ngmix
 import metadetect
 from metadetect import procflags
-from metadetect.lsst.metadetect import run_metadetect
+from metadetect.lsst.metadetect import run_metadetect, get_fitter
+from metadetect.lsst.configs import get_config
 from metadetect.lsst import util
 import descwl_shear_sims
 from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 import lsst.afw.image as afw_image
+
+ngmix_v = float(ngmix.__version__[:3])
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -124,6 +127,77 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
 
         assert len(res[shear][flux_name].shape) == len(bands)
         assert len(res[shear][flux_name][0]) == len(bands)
+
+
+@pytest.mark.skipif(ngmix_v < 2.1, reason="requires ngmix 2.1 or higher")
+@pytest.mark.parametrize('meas_type', ['wmom', 'ksigma', 'pgauss'])
+@pytest.mark.parametrize('fwhm_smooth', [None, 1.2])
+def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
+    rng = np.random.RandomState(seed=882)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    fwhm = 2.0
+    config = {
+        'meas_type': meas_type,
+        'weight': {
+            'fwhm': fwhm,
+        }
+    }
+    if meas_type != 'wmom' and fwhm_smooth is not None:
+        config['weight']['fwhm_smooth'] = fwhm_smooth
+
+    fitter = get_fitter(config=get_config(config), rng=rng)
+    assert fitter.fwhm == fwhm
+    if meas_type != 'wmom' and fwhm_smooth is not None:
+        assert fitter.fwhm_smooth == fwhm_smooth
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    gname = f'{meas_type}_g'
+    flux_name = f'{meas_type}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ('noshear', '1p', '1m'):
+        # 5x5 grid
+        assert res[shear].size == 25
+
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        assert len(res[shear][flux_name].shape) == len(bands)
+        assert len(res[shear][flux_name][0]) == len(bands)
+
+
+def test_lsst_metadetect_am():
+    rng = np.random.RandomState(seed=882)
+
+    # only single band for am currently
+    bands = ['i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    meas_type = 'am'
+    config = {'meas_type': meas_type}
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    gname = f'{meas_type}_g'
+    flux_name = f'{meas_type}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ('noshear', '1p', '1m'):
+        # 5x5 grid
+        assert res[shear].size == 25
+
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        assert len(res[shear][flux_name].shape) == len(bands)
+        with pytest.raises(TypeError):
+            len(res[shear][flux_name][0])
 
 
 def test_lsst_metadetect_fullcoadd_smoke():
