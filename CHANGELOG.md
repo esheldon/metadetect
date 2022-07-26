@@ -10,7 +10,7 @@
 
 ### removed
 
- - Rolled back bugfix in 0.8.1 for the PSFs and `fwhm_smooth`.
+ - Removed deconvolution of PSF with itself when smoothing.
 
 ### fixed
 
