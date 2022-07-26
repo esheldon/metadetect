@@ -8,6 +8,8 @@
 
 ### removed
 
+- Removed deconvolution of PSF with itself when smoothing.
+
 ### fixed
 
 ## 0.8.1 - 2022-07-22
