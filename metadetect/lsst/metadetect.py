@@ -147,6 +147,7 @@ def detect_deblend_and_measure(
         sources=sources,
         fitter=fitter,
         stamp_size=config['stamp_size'],
+        fwhm_reg=config['weight']['fwhm_reg'],
     )
 
     return results
