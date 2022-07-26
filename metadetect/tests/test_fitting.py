@@ -1038,7 +1038,9 @@ def test_fitting_combine_fit_results_wavg_flagging(
     model = "wwmom"
     shear_bands = [i for i, b in enumerate(kwargs["all_is_shear_band"]) if b]
 
-    data = _combine_fit_results_wavg(model=model, shear_bands=shear_bands, **kwargs)
+    data = _combine_fit_results_wavg(
+        model=model, shear_bands=shear_bands, fwhm_reg=0, **kwargs
+    )
     print()
     _print_res(data[0])
     _check_flags(data["psf_flags"][0], psf_flags)

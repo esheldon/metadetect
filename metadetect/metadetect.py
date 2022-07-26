@@ -446,6 +446,7 @@ class Metadetect(dict):
             fitter=self._fitter,
             shear_bands=shear_bands,
             bmask_flags=self.get("bmask_flags", 0),
+            fwhm_reg=self["weight"].get("fwhm_reg", 0),
         )
 
         if res is not None:

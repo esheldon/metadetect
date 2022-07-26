@@ -421,6 +421,50 @@ def test_metadetect_fitter_fwhm_smooth(model):
         )
 
 
+@pytest.mark.parametrize("model", ["pgauss", "ksigma"])
+def test_metadetect_fitter_fwhm_reg(model):
+    nband = 3
+    rng = np.random.RandomState(seed=116)
+
+    sim = Sim(rng, config={"nband": nband})
+    mbobs = sim.get_mbobs()
+
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+    config["weight"]["fwhm"] = 1.2
+
+    md = metadetect.Metadetect(
+        config, mbobs, rng,
+    )
+    md.go()
+    res = md.result
+
+    config["weight"]["fwhm_reg"] = 0.8
+    rng = np.random.RandomState(seed=116)
+    md = metadetect.Metadetect(
+        config, mbobs, rng,
+    )
+    md.go()
+    res_reg = md.result
+
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        msk = res[shear]["flags"] == 0
+        msk_reg = res_reg[shear]["flags"] == 0
+        assert np.allclose(
+            res_reg[shear][model + "T"][msk_reg],
+            res[shear][model + "_T"][msk]
+        )
+        assert np.allclose(
+            res_reg[shear][model + "e1"][msk_reg],
+            res[shear][model + "_e1"][msk]
+        )
+        assert np.allclose(
+            res_reg[shear][model + "e2"][msk_reg],
+            res[shear][model + "_e2"][msk]
+        )
+
+
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
 @pytest.mark.parametrize("nband,nshear", [(3, 2), (1, 1), (4, 2), (3, 1)])
 def test_metadetect_flux(model, nband, nshear):
