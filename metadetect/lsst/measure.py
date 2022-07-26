@@ -180,7 +180,7 @@ def measure(
         For calculating moments
     stamp_size: int
         Size for postage stamps
-    fwhm_reg: int, optional
+    fwhm_reg: float, optional
         Optional regularization for calculating shapes.  The fwhm is converted
         to T and T+Treg is used in the denominator
 
