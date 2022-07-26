@@ -457,12 +457,8 @@ def test_metadetect_fitter_fwhm_reg(model):
             res[shear][model + "_T"][msk]
         )
         assert np.allclose(
-            res_reg[shear][model + "_e1"][msk_reg],
-            res[shear][model + "_e1"][msk]
-        )
-        assert np.allclose(
-            res_reg[shear][model + "_e2"][msk_reg],
-            res[shear][model + "_e2"][msk]
+            res_reg[shear][model + "_g"][msk_reg],
+            res[shear][model + "_g"][msk]
         )
 
 
