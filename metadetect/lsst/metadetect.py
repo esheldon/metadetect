@@ -141,13 +141,19 @@ def detect_deblend_and_measure(
         thresh=config['detect']['thresh'],
         show=show,
     )
+
+    if config['weight'] is not None:
+        fwhm_reg = config['weight'].get('fwhm_reg', 0)
+    else:
+        fwhm_reg = 0
+
     results = measure.measure(
         mbexp=mbexp,
         detexp=detexp,
         sources=sources,
         fitter=fitter,
         stamp_size=config['stamp_size'],
-        fwhm_reg=config['weight']['fwhm_reg'],
+        fwhm_reg=fwhm_reg,
     )
 
     return results
