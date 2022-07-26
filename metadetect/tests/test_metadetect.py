@@ -434,6 +434,7 @@ def test_metadetect_fitter_fwhm_reg(model):
     config["model"] = model
     config["weight"]["fwhm"] = 1.2
 
+    rng = np.random.RandomState(seed=116)
     md = metadetect.Metadetect(
         config, mbobs, rng,
     )
