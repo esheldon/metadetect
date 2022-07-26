@@ -4,6 +4,7 @@ from .defaults import (
     DEFAULT_MDET_CONFIG,
     DEFAULT_WEIGHT_FWHMS,
     DEFAULT_FWHM_SMOOTH,
+    DEFAULT_FWHM_REG,
     DEFAULT_STAMP_SIZES,
 )
 
@@ -75,6 +76,7 @@ def get_default_weight_config(meas_type):
 
     if meas_type in ('pgauss', 'ksigma'):
         weight_config['fwhm_smooth'] = DEFAULT_FWHM_SMOOTH
+        weight_config['fwhm_reg'] = DEFAULT_FWHM_REG
 
     return weight_config
 
@@ -138,7 +140,10 @@ def _verify_weight_config(config):
         config=config, required_keys=['fwhm'], name=name,
     )
 
-    _check_keywords(config=config, allowed_keys=['fwhm', 'fwhm_smooth'], name=name)
+    _check_keywords(
+        config=config, allowed_keys=['fwhm', 'fwhm_smooth', 'fwhm_reg'],
+        name=name,
+    )
 
 
 def _check_required_keywords(config, required_keys, name):
