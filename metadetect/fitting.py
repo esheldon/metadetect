@@ -491,8 +491,8 @@ def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var, fwhm_reg):
         momres["s2n"] = np.nan
         momres["flags"] |= ngmix.flags.NONPOS_VAR
 
-    momres["flux_flagstr"] = procflags.get_flags_str(momres["flux_flags"])
-    momres["flagstr"] = procflags.get_flags_str(momres["flags"])
+    momres["flux_flagstr"] = procflags.get_procflags_str(momres["flux_flags"])
+    momres["flagstr"] = procflags.get_procflags_str(momres["flags"])
 
     return momres
 
