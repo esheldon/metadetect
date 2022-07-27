@@ -463,20 +463,17 @@ def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var, fwhm_reg):
 
         T_reg = fwhm_to_T(fwhm_reg)
 
-        reg_mom = raw_mom.copy()
-        reg_mom_cov = raw_mom_cov.copy()
         # the moments are not normalized and are sums, so convert T_reg to a sum using
         # the flux sum first via T_reg -> T_reg * raw_mom[5]
-        reg_mom[4] = raw_mom[4] + T_reg * raw_mom[5]
-        # TODO double check this math
-        reg_mom_cov[4, 4] = raw_mom_cov[4, 4] + T_reg**2 * raw_mom_cov[5, 5]
-        reg_mom_cov[4, 5] = raw_mom_cov[4, 5] + T_reg**2 * raw_mom_cov[5, 5]
-        reg_mom_cov[5, 4] = raw_mom_cov[5, 4] + T_reg**2 * raw_mom_cov[5, 5]
+        amat = np.eye(6)
+        amat[4, 5] = T_reg
+        reg_mom = np.dot(amat, raw_mom)
+        reg_mom_cov = np.dot(amat, np.dot(raw_mom_cov, amat.T))
         momres = make_mom_result(reg_mom, reg_mom_cov)
 
         # use old T
         for col in ["T", "T_err", "T_flags", "T_flagstr"]:
-            momres[col] = momres_t[col]
+            momres[col] = res[col]
 
         momres["flags"] |= momres_t["flags"]
         momres["flagstr"] = ngmix.flags.get_flags_str(momres["flags"])
