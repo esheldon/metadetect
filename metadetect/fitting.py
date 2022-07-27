@@ -467,7 +467,20 @@ def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var, fwhm_reg):
         # the flux sum first via T_reg -> T_reg * raw_mom[5]
         amat = np.eye(6)
         amat[4, 5] = T_reg
+
+        raw_mom_orig = raw_mom.copy()
+        if np.isnan(raw_mom_orig[0]):
+            raw_mom[0] = 0
+        if np.isnan(raw_mom_orig[1]):
+            raw_mom[1] = 0
         reg_mom = np.dot(amat, raw_mom)
+        if np.isnan(raw_mom_orig[0]):
+            raw_mom[0] = np.nan
+            reg_mom[0] = np.nan
+        if np.isnan(raw_mom_orig[1]):
+            raw_mom[1] = np.nan
+            reg_mom[1] = np.nan
+
         reg_mom_cov = np.dot(amat, np.dot(raw_mom_cov, amat.T))
         momres = make_mom_result(reg_mom, reg_mom_cov)
 
