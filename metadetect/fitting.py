@@ -473,7 +473,7 @@ def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var, fwhm_reg):
 
         # use old T
         for col in ["T", "T_err", "T_flags", "T_flagstr"]:
-            momres[col] = res[col]
+            momres[col] = momres_t[col]
 
         momres["flags"] |= momres_t["flags"]
         momres["flagstr"] = ngmix.flags.get_flags_str(momres["flags"])
