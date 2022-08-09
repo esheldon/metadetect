@@ -162,6 +162,7 @@ def measure(
     sources,
     fitter,
     stamp_size,
+    fwhm_reg=0,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -179,6 +180,9 @@ def measure(
         For calculating moments
     stamp_size: int
         Size for postage stamps
+    fwhm_reg: float, optional
+        Optional regularization for calculating shapes.  The fwhm is converted
+        to T and T+Treg is used in the denominator
 
     Returns
     -------
@@ -214,6 +218,7 @@ def measure(
                 mbobs=mbobs,
                 fitter=fitter,
                 bmask_flags=0,
+                fwhm_reg=fwhm_reg,
             )
         except LengthError as err:
             # This is raised when a bbox hits an edge

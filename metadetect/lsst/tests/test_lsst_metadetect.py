@@ -171,6 +171,75 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.parametrize('fwhm_reg', [0, 0.8])
+def test_lsst_metadetect_fwhm_reg(fwhm_reg):
+    rng = np.random.RandomState(seed=882)
+
+    meas_type = 'pgauss'
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(35, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    fwhm = 2.0
+    config = {
+        'meas_type': meas_type,
+        'weight': {
+            'fwhm': fwhm,
+            'fwhm_reg': fwhm_reg,
+        }
+    }
+
+    fitter = get_fitter(config=get_config(config), rng=rng)
+    assert fitter.fwhm == fwhm
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    gname = f'{meas_type}_g'
+    flux_name = f'{meas_type}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ('noshear', '1p', '1m'):
+        # 5x5 grid
+        assert res[shear].size == 25
+
+        assert np.any(res[shear]["flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        assert len(res[shear][flux_name].shape) == len(bands)
+        assert len(res[shear][flux_name][0]) == len(bands)
+
+
+def test_lsst_metadetect_fwhm_reg_shapenoise():
+
+    sdevs = {}
+    for fwhm_reg in [0, 0.8]:
+        meas_type = 'pgauss'
+        bands = ['r', 'i']
+        sim_data = make_lsst_sim(35, bands=bands)
+        rng = np.random.RandomState(seed=882)
+        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+        fwhm = 2.0
+        config = {
+            'meas_type': meas_type,
+            'weight': {
+                'fwhm': fwhm,
+                'fwhm_reg': fwhm_reg,
+            }
+        }
+
+        fitter = get_fitter(config=get_config(config), rng=rng)
+        assert fitter.fwhm == fwhm
+
+        res = run_metadetect(rng=rng, config=config, **data)
+
+        w, = np.where(res['noshear']['flags'] == 0)
+
+        sdevs[fwhm_reg] = res['noshear'][f'{meas_type}_g'][w, 0].std()
+
+    assert sdevs[0.8] < 0.6 * sdevs[0]
+
+
 def test_lsst_metadetect_am():
     rng = np.random.RandomState(seed=882)
 

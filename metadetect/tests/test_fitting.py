@@ -1,9 +1,11 @@
 import numpy as np
+import galsim
+import ngmix
 
 import pytest
 
 from ngmix.gaussmom import GaussMom
-import ngmix
+from ngmix.moments import fwhm_to_T
 
 from .sim import make_mbobs_sim
 from ..fitting import (
@@ -13,6 +15,7 @@ from ..fitting import (
     fit_all_psfs,
     _sum_bands_wavg,
     MOMNAME,
+    _make_mom_res,
 )
 from .. import procflags
 
@@ -1038,7 +1041,9 @@ def test_fitting_combine_fit_results_wavg_flagging(
     model = "wwmom"
     shear_bands = [i for i, b in enumerate(kwargs["all_is_shear_band"]) if b]
 
-    data = _combine_fit_results_wavg(model=model, shear_bands=shear_bands, **kwargs)
+    data = _combine_fit_results_wavg(
+        model=model, shear_bands=shear_bands, fwhm_reg=0, **kwargs
+    )
     print()
     _print_res(data[0])
     _check_flags(data["psf_flags"][0], psf_flags)
@@ -1256,3 +1261,107 @@ def test_fitting_fit_mbobs_wavg_wmom_tratio():
     _print_res(res[0])
     assert not np.allclose(res["wmom_T_ratio"], 1.0)
     assert res["wmom_T_ratio"][0] > 1.5
+
+
+@pytest.mark.parametrize("fwhm_reg", [0, 0.8])
+@pytest.mark.parametrize("has_nan", [True, False])
+@pytest.mark.parametrize("zero_flux", [True, False])
+@pytest.mark.parametrize("neg_flux_var", [True, False])
+def test_make_mom_res(fwhm_reg, has_nan, zero_flux, neg_flux_var):
+    fwhm = 0.9
+    image_size = 107
+    cen = (image_size - 1)/2
+    gs_wcs = galsim.ShearWCS(
+        0.125, galsim.Shear(g1=0, g2=0)).jacobian()
+
+    obj = galsim.Gaussian(
+        fwhm=fwhm
+    ).shear(
+        g1=-0.1, g2=0.3
+    ).withFlux(
+        400)
+    im = obj.drawImage(
+        nx=image_size,
+        ny=image_size,
+        wcs=gs_wcs,
+        method='no_pixel').array
+    noise = np.sqrt(np.sum(im**2)) / 1e2
+    wgt = np.ones_like(im) / noise**2
+
+    fitter = GaussMom(fwhm=1.2)
+
+    # get true flux
+    jac = ngmix.Jacobian(
+        y=cen, x=cen,
+        dudx=gs_wcs.dudx, dudy=gs_wcs.dudy,
+        dvdx=gs_wcs.dvdx, dvdy=gs_wcs.dvdy)
+    obs = ngmix.Observation(
+        image=im,
+        jacobian=jac,
+        weight=wgt,
+    )
+    res = fitter.go(obs=obs)
+
+    if has_nan:
+        res["sums"][0] = np.nan
+        res["sums"][1] = np.nan
+
+    raw_mom = res["sums"].copy()
+    raw_mom_cov = res["sums_cov"].copy()
+    raw_flux = res["flux"] / 1.15
+    raw_flux_var = res["sums_cov"][5, 5] / 1.15**2
+
+    if zero_flux:
+        raw_flux = -1
+    if neg_flux_var:
+        raw_flux_var = -1
+
+    res_reg = _make_mom_res(
+        raw_mom=raw_mom,
+        raw_mom_cov=raw_mom_cov,
+        raw_flux=raw_flux,
+        raw_flux_var=raw_flux_var,
+        fwhm_reg=fwhm_reg,
+    )
+
+    if has_nan:
+        assert np.isnan(res_reg["sums"][0])
+        assert np.isnan(res_reg["sums"][1])
+    assert np.all(np.isfinite(res_reg["sums"][2:]))
+
+    T_reg = fwhm_to_T(fwhm_reg)
+
+    if not has_nan:
+        assert np.allclose(res["sums"][[0, 1]], res_reg["sums"][[0, 1]])
+    assert np.allclose(res["sums"][4] + T_reg * res["sums"][5], res_reg["sums"][4])
+    if fwhm_reg > 0:
+        assert not np.allclose(res["sums"][4], res_reg["sums"][4])
+    assert np.allclose(res["sums"][[2, 3, 5]], res_reg["sums"][[2, 3, 5]])
+    for col in ["T", "T_err", "T_flags"]:
+        assert np.allclose(res[col], res_reg[col])
+    for col in ["e1", "e2", "e", "e_err", "e_cov"]:
+        if fwhm_reg > 0:
+            assert not np.allclose(res[col], res_reg[col])
+        else:
+            assert np.allclose(res[col], res_reg[col])
+
+    if zero_flux:
+        assert (res_reg["flags"] & ngmix.flags.NONPOS_FLUX) != 0
+    else:
+        assert (res_reg["flags"] & ngmix.flags.NONPOS_FLUX) == 0
+    assert not np.allclose(res["flux"], res_reg["flux"])
+
+    if neg_flux_var:
+        assert (res_reg["flags"] & ngmix.flags.NONPOS_VAR) != 0
+        assert (res_reg["flux_flags"] & ngmix.flags.NONPOS_VAR) != 0
+        assert np.isnan(res_reg["flux_err"])
+        assert np.isnan(res_reg["s2n"])
+    else:
+        assert (res_reg["flags"] & ngmix.flags.NONPOS_VAR) == 0
+        assert (res_reg["flux_flags"] & ngmix.flags.NONPOS_VAR) == 0
+        assert not np.allclose(res["flux_err"], res_reg["flux_err"])
+
+    if not zero_flux and not neg_flux_var:
+        assert np.allclose(res["s2n"], res_reg["s2n"])
+    else:
+        assert not np.allclose(res["s2n"], res_reg["s2n"])

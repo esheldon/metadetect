@@ -4,11 +4,13 @@
 
 ### added
 
+ - Added `fwhm_reg` parameter to regularize the moments.
+
 ### changed
 
 ### removed
 
-- Removed deconvolution of PSF with itself when smoothing.
+ - Removed deconvolution of PSF with itself when smoothing.
 
 ### fixed
 

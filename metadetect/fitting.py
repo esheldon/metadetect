@@ -5,7 +5,7 @@ import numpy as np
 
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
-from ngmix.moments import make_mom_result
+from ngmix.moments import make_mom_result, fwhm_to_T
 from pkg_resources import parse_version
 
 from .util import Namer
@@ -61,7 +61,9 @@ def fit_all_psfs(mbobs, rng):
             raise BootPSFFailure("failed to measure psfs: %s" % flags)
 
 
-def fit_mbobs_list_wavg(*, mbobs_list, fitter, bmask_flags, shear_bands=None):
+def fit_mbobs_list_wavg(
+    *, mbobs_list, fitter, bmask_flags, shear_bands=None, fwhm_reg=0
+):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a weighted average
     over bands.
 
@@ -79,6 +81,13 @@ def fit_mbobs_list_wavg(*, mbobs_list, fitter, bmask_flags, shear_bands=None):
     shear_bands : list of int, optional
         A list of indices into each mbobs that denotes which band is used for shear.
         Default is to use all bands.
+    fwhm_reg : float, optional
+        This value is converted to T and used to regularize the shapes via
+
+            e_{1,2} = M_{1,2}/(T + T_reg)
+
+        For Gaussians, this relationship is equivalent to smoothing by a round
+        Gaussian with FWHM `fwhm_reg`.
 
     Returns
     -------
@@ -93,6 +102,7 @@ def fit_mbobs_list_wavg(*, mbobs_list, fitter, bmask_flags, shear_bands=None):
             fitter=fitter,
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
+            fwhm_reg=fwhm_reg,
         )
         res.append(_res)
 
@@ -108,6 +118,7 @@ def fit_mbobs_wavg(
     fitter,
     bmask_flags,
     shear_bands=None,
+    fwhm_reg=0,
 ):
     """Fit the object in the ngmix.MultiBandObsList using a weighted average
     over bands.
@@ -126,6 +137,13 @@ def fit_mbobs_wavg(
     shear_bands : list of int, optional
         A list of indices into each mbobs that denotes which band is used for shear.
         Default is to use all bands.
+    fwhm_reg : float, optional
+        This value is converted to T and used to regularize the shapes via
+
+            e_{1,2} = M_{1,2}/(T + T_reg)
+
+        For Gaussians, this relationship is equivalent to smoothing by a round
+        Gaussian with FWHM `fwhm_reg`.
 
     Returns
     -------
@@ -165,6 +183,7 @@ def fit_mbobs_wavg(
         model=fitter.kind,
         all_flags=all_flags,
         shear_bands=shear_bands,
+        fwhm_reg=fwhm_reg,
     )
 
 
@@ -438,8 +457,39 @@ def _sum_bands_wavg(
     )
 
 
-def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var):
-    momres = make_mom_result(raw_mom, raw_mom_cov)
+def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var, fwhm_reg):
+    if fwhm_reg > 0:
+        momres_t = make_mom_result(raw_mom, raw_mom_cov)
+
+        T_reg = fwhm_to_T(fwhm_reg)
+
+        # the moments are not normalized and are sums, so convert T_reg to a sum using
+        # the flux sum first via T_reg -> T_reg * raw_mom[5]
+        amat = np.eye(6)
+        amat[4, 5] = T_reg
+
+        raw_mom_orig = raw_mom.copy()
+        if np.isnan(raw_mom_orig[0]):
+            raw_mom[0] = 0
+        if np.isnan(raw_mom_orig[1]):
+            raw_mom[1] = 0
+        reg_mom = np.dot(amat, raw_mom)
+        if np.isnan(raw_mom_orig[0]):
+            raw_mom[0] = np.nan
+            reg_mom[0] = np.nan
+        if np.isnan(raw_mom_orig[1]):
+            raw_mom[1] = np.nan
+            reg_mom[1] = np.nan
+
+        reg_mom_cov = np.dot(amat, np.dot(raw_mom_cov, amat.T))
+        momres = make_mom_result(reg_mom, reg_mom_cov)
+
+        # use old T
+        for col in ["T", "T_err", "T_flags", "T_flagstr"]:
+            momres[col] = momres_t[col]
+        momres["flags"] |= momres_t["flags"]
+    else:
+        momres = make_mom_result(raw_mom, raw_mom_cov)
 
     momres["flux"] = raw_flux
     if momres["flux"] <= 0:
@@ -454,11 +504,15 @@ def _make_mom_res(*, raw_mom, raw_mom_cov, raw_flux, raw_flux_var):
         momres["s2n"] = np.nan
         momres["flags"] |= ngmix.flags.NONPOS_VAR
 
+    momres["flux_flagstr"] = procflags.get_procflags_str(momres["flux_flags"])
+    momres["flagstr"] = procflags.get_procflags_str(momres["flags"])
+
     return momres
 
 
 def _combine_fit_results_wavg(
     *, all_res, all_psf_res, all_is_shear_band, all_wgts, model, all_flags, shear_bands,
+    fwhm_reg,
 ):
     tot_nband = len(all_res)
     nband = (
@@ -562,6 +616,7 @@ def _combine_fit_results_wavg(
             raw_mom_cov=psf_raw_mom_cov,
             raw_flux=psf_raw_flux,
             raw_flux_var=psf_raw_flux_var,
+            fwhm_reg=0,
         )
 
         psf_flags |= psf_momres["flags"]
@@ -579,6 +634,7 @@ def _combine_fit_results_wavg(
             raw_mom_cov=raw_mom_cov,
             raw_flux=raw_flux,
             raw_flux_var=raw_flux_var,
+            fwhm_reg=fwhm_reg,
         )
 
         mdet_flags |= momres["flags"]
