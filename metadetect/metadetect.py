@@ -12,7 +12,7 @@ from . import procflags
 from . import shearpos
 from .util import Namer
 from .mfrac import measure_mfrac
-from .fitting import fit_mbobs_list_wavg
+from .fitting import fit_mbobs_list_wavg, combine_fit_res
 
 logger = logging.getLogger(__name__)
 
@@ -206,27 +206,58 @@ class Metadetect(dict):
         """
         set the fitter to be used
         """
-        self['model'] = self.get('model', 'wmom')
 
-        if "fwhm_smooth" in self["weight"]:
-            kwargs = {"fwhm_smooth": self["weight"]["fwhm_smooth"]}
-        else:
-            kwargs = {}
+        def _get_fitter(cfg):
+            model = cfg.get('model', 'wmom')
 
-        if self['model'] == 'wmom':
-            self._fitter = ngmix.gaussmom.GaussMom(fwhm=self["weight"]["fwhm"])
-        elif self['model'] == 'ksigma':
-            self._fitter = ngmix.prepsfmom.KSigmaMom(
-                fwhm=self["weight"]["fwhm"],
-                **kwargs,
-            )
-        elif self['model'] == "pgauss":
-            self._fitter = ngmix.prepsfmom.PGaussMom(
-                fwhm=self["weight"]["fwhm"],
-                **kwargs,
-            )
+            if "fwhm_smooth" in cfg["weight"]:
+                kwargs = {"fwhm_smooth": cfg["weight"]["fwhm_smooth"]}
+            else:
+                kwargs = {}
+
+            if model == 'wmom':
+                fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
+            elif model == 'ksigma':
+                fitter = ngmix.prepsfmom.KSigmaMom(
+                    fwhm=cfg["weight"]["fwhm"],
+                    **kwargs,
+                )
+            elif model == "pgauss":
+                fitter = ngmix.prepsfmom.PGaussMom(
+                    fwhm=cfg["weight"]["fwhm"],
+                    **kwargs,
+                )
+            else:
+                raise ValueError("bad model: '%s'" % model)
+
+            if "fwhm_reg" in cfg["weight"]:
+                fwhm_reg = cfg["weight"]["fwhm_reg"]
+                fitter.kind = fitter.kind + "_reg%0.2f" % cfg["weight"]["fwhm_reg"]
+            else:
+                fwhm_reg = 0
+
+            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg
+
+        if "fitters" in self and ("model" in self or "weight" in self):
+            raise RuntimeError("You can only specify one of fitters or model+weight!")
+
+        if "fitters" in self:
+            fitters = []
+            fwhms = []
+            fwhm_regs = []
+            for fitter_cfg in self["fitters"]:
+                _, fitter, fwhm, fwhm_reg = _get_fitter(fitter_cfg)
+                fitters.append(fitter)
+                fwhms.append(fwhm)
+                fwhm_regs.append(fwhm_reg)
+            self._fitters = fitters
+            self._fwhms = fwhms
+            self._fwhm_regs = fwhm_regs
         else:
-            raise ValueError("bad model: '%s'" % self['model'])
+            model, fitter, fwhm, fwhm_reg = _get_fitter(self)
+            self._fitters = [fitter]
+            self._fwhms = [fwhm]
+            self._fwhm_regs = [fwhm_reg]
 
     @property
     def result(self):
@@ -323,7 +354,7 @@ class Metadetect(dict):
             cat, mbobs_list = self._do_detect(shear_mbobs)
             nocolor_data = fit_mbobs_list_wavg(
                 mbobs_list=mbobs_list,
-                fitter=self._fitter,
+                fitter=self._fitters[0],
                 shear_bands=shear_bands,
                 bmask_flags=self.get("bmask_flags", 0),
             )
@@ -332,7 +363,7 @@ class Metadetect(dict):
                 continue
 
             # now we map color to the mbobs for that color
-            n = Namer(self._fitter.kind)
+            n = Namer(self._fitters[0].kind)
             col = n("band_flux")
             color_keys = [
                 self.color_key_func(nocolor_data[col][i])
@@ -441,13 +472,18 @@ class Metadetect(dict):
     ):
 
         t0 = time.time()
-        res = fit_mbobs_list_wavg(
-            mbobs_list=mbobs_list,
-            fitter=self._fitter,
-            shear_bands=shear_bands,
-            bmask_flags=self.get("bmask_flags", 0),
-            fwhm_reg=self["weight"].get("fwhm_reg", 0),
-        )
+        all_res = []
+        for fitter, fwhm_reg in zip(self._fitters, self._fwhm_regs):
+            res = fit_mbobs_list_wavg(
+                mbobs_list=mbobs_list,
+                fitter=fitter,
+                shear_bands=shear_bands,
+                bmask_flags=self.get("bmask_flags", 0),
+                fwhm_reg=fwhm_reg,
+            )
+            all_res.append(res)
+
+        res = combine_fit_res(all_res)
 
         if res is not None:
             res = self._add_positions_and_psf(
@@ -478,6 +514,7 @@ class Metadetect(dict):
             ('ormask', 'i4'),
             ('mfrac', 'f4'),
             ('bmask', 'i4'),
+            ('mfrac_img', 'f4'),
             ('ormask_noshear', 'i4'),
             ('mfrac_noshear', 'f4'),
             ('bmask_noshear', 'i4'),
@@ -499,6 +536,7 @@ class Metadetect(dict):
         newres['psfrec_g'][:, 0] = psf_stats['g1']
         newres['psfrec_g'][:, 1] = psf_stats['g2']
         newres['psfrec_T'][:] = psf_stats['T']
+        newres['mfrac_img'][:] = np.mean(mfrac)
 
         if cat.size > 0:
             obs = self.mbobs[0][0]
@@ -570,7 +608,7 @@ class Metadetect(dict):
                     y=newres["sx_row"],
                     box_sizes=cat["box_size"],
                     obs=obs,
-                    fwhm=self.get("mfrac_fwhm", self["weight"]["fwhm"]),
+                    fwhm=self.get("mfrac_fwhm", self._fwhms[0]),
                 )
 
                 newres["mfrac_noshear"] = measure_mfrac(
@@ -579,7 +617,7 @@ class Metadetect(dict):
                     y=newres["sx_row_noshear"],
                     box_sizes=cat["box_size"],
                     obs=obs,
-                    fwhm=self.get("mfrac_fwhm", self["weight"]["fwhm"]),
+                    fwhm=self.get("mfrac_fwhm", self._fwhms[0]),
                 )
             else:
                 newres["mfrac"] = 0

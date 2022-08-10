@@ -192,7 +192,7 @@ def test_metadetect(model):
             assert any(c.endswith("band_flux") for c in res[shear].dtype.names)
             assert np.any(res[shear]["psfrec_g"] != 0)
             assert np.any(res[shear]["psfrec_T"] != 0)
-            msk = res[shear]['flags'] == 0
+            msk = res[shear][model + '_flags'] == 0
             for col in res[shear].dtype.names:
                 if col == "shear_bands":
                     assert np.all(res[shear][msk][col] == "012")
@@ -234,10 +234,14 @@ def test_metadetect_mfrac(model):
                 & (res[shear]["mfrac"] < 0.55)
             )
             assert np.all(
+                (res[shear]["mfrac_img"] > 0.45)
+                & (res[shear]["mfrac_img"] < 0.55)
+            )
+            assert np.all(
                 (res[shear]["mfrac_noshear"] > 0.45)
                 & (res[shear]["mfrac_noshear"] < 0.55)
             )
-            msk = res[shear]['flags'] == 0
+            msk = res[shear][model + '_flags'] == 0
             for col in res[shear].dtype.names:
                 if col == "shear_bands":
                     assert np.all(res[shear][msk][col] == "012")
@@ -398,7 +402,7 @@ def test_metadetect_fitter_fwhm_smooth(model):
     )
     md.go()
     res = md.result
-    assert md._fitter.fwhm_smooth == 0
+    assert md._fitters[0].fwhm_smooth == 0
 
     config["weight"]["fwhm_smooth"] = 0.8
     md = metadetect.Metadetect(
@@ -406,11 +410,11 @@ def test_metadetect_fitter_fwhm_smooth(model):
     )
     md.go()
     res_smooth = md.result
-    assert md._fitter.fwhm_smooth == 0.8
+    assert md._fitters[0].fwhm_smooth == 0.8
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
-        msk = res[shear]["flags"] == 0
-        msk_smooth = res_smooth[shear]["flags"] == 0
+        msk = res[shear][model + "_flags"] == 0
+        msk_smooth = res_smooth[shear][model + "_flags"] == 0
         assert (
             np.mean(res_smooth[shear][model + "_T"][msk_smooth])
             > np.mean(res[shear][model + "_T"][msk])
@@ -450,14 +454,61 @@ def test_metadetect_fitter_fwhm_reg(model):
     res_reg = md.result
 
     for shear in ["noshear", "1p", "1m", "2p", "2m"]:
-        msk = res[shear]["flags"] == 0
-        msk_reg = res_reg[shear]["flags"] == 0
+        msk = res[shear][model + "_flags"] == 0
+        msk_reg = res_reg[shear][model + "_reg0.80_" + "flags"] == 0
         assert np.allclose(
-            res_reg[shear][model + "_T"][msk_reg],
+            res_reg[shear][model + "_reg0.80" + "_T"][msk_reg],
             res[shear][model + "_T"][msk]
         )
         assert not np.allclose(
-            res_reg[shear][model + "_g"][msk_reg],
+            res_reg[shear][model + "_reg0.80" + "_g"][msk_reg],
+            res[shear][model + "_g"][msk]
+        )
+
+
+def test_metadetect_fitter_multi_meas():
+    nband = 3
+    rng = np.random.RandomState(seed=116)
+
+    sim = Sim(rng, config={"nband": nband})
+    mbobs = sim.get_mbobs()
+
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    del config["model"]
+    del config["weight"]
+    config["fitters"] = [
+        {"model": "wmom", "weight": {"fwhm": 1.2}},
+        {"model": "pgauss", "weight": {"fwhm": 2.0}},
+        {"model": "pgauss", "weight": {"fwhm": 2.0, "fwhm_reg": 0.8}},
+    ]
+
+    rng = np.random.RandomState(seed=116)
+    md = metadetect.Metadetect(
+        config, mbobs, rng,
+    )
+    md.go()
+    res = md.result
+
+    model = "pgauss"
+    for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+        msk = res[shear][model + "_flags"] == 0
+        msk_reg = res[shear][model + "_reg0.80_" + "flags"] == 0
+        msk_wmom = res[shear]["wmom_flags"] == 0
+        assert np.allclose(
+            res[shear][model + "_reg0.80" + "_T"][msk_reg],
+            res[shear][model + "_T"][msk]
+        )
+        assert not np.allclose(
+            res[shear][model + "_reg0.80" + "_g"][msk_reg],
+            res[shear][model + "_g"][msk]
+        )
+        assert not np.allclose(
+            res[shear]["wmom_T"][msk_wmom],
+            res[shear][model + "_T"][msk]
+        )
+        assert not np.allclose(
+            res[shear]["wmom_g"][msk_wmom],
             res[shear][model + "_g"][msk]
         )
 
