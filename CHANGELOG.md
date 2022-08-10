@@ -5,6 +5,7 @@
 ### added
 
  - Added `fwhm_reg` parameter to regularize the moments.
+ - Added support for more than one measurement made on the detections.
 
 ### changed
 
