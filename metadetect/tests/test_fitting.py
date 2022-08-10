@@ -1423,7 +1423,7 @@ def test_combine_fit_res_nodata(all_res, expected, raises):
     if raises == "":
         res = combine_fit_res(all_res)
         if expected is not None:
-            np.testing.assert_equal(expected, res)
+            np.testing.assert_array_equal(expected, res)
         else:
             assert res is None
     else:
@@ -1446,6 +1446,6 @@ def test_combine_fit_res():
 
     res = combine_fit_res(all_res)
 
-    np.testing.assert_equal(res["a"], np.array([0.3, 2.3], dtype="f4"))
-    np.testing.assert_equal(res["b"], np.array([1.4, 4.6], dtype="f8"))
-    np.testing.assert_equal(res["shear_bands"], np.array([0, 2], dtype="i4"))
+    np.testing.assert_array_equal(res["a"], np.array([0.3, 2.3], dtype="f4"))
+    np.testing.assert_array_equal(res["b"], np.array([1.4, 4.6], dtype="f8"))
+    np.testing.assert_array_equal(res["shear_bands"], np.array([0, 2], dtype="i4"))
