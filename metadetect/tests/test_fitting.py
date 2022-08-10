@@ -1048,7 +1048,7 @@ def test_fitting_combine_fit_results_wavg_flagging(
     print()
     _print_res(data[0])
     _check_flags(data[model + "_psf_flags"][0], psf_flags)
-    _check_flags(data[model + "_gal_flags"][0], model_flags)
+    _check_flags(data[model + "_obj_flags"][0], model_flags)
     _check_flags(data[model + "_band_flux_flags"][0], flux_flags)
     if len(flux_flags) > 1 and isinstance(flux_flags[0], list):
         dff = 0
@@ -1058,10 +1058,10 @@ def test_fitting_combine_fit_results_wavg_flagging(
         dff = data[model + "_band_flux_flags"][0]
     assert (
         data[model + "_flags"][0] ==
-        (data[model + "_gal_flags"][0] | dff)
+        (data[model + "_obj_flags"][0] | dff)
     ), purpose
     if data[model + "_psf_flags"][0] != 0:
-        assert (data[model + "_gal_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
+        assert (data[model + "_obj_flags"][0] & procflags.PSF_FAILURE) != 0, purpose
 
 
 @pytest.mark.parametrize("mom_norm", [None, [0.3, 0.9, 0.8, 0.6]])

@@ -662,7 +662,7 @@ def _combine_fit_results_wavg(
     # now we set the flags as they would have been set in our moments code
     # any PSF failure in a shear band causes a non-zero flags value
     data[n('psf_flags')] = psf_flags
-    data[n('gal_flags')] = mdet_flags
+    data[n('obj_flags')] = mdet_flags
     all_flags = mdet_flags
     for f in flux_flags:
         all_flags |= f
@@ -707,7 +707,7 @@ def get_wavg_output_struct(nband, model, shear_bands=None):
     n = Namer(front=model)
     data[n('flags')] = procflags.NO_ATTEMPT
     data[n('psf_flags')] = procflags.NO_ATTEMPT
-    data[n("gal_flags")] = procflags.NO_ATTEMPT
+    data[n("obj_flags")] = procflags.NO_ATTEMPT
     data[n("T_flags")] = procflags.NO_ATTEMPT
     data[n("band_flux_flags")] = procflags.NO_ATTEMPT
 
@@ -730,7 +730,7 @@ def _make_combine_fit_results_wavg_dtype(nband, model, shear_bands):
         (n('psf_flags'), 'i4'),
         (n('psf_g'), 'f8', 2),
         (n('psf_T'), 'f8'),
-        (n("gal_flags"), 'i4'),
+        (n("obj_flags"), 'i4'),
         (n("s2n"), "f8"),
         (n("g"), "f8", 2),
         (n("g_cov"), "f8", (2, 2)),
