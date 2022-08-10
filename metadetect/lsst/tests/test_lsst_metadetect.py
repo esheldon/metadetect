@@ -352,7 +352,7 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
     # some will have T < 0 due to noise. Expect some with flags set
     assert wlowT.size > 0
 
-    assert np.any((data[n(f'{meas_type}_flags')][wlowT] & ngmix.flags.NONPOS_SIZE) != 0)
+    assert np.any((data[n('flags')][wlowT] & ngmix.flags.NONPOS_SIZE) != 0)
 
     assert np.any(np.isnan(data[n('g')][wlowT]))
     for field in data.dtype.names:
