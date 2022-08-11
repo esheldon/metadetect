@@ -108,7 +108,7 @@ def test_convention(ginput):
         stamp_size=47,
     )
 
-    w, = np.where(res['flags'] == 0)
+    w, = np.where(res['wmom_flags'] == 0)
 
     g1, g2 = res['wmom_g'][w].mean(axis=0)
 

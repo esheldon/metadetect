@@ -122,7 +122,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["flags"] == 0)
+        assert np.any(res[shear][f"{front}_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -164,7 +164,7 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["flags"] == 0)
+        assert np.any(res[shear][f"{meas_type}_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -202,7 +202,7 @@ def test_lsst_metadetect_fwhm_reg(fwhm_reg):
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["flags"] == 0)
+        assert np.any(res[shear][f"{meas_type}_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -233,7 +233,7 @@ def test_lsst_metadetect_fwhm_reg_shapenoise():
 
         res = run_metadetect(rng=rng, config=config, **data)
 
-        w, = np.where(res['noshear']['flags'] == 0)
+        w, = np.where(res['noshear'][f'{meas_type}_flags'] == 0)
 
         sdevs[fwhm_reg] = res['noshear'][f'{meas_type}_g'][w, 0].std()
 
@@ -261,7 +261,7 @@ def test_lsst_metadetect_am():
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["flags"] == 0)
+        assert np.any(res[shear]["am_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -288,7 +288,7 @@ def test_lsst_metadetect_fullcoadd_smoke():
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["flags"] == 0)
+        assert np.any(res[shear]["pgauss_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -318,8 +318,8 @@ def test_lsst_zero_weights(show=False):
 
         if do_zero:
             for shear_type, tres in resdict.items():
-                assert np.any(tres['flags'] & procflags.ZERO_WEIGHTS != 0)
-                assert np.any(tres['psf_flags'] & procflags.NO_ATTEMPT != 0)
+                assert np.any(tres['wmom_flags'] & procflags.ZERO_WEIGHTS != 0)
+                assert np.any(tres['wmom_psf_flags'] & procflags.NO_ATTEMPT != 0)
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
@@ -346,8 +346,8 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
 
     data = res['noshear']
 
-    wlowT, = np.where(data['flags'] != 0)
-    wgood, = np.where(data['flags'] == 0)
+    wlowT, = np.where(data[f'{meas_type}_flags'] != 0)
+    wgood, = np.where(data[f'{meas_type}_flags'] == 0)
 
     # some will have T < 0 due to noise. Expect some with flags set
     assert wlowT.size > 0
@@ -386,7 +386,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
         res = run_metadetect(config=None, rng=rng, **data)
 
         for shear in ('noshear', '1p', '1m'):
-            assert np.any(res[shear]["flags"] == 0)
+            assert np.any(res[shear]["wmom_flags"] == 0)
             assert np.any(
                 (res[shear]["mfrac"] > 0.40)
                 & (res[shear]["mfrac"] < 0.60)

@@ -118,7 +118,7 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     flux_name = f'{front}_band_flux'
     assert gname in res.dtype.names
 
-    assert np.any(res["flags"] == 0)
+    assert np.any(res[f"{front}_flags"] == 0)
     assert np.all(res["mfrac"] == 0)
 
     assert len(res[flux_name].shape) == 2

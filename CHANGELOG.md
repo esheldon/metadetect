@@ -5,6 +5,8 @@
 ### added
 
  - Added `fwhm_reg` parameter to regularize the moments.
+ - Added support for more than one measurement made on the detections.
+ - Added total image mask fraction to outputs.
 
 ### changed
 

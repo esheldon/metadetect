@@ -620,8 +620,8 @@ def _combine_fit_results_wavg(
         )
 
         psf_flags |= psf_momres["flags"]
-        data["psf_g"] = psf_momres['e']
-        data["psf_T"] = psf_momres['T']
+        data[n("psf_g")] = psf_momres['e']
+        data[n("psf_T")] = psf_momres['T']
 
     if mdet_flags == 0:
         raw_mom = sum_data["raw_mom"] / sum_data["wgt_sum"]
@@ -643,7 +643,7 @@ def _combine_fit_results_wavg(
         for col in ['e', 'e_cov']:
             data[n(col.replace('e', 'g'))] = momres[col]
         if psf_flags == 0:
-            data[n('T_ratio')] = data[n('T')] / data['psf_T']
+            data[n('T_ratio')] = data[n('T')] / data[n('psf_T')]
 
     if psf_flags != 0:
         mdet_flags |= procflags.PSF_FAILURE
@@ -661,17 +661,17 @@ def _combine_fit_results_wavg(
 
     # now we set the flags as they would have been set in our moments code
     # any PSF failure in a shear band causes a non-zero flags value
-    data['psf_flags'] = psf_flags
-    data[n('flags')] = mdet_flags
+    data[n('psf_flags')] = psf_flags
+    data[n('obj_flags')] = mdet_flags
     all_flags = mdet_flags
     for f in flux_flags:
         all_flags |= f
-    data['flags'] = all_flags
+    data[n('flags')] = all_flags
 
-    if data['flags'] != 0:
+    if data[n('flags')] != 0:
         logger.debug(
             "fitter failed: flags = %s",
-            procflags.get_procflags_str(data["flags"])
+            procflags.get_procflags_str(data[n("flags")])
         )
 
     return data
@@ -705,9 +705,9 @@ def get_wavg_output_struct(nband, model, shear_bands=None):
     data = np.zeros(1, dtype=dt)
 
     n = Namer(front=model)
-    data['flags'] = procflags.NO_ATTEMPT
-    data['psf_flags'] = procflags.NO_ATTEMPT
-    data[n("flags")] = procflags.NO_ATTEMPT
+    data[n('flags')] = procflags.NO_ATTEMPT
+    data[n('psf_flags')] = procflags.NO_ATTEMPT
+    data[n("obj_flags")] = procflags.NO_ATTEMPT
     data[n("T_flags")] = procflags.NO_ATTEMPT
     data[n("band_flux_flags")] = procflags.NO_ATTEMPT
 
@@ -726,11 +726,11 @@ def get_wavg_output_struct(nband, model, shear_bands=None):
 def _make_combine_fit_results_wavg_dtype(nband, model, shear_bands):
     n = Namer(front=model)
     dt = [
-        ("flags", 'i4'),
-        ('psf_flags', 'i4'),
-        ('psf_g', 'f8', 2),
-        ('psf_T', 'f8'),
         (n("flags"), 'i4'),
+        (n('psf_flags'), 'i4'),
+        (n('psf_g'), 'f8', 2),
+        (n('psf_T'), 'f8'),
+        (n("obj_flags"), 'i4'),
         (n("s2n"), "f8"),
         (n("g"), "f8", 2),
         (n("g_cov"), "f8", (2, 2)),
@@ -783,3 +783,73 @@ def symmetrize_obs_weights(obs):
             sym_obs.weight[:, :] = new_wgt
 
     return sym_obs
+
+
+def combine_fit_res(all_res):
+    """Combine fit result data structures.
+
+    Parameters
+    ----------
+    all_res : list of np.ndarray
+        The list of structured array results.
+
+    Returns
+    -------
+    res : np.ndarray
+        The combined results list.
+    """
+
+    if len(all_res) == 1:
+        return all_res[0]
+
+    dupe_cols = [
+        "shear_bands",
+    ]
+
+    nobj = None
+    dt = []
+    for _res in all_res:
+        if _res is not None:
+            if nobj is None:
+                nobj = _res.shape[0]
+            else:
+                if nobj != _res.shape[0]:
+                    raise RuntimeError("All fit results must be the same length!")
+
+            if len(dt) == 0:
+                dt.extend(_res.dtype.descr)
+            else:
+                for descr in _res.dtype.descr:
+                    if descr[0] not in dupe_cols:
+                        dt.append(descr)
+        else:
+            if nobj is None:
+                nobj = 0
+            else:
+                if nobj != 0:
+                    raise RuntimeError(
+                        "All fit results must zero length if one is None!"
+                    )
+
+    if nobj > 0:
+        res = np.zeros(nobj, dtype=dt)
+        for i, _res in enumerate(all_res):
+            for col in _res.dtype.names:
+                if col in dupe_cols:
+                    if i > 0:
+                        if not np.array_equal(res[col], _res[col]):
+                            raise RuntimeError(
+                                "Inconsistent column values "
+                                "for %s when combining results!" % col
+                            )
+                    else:
+                        res[col] = _res[col]
+                else:
+                    res[col] = _res[col]
+
+        return res
+    else:
+        if any(_res is not None for _res in all_res):
+            return np.zeros(0, dtype=dt)
+        else:
+            return None

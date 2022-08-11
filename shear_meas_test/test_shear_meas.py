@@ -278,7 +278,7 @@ def _shear_cuts(arr, model):
     else:
         tmin = 0.5
     msk = (
-        (arr['flags'] == 0)
+        (arr[f'{model}_flags'] == 0)
         & (arr[f'{model}_s2n'] > 10)
         & (arr[f'{model}_T_ratio'] > tmin)
     )
