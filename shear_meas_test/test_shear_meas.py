@@ -488,7 +488,7 @@ def test_shear_meas_color(model, snr, ngrid, ntrial):
         ("pgauss", 1e6, 7, 64),
         # this test takes ~3 hours on github actions so we only run it once and not
         # with color
-        ("wmom", 1e6, None, 10240),
+        ("wmom", 1e6, None, 9500),
     ]
 )
 def test_shear_meas_simple(model, snr, ngrid, ntrial):
