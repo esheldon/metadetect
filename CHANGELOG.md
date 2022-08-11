@@ -4,17 +4,27 @@
 
 ### added
 
+### changed
+
+### removed
+
+### fixed
+
+## 0.9.0 - 2022-08-11
+
+### added
+
  - Added `fwhm_reg` parameter to regularize the moments.
  - Added support for more than one measurement made on the detections.
  - Added total image mask fraction to outputs.
 
 ### changed
 
+ - Output data format column names have changed (`flags` -> `{model}_flags`, etc.)
+
 ### removed
 
  - Removed deconvolution of PSF with itself when smoothing.
-
-### fixed
 
 ## 0.8.1 - 2022-07-22
 
