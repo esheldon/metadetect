@@ -771,7 +771,7 @@ def symmetrize_obs_weights(obs):
         A copy of the input observation with a symmetrized weight map.
     """
     # sym_obs = obs.copy()
-    if np.any(obs.weight <= 0) and "_metadetect_obs_sym" not in obs.meta:
+    if "_metadetect_obs_sym" not in obs.meta and np.any(obs.weight <= 0):
         obs.meta["_metadetect_obs_sym"] = True
         new_wgt = obs.weight.copy()
         for k in [1, 2, 3]:
