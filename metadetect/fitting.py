@@ -770,19 +770,20 @@ def symmetrize_obs_weights(obs):
     sym_obs : ngmix.Observation
         A copy of the input observation with a symmetrized weight map.
     """
-    sym_obs = obs.copy()
-    if np.any(obs.weight <= 0):
+    # sym_obs = obs.copy()
+    if np.any(obs.weight <= 0) and "_metadetect_obs_sym" not in obs.meta:
+        obs.meta["_metadetect_obs_sym"] = True
         new_wgt = obs.weight.copy()
         for k in [1, 2, 3]:
             msk = np.rot90(obs.weight, k=k) <= 0
             new_wgt[msk] = 0
 
-        with sym_obs.writeable():
+        with obs.writeable():
             if not np.any(new_wgt > 0):
-                sym_obs.ignore_zero_weight = False
-            sym_obs.weight[:, :] = new_wgt
+                obs.ignore_zero_weight = False
+            obs.weight[:, :] = new_wgt
 
-    return sym_obs
+    return obs
 
 
 def combine_fit_res(all_res):
