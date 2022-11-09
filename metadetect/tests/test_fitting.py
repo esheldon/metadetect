@@ -1379,8 +1379,8 @@ def test_make_mom_res(fwhm_reg, has_nan, zero_flux, neg_flux_var):
         ],
         np.zeros(0, dtype=[
             ("a_flags", "i8"),
-            ("b_flags", "i8"),
             ("a", "f4"),
+            ("b_flags", "i8"),
             ("b", "f8")
         ]),
         "",
