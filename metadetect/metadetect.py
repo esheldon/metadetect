@@ -217,16 +217,19 @@ class Metadetect(dict):
 
             if model == 'wmom':
                 fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
+                is_wavg = True
             elif model == 'ksigma':
                 fitter = ngmix.prepsfmom.KSigmaMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
+                is_wavg = True
             elif model == "pgauss":
                 fitter = ngmix.prepsfmom.PGaussMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
+                is_wavg = True
             else:
                 raise ValueError("bad model: '%s'" % model)
 
@@ -236,7 +239,7 @@ class Metadetect(dict):
             else:
                 fwhm_reg = 0
 
-            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg
+            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg, is_wavg
 
         if "fitters" in self and ("model" in self or "weight" in self):
             raise RuntimeError("You can only specify one of fitters or model+weight!")
@@ -245,19 +248,23 @@ class Metadetect(dict):
             fitters = []
             fwhms = []
             fwhm_regs = []
+            fitter_is_wavg = []
             for fitter_cfg in self["fitters"]:
-                _, fitter, fwhm, fwhm_reg = _get_fitter(fitter_cfg)
+                _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(fitter_cfg)
                 fitters.append(fitter)
                 fwhms.append(fwhm)
                 fwhm_regs.append(fwhm_reg)
+                fitter_is_wavg.append(is_wavg)
             self._fitters = fitters
             self._fwhms = fwhms
             self._fwhm_regs = fwhm_regs
+            self._fitter_is_wavg = fitter_is_wavg
         else:
-            model, fitter, fwhm, fwhm_reg = _get_fitter(self)
+            _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(self)
             self._fitters = [fitter]
             self._fwhms = [fwhm]
             self._fwhm_regs = [fwhm_reg]
+            self._fitter_is_wavg = [is_wavg]
 
     @property
     def result(self):
@@ -350,6 +357,12 @@ class Metadetect(dict):
     def _go_bands_with_color(self, shear_bands, mcal_res):
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
+            if not self._fitter_is_wavg[0]:
+                raise RuntimeError(
+                    "Color-dependent metadetect can only run if first"
+                    " fitter is one of wmom, pgauss, or ksigma!"
+                )
+
             # we first detect and get color of each detection
             cat, mbobs_list = self._do_detect(shear_mbobs)
             nocolor_data = fit_mbobs_list_wavg(
@@ -473,14 +486,21 @@ class Metadetect(dict):
 
         t0 = time.time()
         all_res = []
-        for fitter, fwhm_reg in zip(self._fitters, self._fwhm_regs):
-            res = fit_mbobs_list_wavg(
-                mbobs_list=mbobs_list,
-                fitter=fitter,
-                shear_bands=shear_bands,
-                bmask_flags=self.get("bmask_flags", 0),
-                fwhm_reg=fwhm_reg,
-            )
+        for fitter, fwhm_reg, is_wavg in zip(
+            self._fitters, self._fwhm_regs, self._fitter_is_wavg
+        ):
+            if is_wavg:
+                res = fit_mbobs_list_wavg(
+                    mbobs_list=mbobs_list,
+                    fitter=fitter,
+                    shear_bands=shear_bands,
+                    bmask_flags=self.get("bmask_flags", 0),
+                    fwhm_reg=fwhm_reg,
+                )
+            else:
+                raise RuntimeError(
+                    "Non-weighted average fitters are not implemented!"
+                )
             all_res.append(res)
 
         res = combine_fit_res(all_res)
