@@ -209,7 +209,9 @@ def test_metadetect(model):
                                     col, res[shear][msk][col]
                                 )
                             )
-                        elif any(col.endswith(s) for s in ["band_flux", "band_flux_err"]):
+                        elif any(
+                            col.endswith(s) for s in ["band_flux", "band_flux_err"]
+                        ):
                             assert np.all(np.isnan(
                                 res[shear][msk][col],
                             )), (
