@@ -258,11 +258,11 @@ def make_mbobs_sim(
                     wcs=gs_wcs,
                 ),
                 bmask=np.zeros_like(im, dtype=np.int32),
-                ormask=np.zeros_like(im, dtype=np.int32),
-                mfrac=np.zeros_like(im),
+                ormask=(rng.uniform(size=im.shape) * 2**29).astype(int),
+                mfrac=rng.uniform(size=im.shape),
                 psf=psf_obs,
                 meta={"wgt": 1.0/nse**2},
-                noise=np.zeros_like(im) + nse,
+                noise=rng.normal(size=im.shape, scale=nse),
             )
         )
         mbobs.append(obslist)

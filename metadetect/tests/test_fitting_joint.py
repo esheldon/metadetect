@@ -215,6 +215,76 @@ def test_make_coadd_obs_errors(case):
         assert False, f"case {case} not found!"
 
 
+def test_make_coadd_obs_single():
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+
+    coadd_obs, flags = make_coadd_obs(mbobs[:1])
+    assert coadd_obs is mbobs[0][0]
+    assert flags == 0
+
+    coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[2])
+    assert coadd_obs is mbobs[2][0]
+    assert flags == 0
+
+
+def test_make_coadd_obs_symmetric():
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+
+    coadd_obs01, flags = make_coadd_obs(mbobs, shear_bands=[0, 1])
+    assert flags == 0
+
+    coadd_obs10, flags = make_coadd_obs(mbobs, shear_bands=[1, 0])
+    assert flags == 0
+
+    assert repr(coadd_obs01.jacobian) == repr(coadd_obs10.jacobian)
+    assert coadd_obs01.meta == mbobs[1][0].meta
+    assert coadd_obs10.meta == mbobs[0][0].meta
+    for attr in [
+        "image", "weight",
+        "bmask", "ormask", "noise", "mfrac",
+    ]:
+        assert np.array_equal(
+            getattr(coadd_obs01, attr),
+            getattr(coadd_obs10, attr),
+        )
+
+    assert repr(coadd_obs01.psf.jacobian) == repr(coadd_obs10.psf.jacobian)
+    assert coadd_obs01.psf.meta == mbobs[1][0].psf.meta
+    assert coadd_obs10.psf.meta == mbobs[0][0].psf.meta
+    for attr in ["image", "weight"]:
+        assert np.array_equal(
+            getattr(coadd_obs01.psf, attr),
+            getattr(coadd_obs10.psf, attr),
+        )
+
+
+@pytest.mark.parametrize("shear_bands", [None, [0, 1], [3, 1, 2]])
+def test_make_coadd_obs_shear_bands(shear_bands):
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+
+    coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=shear_bands)
+    assert flags == 0
+
+    # make sure different shear bands give different answers
+    coadd_obs_none, flags = make_coadd_obs(mbobs, shear_bands=None)
+    assert flags == 0
+
+    if shear_bands is not None:
+        assert not np.array_equal(
+            coadd_obs.image,
+            coadd_obs_none.image
+        )
+    else:
+        assert np.array_equal(
+            coadd_obs.image,
+            coadd_obs_none.image
+        )
+
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
+
+    # TODO test actual values of output coadd obs
+
 # def fit_mbobs_list_joint(
 #     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
 # ):
