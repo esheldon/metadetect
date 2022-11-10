@@ -404,10 +404,10 @@ class Metadetect(dict):
                     cat['y'][i:i+1],
                     cat['box_size'][i:i+1],
                 )
-                mbm = _medsifier.get_multiband_meds(
+                mbm = _medsifier.get_multiband_meds()
+                mbobs_list = mbm.get_mbobs_list(
                     weight_type=self["meds"].get("weight_type", "weight"),
                 )
-                mbobs_list = mbm.get_mbobs_list()
 
                 _data = self._measure(
                     mbobs_list=mbobs_list,
@@ -681,10 +681,10 @@ class Metadetect(dict):
             medsifier.cat['y'],
             medsifier.cat['box_size'],
         )
-        mbm = all_medsifier.get_multiband_meds(
-            weight_type=self["mdes"].get("weight_type", "weight"),
+        mbm = all_medsifier.get_multiband_meds()
+        mbobs_list = mbm.get_mbobs_list(
+            weight_type=self["meds"].get("weight_type", "weight"),
         )
-        mbobs_list = mbm.get_mbobs_list()
         logger.info("detect took %s seconds", time.time() - t0)
 
         return medsifier.cat, mbobs_list

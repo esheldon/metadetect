@@ -167,7 +167,7 @@ def test_detect_masking(ntrial=1, show=False):
         assert mer.cat.size == 0
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "admom"])
 def test_metadetect(model):
     """
     test full metadetection
@@ -197,8 +197,32 @@ def test_metadetect(model):
                 if col == "shear_bands":
                     assert np.all(res[shear][msk][col] == "012")
                 else:
-                    assert np.all(np.isfinite(res[shear][msk][col])), (
-                        "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
+                    # admom doesn't make band fluxes
+                    if model == "admom" and "band_flux" in col:
+                        if col.endswith("band_flux_flags"):
+                            assert np.array_equal(
+                                res[shear][msk][col],
+                                np.zeros_like(res[shear][msk][col])
+                                + procflags.NO_ATTEMPT,
+                            ), (
+                                "result column '%s' is not NO_ATTEMPT: %s" % (
+                                    col, res[shear][msk][col]
+                                )
+                            )
+                        elif any(col.endswith(s) for s in ["band_flux", "band_flux_err"]):
+                            assert np.all(np.isnan(
+                                res[shear][msk][col],
+                            )), (
+                                "result column '%s' is not NaN: %s" % (
+                                    col, res[shear][msk][col]
+                                )
+                            )
+                    else:
+                        assert np.all(np.isfinite(res[shear][msk][col])), (
+                            "result column '%s' has NaNs: %s" % (
+                                col, res[shear][msk][col]
+                            )
+                        )
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)

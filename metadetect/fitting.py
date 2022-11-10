@@ -62,7 +62,7 @@ def fit_mbobs_list_joint(
             shear_bands=shear_bands,
             rng=rng,
         )
-    res.append(_res)
+        res.append(_res)
 
     if len(res) > 0:
         return np.hstack(res)
@@ -252,20 +252,20 @@ def make_coadd_obs(mbobs, shear_bands=None):
     # finish coadding
     image = np.zeros_like(mbobs[shear_bands[0]][0].image)
     weight = np.zeros_like(mbobs[shear_bands[0]][0].weight)
-    mfrac = np.zeros_like(mbobs[shear_bands[0]][0].mfrac)
+    mfrac = np.zeros_like(mbobs[shear_bands[0]][0].image)
     nmfrac = 0
     noise = np.zeros_like(mbobs[shear_bands[0]][0].image)
     nnoise = 0
     bmask = np.zeros_like(mbobs[shear_bands[0]][0].image, dtype=np.int32)
     nbmask = 0
-    ormask = np.zeros_like(mbobs[shear_bands[0]][0].ormask, dtype=np.int32)
+    ormask = np.zeros_like(mbobs[shear_bands[0]][0].image, dtype=np.int32)
     normask = 0
     meta = {}
     psf_meta = {}
-    psf_image = np.zeros_like(mbobs[shear_bands[0]][0].psf_image)
+    psf_image = np.zeros_like(mbobs[shear_bands[0]][0].psf.image)
 
     for i, shear_band in enumerate(shear_bands):
-        obs = mbobs[shear_band][0].image
+        obs = mbobs[shear_band][0]
         wgt = wgts[i]
 
         meta.update(obs.meta)
