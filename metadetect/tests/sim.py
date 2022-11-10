@@ -178,7 +178,7 @@ class Sim(dict):
 
 def make_mbobs_sim(
     seed, nband, simulate_star=False, noise_scale=1, band_flux_factors=None,
-    band_image_sizes=None,
+    band_image_sizes=None, wcs_var_scale=1,
 ):
     rng = np.random.RandomState(seed=seed)
 
@@ -221,11 +221,11 @@ def make_mbobs_sim(
         gs_wcs = galsim.ShearWCS(
             0.25,
             galsim.Shear(
-                g1=rng.uniform(low=-0.1, high=0.1),
-                g2=rng.uniform(low=-0.1, high=0.1),
+                g1=rng.uniform(low=-0.1, high=0.1) * wcs_var_scale,
+                g2=rng.uniform(low=-0.1, high=0.1) * wcs_var_scale,
             )
         ).jacobian()
-        offset = rng.uniform(low=-0.5, high=0.5, size=2)
+        offset = rng.uniform(low=-0.5, high=0.5, size=2) * wcs_var_scale
 
         if band_flux_factors is not None:
             flux_factor = band_flux_factors[band]
@@ -258,8 +258,11 @@ def make_mbobs_sim(
                     wcs=gs_wcs,
                 ),
                 bmask=np.zeros_like(im, dtype=np.int32),
+                ormask=np.zeros_like(im, dtype=np.int32),
+                mfrac=np.zeros_like(im),
                 psf=psf_obs,
                 meta={"wgt": 1.0/nse**2},
+                noise=np.zeros_like(im) + nse,
             )
         )
         mbobs.append(obslist)

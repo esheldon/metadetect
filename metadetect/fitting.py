@@ -280,34 +280,18 @@ def make_coadd_obs(mbobs, shear_bands=None):
         if obs.has_mfrac():
             mfrac += (wgt * obs.mfrac)
             nmfrac += 1
-        else:
-            if nmfrac > 0:
-                flags |= procflags.INCONSISTENT_BANDS
-                return None, flags
 
         if obs.has_noise():
             noise += (wgt * obs.noise)
             nnoise += 1
-        else:
-            if nnoise > 0:
-                flags |= procflags.INCONSISTENT_BANDS
-                return None, flags
 
         if obs.has_bmask():
             bmask |= obs.bmask
             nbmask += 1
-        else:
-            if nbmask > 0:
-                flags |= procflags.INCONSISTENT_BANDS
-                return None, flags
 
         if obs.has_ormask():
             ormask |= obs.ormask
             normask += 1
-        else:
-            if normask > 0:
-                flags |= procflags.INCONSISTENT_BANDS
-                return None, flags
 
     weight = 1.0 / weight
     msk = ~np.isfinite(weight)
@@ -316,8 +300,12 @@ def make_coadd_obs(mbobs, shear_bands=None):
 
     if np.all(weight == 0):
         flags |= procflags.ZERO_WEIGHTS
-        # let's not waste time since we are missing a band
         return None, flags
+
+    for var in [nmfrac, nnoise, nbmask, normask]:
+        if var not in [0, len(shear_bands)]:
+            flags |= procflags.INCONSISTENT_BANDS
+            return None, flags
 
     meta.update(mbobs.meta)
 
@@ -332,24 +320,12 @@ def make_coadd_obs(mbobs, shear_bands=None):
         "meta": meta,
     }
     if nmfrac > 0:
-        if nmfrac != len(shear_bands):
-            flags |= procflags.INCONSISTENT_BANDS
-            return None, flags
         kwargs["mfrac"] = mfrac
     if nnoise > 0:
-        if nnoise != len(shear_bands):
-            flags |= procflags.INCONSISTENT_BANDS
-            return None, flags
         kwargs["noise"] = noise
     if nbmask > 0:
-        if nbmask != len(shear_bands):
-            flags |= procflags.INCONSISTENT_BANDS
-            return None, flags
         kwargs["bmask"] = bmask
     if normask > 0:
-        if normask != len(shear_bands):
-            flags |= procflags.INCONSISTENT_BANDS
-            return None, flags
         kwargs["ormask"] = ormask
 
     cobs = ngmix.Observation(image, **kwargs)
