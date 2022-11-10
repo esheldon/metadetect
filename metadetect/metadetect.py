@@ -214,7 +214,7 @@ class Metadetect(dict):
         def _get_fitter(cfg):
             model = cfg.get('model', 'wmom')
 
-            if "fwhm_smooth" in cfg["weight"]:
+            if "fwhm_smooth" in cfg.get("weight", {}):
                 kwargs = {"fwhm_smooth": cfg["weight"]["fwhm_smooth"]}
             else:
                 kwargs = {}
@@ -234,14 +234,22 @@ class Metadetect(dict):
                     **kwargs,
                 )
                 is_wavg = True
-            elif model == "admom":
+            elif model in ["admom", "am"]:
                 # we pass the name to our codes, not an admom object
                 fitter = model
                 is_wavg = False
+
+                # we set this defualt for admom
+                # it may be used to set the masked fraction measurement
+                # aperture
+                if "weight" not in cfg:
+                    cfg["weight"] = {}
+                if "fwhm" not in cfg["weight"]:
+                    cfg["weight"]["fwhm"] = 1.2
             else:
                 raise ValueError("bad model: '%s'" % model)
 
-            if "fwhm_reg" in cfg["weight"]:
+            if "fwhm_reg" in cfg.get("weight", {}):
                 fwhm_reg = cfg["weight"]["fwhm_reg"]
                 fitter.kind = fitter.kind + "_reg%0.2f" % cfg["weight"]["fwhm_reg"]
             else:

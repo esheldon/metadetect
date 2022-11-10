@@ -49,7 +49,7 @@ def fit_mbobs_list_joint(
     res : np.ndarray
         A structured array of the fitting results.
     """
-    if fitter_name == "admom":
+    if fitter_name in ["am", "admom"]:
         fit_func = fit_mbobs_admom
     else:
         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
@@ -112,7 +112,7 @@ def fit_mbobs_admom(
     """
     fitter = get_admom_fitter(rng)
     nband = len(mbobs)
-    res = get_wavg_output_struct(nband, "admom", shear_bands=shear_bands)
+    res = get_wavg_output_struct(nband, "am", shear_bands=shear_bands)
 
     flags = 0
     for obslist in mbobs:
@@ -139,33 +139,33 @@ def fit_mbobs_admom(
     if flags == 0:
         # then fit the PSF
         pres = fitter.go(coadd_obs.psf)
-        res["admom_psf_flags"] = pres["flags"]
+        res["am_psf_flags"] = pres["flags"]
         if pres["flags"] == 0:
-            res["admom_psf_g"] = pres["e"]
-            res["admom_psf_T"] = pres["T"]
+            res["am_psf_g"] = pres["e"]
+            res["am_psf_T"] = pres["T"]
 
         # then fit the object
         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
         gres = fitter.go(sym_coadd_obs)
-        res["admom_T_flags"] = gres["T_flags"]
+        res["am_T_flags"] = gres["T_flags"]
         if gres["T_flags"] == 0:
-            res["admom_T"] = gres["T"]
-            res["admom_T_err"] = gres["T_err"]
+            res["am_T"] = gres["T"]
+            res["am_T_err"] = gres["T_err"]
             if pres["flags"] == 0:
-                res["admom_T_ratio"] = res["admom_T"] / res["admom_psf_T"]
+                res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
 
-        res["admom_obj_flags"] = gres["flags"]
+        res["am_obj_flags"] = gres["flags"]
         if gres["flags"] == 0:
-            res["admom_s2n"] = gres["s2n"]
-            res["admom_g"] = gres["e"]
-            res["admom_g_cov"] = gres["e_cov"]
+            res["am_s2n"] = gres["s2n"]
+            res["am_g"] = gres["e"]
+            res["am_g_cov"] = gres["e_cov"]
 
         # this replaces the flags so they are zero and unsets the default of
         # no attempt
-        res["admom_flags"] = (res["admom_psf_flags"] | res["admom_obj_flags"])
+        res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
     else:
         # this branch ensures noattempt remains set
-        res["admom_flags"] |= flags
+        res["am_flags"] |= flags
 
     return res
 

@@ -167,7 +167,42 @@ def test_detect_masking(ntrial=1, show=False):
         assert mer.cat.size == 0
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "admom"])
+def _check_result_array(res, shear, msk, model):
+    for col in res[shear].dtype.names:
+        if col == "shear_bands":
+            assert np.all(res[shear][msk][col] == "012")
+        else:
+            # admom doesn't make band fluxes
+            if model in ["admom", "am"] and "band_flux" in col:
+                if col.endswith("band_flux_flags"):
+                    assert np.array_equal(
+                        res[shear][msk][col],
+                        np.zeros_like(res[shear][msk][col])
+                        + procflags.NO_ATTEMPT,
+                    ), (
+                        "result column '%s' is not NO_ATTEMPT: %s" % (
+                            col, res[shear][msk][col]
+                        )
+                    )
+                elif any(
+                    col.endswith(s) for s in ["band_flux", "band_flux_err"]
+                ):
+                    assert np.all(np.isnan(
+                        res[shear][msk][col],
+                    )), (
+                        "result column '%s' is not NaN: %s" % (
+                            col, res[shear][msk][col]
+                        )
+                    )
+            else:
+                assert np.all(np.isfinite(res[shear][msk][col])), (
+                    "result column '%s' has NaNs: %s" % (
+                        col, res[shear][msk][col]
+                    )
+                )
+
+
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect(model):
     """
     test full metadetection
@@ -193,44 +228,13 @@ def test_metadetect(model):
             assert np.any(res[shear]["psfrec_g"] != 0)
             assert np.any(res[shear]["psfrec_T"] != 0)
             msk = res[shear][model + '_flags'] == 0
-            for col in res[shear].dtype.names:
-                if col == "shear_bands":
-                    assert np.all(res[shear][msk][col] == "012")
-                else:
-                    # admom doesn't make band fluxes
-                    if model == "admom" and "band_flux" in col:
-                        if col.endswith("band_flux_flags"):
-                            assert np.array_equal(
-                                res[shear][msk][col],
-                                np.zeros_like(res[shear][msk][col])
-                                + procflags.NO_ATTEMPT,
-                            ), (
-                                "result column '%s' is not NO_ATTEMPT: %s" % (
-                                    col, res[shear][msk][col]
-                                )
-                            )
-                        elif any(
-                            col.endswith(s) for s in ["band_flux", "band_flux_err"]
-                        ):
-                            assert np.all(np.isnan(
-                                res[shear][msk][col],
-                            )), (
-                                "result column '%s' is not NaN: %s" % (
-                                    col, res[shear][msk][col]
-                                )
-                            )
-                    else:
-                        assert np.all(np.isfinite(res[shear][msk][col])), (
-                            "result column '%s' has NaNs: %s" % (
-                                col, res[shear][msk][col]
-                            )
-                        )
+            _check_result_array(res, shear, msk, model)
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
@@ -268,18 +272,13 @@ def test_metadetect_mfrac(model):
                 & (res[shear]["mfrac_noshear"] < 0.55)
             )
             msk = res[shear][model + '_flags'] == 0
-            for col in res[shear].dtype.names:
-                if col == "shear_bands":
-                    assert np.all(res[shear][msk][col] == "012")
-                else:
-                    assert np.all(np.isfinite(res[shear][msk][col])), (
-                        "result column '%s' has NaNs: %s" % (col, res[shear][msk][col]))
+            _check_result_array(res, shear, msk, model)
 
     total_time = time.time()-tm0
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_mfrac_all(model):
     """
     test full metadetection w/ mfrac all 1
@@ -303,7 +302,7 @@ def test_metadetect_mfrac_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_zero_weight_all(model):
     """
     test full metadetection w/ all zero weight
@@ -328,7 +327,7 @@ def test_metadetect_zero_weight_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_zero_weight_some(model):
     """
     test full metadetection w/ some zero weight
@@ -353,7 +352,7 @@ def test_metadetect_zero_weight_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_nodet_flags_all(model):
     """
     test full metadetection w/ all bmask all nodet_flags
@@ -379,7 +378,7 @@ def test_metadetect_nodet_flags_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_nodet_flags_some(model):
     """
     test full metadetection w/ some bmask nodet_flags
@@ -507,6 +506,7 @@ def test_metadetect_fitter_multi_meas():
         {"model": "wmom", "weight": {"fwhm": 1.2}},
         {"model": "pgauss", "weight": {"fwhm": 2.0}},
         {"model": "pgauss", "weight": {"fwhm": 2.0, "fwhm_reg": 0.8}},
+        {"model": "am"},
     ]
 
     rng = np.random.RandomState(seed=116)
@@ -521,6 +521,7 @@ def test_metadetect_fitter_multi_meas():
         msk = res[shear][model + "_flags"] == 0
         msk_reg = res[shear][model + "_reg0.80_" + "flags"] == 0
         msk_wmom = res[shear]["wmom_flags"] == 0
+        msk_admom = res[shear]["am_flags"] == 0
         assert np.allclose(
             res[shear][model + "_reg0.80" + "_T"][msk_reg],
             res[shear][model + "_T"][msk]
@@ -536,6 +537,15 @@ def test_metadetect_fitter_multi_meas():
         assert not np.allclose(
             res[shear]["wmom_g"][msk_wmom],
             res[shear][model + "_g"][msk]
+        )
+        # admom can fail so look at intersection
+        assert not np.allclose(
+            res[shear]["am_T"][msk_admom & msk],
+            res[shear][model + "_T"][msk_admom & msk]
+        )
+        assert not np.allclose(
+            res[shear]["am_g"][msk_admom & msk],
+            res[shear][model + "_g"][msk_admom & msk]
         )
 
 
@@ -579,11 +589,11 @@ def test_metadetect_flux(model, nband, nshear):
     print("time per:", total_time/ntrial)
 
 
-def test_metadetect_multiband():
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "am"])
+def test_metadetect_multiband(model):
     """
     test full metadetection w/ multiple bands
     """
-    model = "wmom"
     nband = 3
     ntrial = 1
     rng = np.random.RandomState(seed=116)
