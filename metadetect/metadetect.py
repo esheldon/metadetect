@@ -12,7 +12,11 @@ from . import procflags
 from . import shearpos
 from .util import Namer
 from .mfrac import measure_mfrac
-from .fitting import fit_mbobs_list_wavg, combine_fit_res
+from .fitting import (
+    fit_mbobs_list_wavg,
+    combine_fit_res,
+    fit_mbobs_list_joint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +234,10 @@ class Metadetect(dict):
                     **kwargs,
                 )
                 is_wavg = True
+            elif model == "admom":
+                # we pass the name to our codes, not an admom object
+                fitter = model
+                is_wavg = False
             else:
                 raise ValueError("bad model: '%s'" % model)
 
@@ -396,7 +404,9 @@ class Metadetect(dict):
                     cat['y'][i:i+1],
                     cat['box_size'][i:i+1],
                 )
-                mbm = _medsifier.get_multiband_meds()
+                mbm = _medsifier.get_multiband_meds(
+                    weight_type=self["meds"].get("weight_type", "weight"),
+                )
                 mbobs_list = mbm.get_mbobs_list()
 
                 _data = self._measure(
@@ -498,8 +508,12 @@ class Metadetect(dict):
                     fwhm_reg=fwhm_reg,
                 )
             else:
-                raise RuntimeError(
-                    "Non-weighted average fitters are not implemented!"
+                res = fit_mbobs_list_joint(
+                    mbobs_list=mbobs_list,
+                    fitter_name=fitter,
+                    shear_bands=shear_bands,
+                    bmask_flags=self.get("bmask_flags", 0),
+                    rng=self.rng,
                 )
             all_res.append(res)
 
@@ -667,7 +681,9 @@ class Metadetect(dict):
             medsifier.cat['y'],
             medsifier.cat['box_size'],
         )
-        mbm = all_medsifier.get_multiband_meds()
+        mbm = all_medsifier.get_multiband_meds(
+            weight_type=self["mdes"].get("weight_type", "weight"),
+        )
         mbobs_list = mbm.get_mbobs_list()
         logger.info("detect took %s seconds", time.time() - t0)
 
