@@ -6,7 +6,6 @@ import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
 from ngmix.moments import make_mom_result, fwhm_to_T
-from ngmix.admom import run_admom
 from pkg_resources import parse_version
 
 from .util import Namer
@@ -71,6 +70,17 @@ def fit_mbobs_list_joint(
         return None
 
 
+def get_admom_fitter(rng):
+    fitter = ngmix.admom.AdmomFitter(rng=rng)
+    guesser = ngmix.guessers.GMixPSFGuesser(
+        rng=rng, ngauss=1, guess_from_moms=True,
+    )
+    return ngmix.runners.Runner(
+        fitter=fitter, guesser=guesser,
+        ntry=2,
+    )
+
+
 def fit_mbobs_admom(
     *,
     mbobs,
@@ -100,6 +110,7 @@ def fit_mbobs_admom(
     res : np.ndarray
         A structured array of the fitting results.
     """
+    fitter = get_admom_fitter(rng)
     nband = len(mbobs)
     res = get_wavg_output_struct(nband, "admom", shear_bands=shear_bands)
 
@@ -127,10 +138,7 @@ def fit_mbobs_admom(
 
     if flags == 0:
         # then fit the PSF
-        pres = run_admom(
-            coadd_obs.psf, 1.0,
-            rng=rng,
-        )
+        pres = fitter.go(coadd_obs.psf)
         res["admom_psf_flags"] = pres["flags"]
         if pres["flags"] == 0:
             res["admom_psf_g"] = pres["e"]
@@ -138,10 +146,7 @@ def fit_mbobs_admom(
 
         # then fit the object
         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
-        gres = run_admom(
-            sym_coadd_obs, pres.get_gmix() if pres["flags"] == 0 else 1.0,
-            rng=rng,
-        )
+        gres = fitter.go(sym_coadd_obs)
         res["admom_T_flags"] = gres["T_flags"]
         if gres["T_flags"] == 0:
             res["admom_T"] = gres["T"]
