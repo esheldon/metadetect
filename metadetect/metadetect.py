@@ -356,7 +356,9 @@ class Metadetect(dict):
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
-            cat, mbobs_list = self._do_detect(shear_mbobs)
+            cat, mbobs_list = self._do_detect(
+                shear_mbobs, shear_bands
+            )
             _result[shear_str] = self._measure(
                 mbobs_list=mbobs_list,
                 shear_bands=shear_bands,
@@ -380,7 +382,7 @@ class Metadetect(dict):
                 )
 
             # we first detect and get color of each detection
-            cat, mbobs_list = self._do_detect(shear_mbobs)
+            cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
             nocolor_data = fit_mbobs_list_wavg(
                 mbobs_list=mbobs_list,
                 fitter=self._fitters[0],
@@ -667,13 +669,17 @@ class Metadetect(dict):
 
         return newres
 
-    def _do_detect(self, mbobs):
+    def _do_detect(self, mbobs, shear_bands):
         """
         use a MEDSifier to run detection
         """
         t0 = time.time()
+        shear_mbobs = ngmix.MultiBandObsList()
+        for band in shear_bands:
+            shear_mbobs.append(mbobs[band])
+
         medsifier = detect.MEDSifier(
-            mbobs=mbobs,
+            mbobs=shear_mbobs,
             sx_config=self.get('sx', None),
             meds_config=self['meds'],
             nodet_flags=self['nodet_flags'],
@@ -688,6 +694,8 @@ class Metadetect(dict):
             medsifier.cat['x'],
             medsifier.cat['y'],
             medsifier.cat['box_size'],
+            seg=medsifier.seg,
+            number=medsifier.cat['number'],
         )
         mbm = all_medsifier.get_multiband_meds()
         mbobs_list = mbm.get_mbobs_list(

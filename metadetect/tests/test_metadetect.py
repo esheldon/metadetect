@@ -235,6 +235,41 @@ def test_metadetect(model):
 
 
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+def test_metadetect_uberseg(model):
+    """
+    test full metadetection
+    """
+    ntrial = 1
+    rng = np.random.RandomState(seed=116)
+
+    tm0 = time.time()
+
+    sim = Sim(rng)
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    config["model"] = model
+    config["meds"]["weight_type"] = "uberseg"
+
+    mbobs = sim.get_mbobs()
+    res = metadetect.do_metadetect(config, mbobs, rng)
+
+    for trial in range(ntrial):
+        print("trial: %d/%d" % (trial+1, ntrial))
+
+        res = metadetect.do_metadetect(config, mbobs, rng)
+        for shear in ["noshear", "1p", "1m", "2p", "2m"]:
+            assert np.all(res[shear]["mfrac"] == 0)
+            assert any(c.endswith("band_flux") for c in res[shear].dtype.names)
+            assert np.any(res[shear]["psfrec_g"] != 0)
+            assert np.any(res[shear]["psfrec_T"] != 0)
+            msk = res[shear][model + '_flags'] == 0
+            _check_result_array(res, shear, msk, model)
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial)
+
+
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
 def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac

@@ -435,9 +435,14 @@ class CatalogMEDSifier(MEDSifier):
         Input y/row in zero-indexed pixels.
     box_sizes : array-like
         The box size for each stamp.
+    number : array, optional
+        If not None, the number in the seg map for the object.
+    seg : array, optional
+        If not None, the seg map for the objects.
+        Note the objects are assumed to be in numerical order
+        matching the seg map.
     """
-
-    def __init__(self, mbobs, x, y, box_sizes):
+    def __init__(self, mbobs, x, y, box_sizes, number=None, seg=None):
         self.mbobs = mbobs
         self.nband = len(mbobs)
         assert len(mbobs[0]) == 1, 'multi-epoch is not supported'
@@ -445,12 +450,13 @@ class CatalogMEDSifier(MEDSifier):
         self.y = y
         self.box_sizes = box_sizes
 
-        self._set_cat_and_seg()
+        self._set_cat_and_seg(number, seg)
 
-    def _set_cat_and_seg(self):
+    def _set_cat_and_seg(self, number, seg):
         ncut = 2  # need this to make sure array
         new_dt = [
             ('id', 'i8'),
+            ('number', 'i8'),
             ('ncutout', 'i4'),
             ('box_size', 'i4'),
             ('file_id', 'i8', ncut),
@@ -470,7 +476,12 @@ class CatalogMEDSifier(MEDSifier):
             ('dvdcol', 'f8', ncut),
         ]
         cat = np.zeros(self.x.shape[0], dtype=new_dt)
-        cat['id'] = np.arange(cat.size)
+        if number is None:
+            cat['id'] = np.arange(cat.size)
+            cat['number'] = cat['id'] + 1
+        else:
+            cat['id'] = number - 1
+            cat["number"] = number
         cat['ncutout'] = 1
 
         jacob = self.mbobs[0][0].jacobian
@@ -515,5 +526,8 @@ class CatalogMEDSifier(MEDSifier):
         cat['psf_cutout_row'][:, 0] = psf_cen[0]
         cat['psf_cutout_col'][:, 0] = psf_cen[1]
 
-        self.seg = np.zeros_like(self.mbobs[0][0].image, dtype=np.int32)
+        if seg is None:
+            self.seg = np.zeros_like(self.mbobs[0][0].image, dtype=np.int32)
+        else:
+            self.seg = seg
         self.cat = cat
