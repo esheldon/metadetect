@@ -258,6 +258,14 @@ def test_make_coadd_obs_symmetric():
         )
 
 
+def _or_arrays(arrs):
+    res = arrs[0].copy()
+    for arr in arrs[1:]:
+        res |= arr
+
+    return res
+
+
 @pytest.mark.parametrize("shear_bands", [None, [0, 1], [3, 1, 2]])
 def test_make_coadd_obs_shear_bands(shear_bands):
     mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
@@ -283,7 +291,68 @@ def test_make_coadd_obs_shear_bands(shear_bands):
     if shear_bands is None:
         shear_bands = list(range(len(mbobs)))
 
-    # TODO test actual values of output coadd obs
+    # the coadded image should have higher s/n
+    assert all(
+        coadd_obs.get_s2n()
+        > mbobs[sb][0].get_s2n() for sb in shear_bands
+    )
+
+    # total flux should be close
+    fluxes = list(
+        mbobs[sb][0].image.sum()
+        for sb in shear_bands
+    )
+    assert np.allclose(
+        coadd_obs.image.sum(),
+        fluxes,
+        atol=0,
+        rtol=0.2,
+    ), (coadd_obs.image.sum(), fluxes)
+
+    # psf should sum to unity
+    assert np.allclose(coadd_obs.psf.image.sum(), 1)
+
+    # jacobians and image shapes should be the same
+    assert repr(coadd_obs.jacobian) == repr(mbobs[0][0].jacobian)
+    assert coadd_obs.image.shape == mbobs[0][0].image.shape
+    assert repr(coadd_obs.psf.jacobian) == repr(mbobs[0][0].psf.jacobian)
+    assert coadd_obs.psf.image.shape == mbobs[0][0].psf.image.shape
+    assert coadd_obs.meta == mbobs[shear_bands[-1]][0].meta
+
+    assert np.array_equal(
+        coadd_obs.bmask,
+        _or_arrays([mbobs[sb][0].bmask for sb in shear_bands]),
+    )
+    assert np.array_equal(
+        coadd_obs.ormask,
+        _or_arrays([mbobs[sb][0].ormask for sb in shear_bands]),
+    )
+
+    wgts = [np.median(mbobs[sb][0].weight) for sb in shear_bands]
+    wgts = np.array(wgts)
+    wgts /= np.sum(wgts)
+    # weights should be different
+    assert not np.allclose(wgts[0], wgts)
+
+    # check the actual values in coadded attributes
+    image = np.zeros_like(mbobs[0][0].image)
+    weight = np.zeros_like(mbobs[0][0].image)
+    mfrac = np.zeros_like(mbobs[0][0].image)
+    noise = np.zeros_like(mbobs[0][0].image)
+    psf_image = np.zeros_like(mbobs[0][0].psf.image)
+    for i, sb in enumerate(shear_bands):
+        image += mbobs[sb][0].image * wgts[i]
+        mfrac += mbobs[sb][0].mfrac * wgts[i]
+        noise += mbobs[sb][0].noise * wgts[i]
+        psf_image += mbobs[sb][0].psf.image * wgts[i]
+        weight += wgts[i]**2 / mbobs[sb][0].weight
+    weight = 1.0 / weight
+    assert np.allclose(image, coadd_obs.image)
+    assert np.allclose(weight, coadd_obs.weight)
+    assert np.allclose(mfrac, coadd_obs.mfrac)
+    assert np.allclose(noise, coadd_obs.noise)
+    assert np.allclose(psf_image, coadd_obs.psf.image)
+
 
 # def fit_mbobs_list_joint(
 #     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
