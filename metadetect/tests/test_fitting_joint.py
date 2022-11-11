@@ -8,6 +8,8 @@ from ..fitting import (
     fit_mbobs_admom,
     fit_mbobs_list_joint,
     make_coadd_obs,
+    get_admom_fitter,
+    symmetrize_obs_weights,
 )
 from .. import procflags
 
@@ -26,6 +28,8 @@ from .. import procflags
     "disjoint_weights",
 ])
 def test_make_coadd_obs_errors(case):
+    ran_one = False
+
     if case == "shear_bands_bad_oneband":
         mbobs = make_mbobs_sim(45, 1, wcs_var_scale=0)
         coadd_obs, flags = make_coadd_obs(
@@ -33,6 +37,7 @@ def test_make_coadd_obs_errors(case):
         )
         assert coadd_obs is None
         assert flags == procflags.INCONSISTENT_BANDS
+        ran_one = True
     elif case == "shear_bands_bad":
         mbobs = make_mbobs_sim(45, 3, wcs_var_scale=0)
         coadd_obs, flags = make_coadd_obs(
@@ -40,6 +45,7 @@ def test_make_coadd_obs_errors(case):
         )
         assert coadd_obs is None
         assert flags == procflags.INCONSISTENT_BANDS
+        ran_one = True
     elif case == "shear_bands_outofrange":
         mbobs = make_mbobs_sim(45, 3, wcs_var_scale=0)
         coadd_obs, flags = make_coadd_obs(
@@ -47,6 +53,7 @@ def test_make_coadd_obs_errors(case):
         )
         assert coadd_obs is None
         assert flags == procflags.INCONSISTENT_BANDS
+        ran_one = True
     elif case == "bad_img_jacob":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0] = ngmix.Observation(
@@ -67,6 +74,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "bad_img_shape":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0] = ngmix.Observation(
@@ -83,6 +91,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "missing_psf":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0] = ngmix.Observation(
@@ -98,6 +107,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "bad_psf_jacob":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0].psf = ngmix.Observation(
@@ -117,6 +127,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "bad_psf_img_shape":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0].psf = ngmix.Observation(
@@ -132,6 +143,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "zero_weights":
         mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
         mbobs[1][0] = ngmix.Observation(
@@ -150,6 +162,7 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     elif case == "missing_attrs":
         for attr in ["mfrac", "noise", "bmask", "ormask"]:
             mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
@@ -176,6 +189,7 @@ def test_make_coadd_obs_errors(case):
             coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
             assert coadd_obs is not None
             assert flags == 0
+            ran_one = True
     elif case == "disjoint_weights":
         # if two images have disjoint weight maps where no non-zero
         # areas overlap, then we cannot coadd
@@ -211,8 +225,11 @@ def test_make_coadd_obs_errors(case):
         coadd_obs, flags = make_coadd_obs(mbobs, shear_bands=[0, 2, 3])
         assert coadd_obs is not None
         assert flags == 0
+        ran_one = True
     else:
         assert False, f"case {case} not found!"
+
+    assert ran_one, "No tests ran!"
 
 
 def test_make_coadd_obs_single():
@@ -451,90 +468,186 @@ def test_fit_mbobs_list_joint_seeding(shear_bands, fname):
         np.testing.assert_array_equal(res[col], res1[col])
 
 
-# def fit_mbobs_admom(
-#     *,
-#     mbobs,
-#     bmask_flags,
-#     rng,
-#     shear_bands=None,
-# ):
-#     """Fit a multiband obs using adaptive moments.
+@pytest.mark.parametrize("case", [
+    "missing_band",
+    "too_many_bands",
+    "zero_weights",
+    "edge_hit",
+    "coadd_flags",
+])
+def test_fit_mbobs_admom_input_errors(case):
+    rng = np.random.RandomState(seed=211324)
+    ran_one = False
 
-#     This function forms a coadd of the shear bands and then runs
-#     adaptive moments on the coadd.
+    if case == "missing_band":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1] = ngmix.ObsList()
+        res = fit_mbobs_admom(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["am_flags"] == (procflags.NO_ATTEMPT | procflags.MISSING_BAND), (
+            procflags.get_procflags_str(res["am_flags"][0])
+        )
+    elif case == "too_many_bands":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        ol = ngmix.ObsList()
+        ol.append(mbobs[1][0])
+        ol.append(mbobs[1][0])
+        mbobs[1] = ol
+        res = fit_mbobs_admom(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["am_flags"] == (
+            procflags.NO_ATTEMPT | procflags.INCONSISTENT_BANDS
+        ), (
+            procflags.get_procflags_str(res["am_flags"][0])
+        )
+    elif case == "zero_weights":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=np.zeros_like(mbobs[1][0].image),
+            ignore_zero_weight=False,
+            bmask=mbobs[1][0].bmask,
+        )
+        res = fit_mbobs_admom(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["am_flags"] == (procflags.NO_ATTEMPT | procflags.ZERO_WEIGHTS), (
+            procflags.get_procflags_str(res["am_flags"][0])
+        )
+    elif case == "edge_hit":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=mbobs[1][0].weight,
+            bmask=mbobs[1][0].bmask + 10,
+        )
+        res = fit_mbobs_admom(
+            mbobs=mbobs,
+            bmask_flags=10,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["am_flags"] == (procflags.NO_ATTEMPT | procflags.EDGE_HIT), (
+            procflags.get_procflags_str(res["am_flags"][0])
+        )
+    elif case == "coadd_flags":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=mbobs[1][0].weight,
+            bmask=mbobs[1][0].bmask,
+            ormask=mbobs[1][0].ormask,
+            noise=mbobs[1][0].noise,
+            # missing mfrac so coadd fails
+        )
+        res = fit_mbobs_admom(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["am_flags"] == (
+            procflags.NO_ATTEMPT | procflags.INCONSISTENT_BANDS
+        ), (
+            procflags.get_procflags_str(res["am_flags"][0])
+        )
+    else:
+        assert False, f"case {case} not found!"
 
-#     Parameters
-#     ----------
-#     mbobs : ngmix.MultiBandObsList
-#         The observation to use for shear measurement.
-#     bmask_flags : int
-#         Observations with these bits set in the bmask are not fit.
-#     rng : np.random.RandomState
-#         Random state for fitting.
-#     shear_bands : list of int, optional
-#         A list of indices into each mbobs that denotes which band is used for shear.
-#         Default is to use all bands.
+    assert ran_one, "No tests ran!"
 
-#     Returns
-#     -------
-#     res : np.ndarray
-#         A structured array of the fitting results.
-#     """
-#     fitter = get_admom_fitter(rng)
-#     nband = len(mbobs)
-#     res = get_wavg_output_struct(nband, "am", shear_bands=shear_bands)
 
-#     flags = 0
-#     for obslist in mbobs:
-#         if len(obslist) == 0:
-#             flags |= procflags.MISSING_BAND
-#             continue
+@pytest.mark.parametrize("shear_bands", [[0], [2]])
+def test_fit_mbobs_admom_oneband(shear_bands):
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+    res = fit_mbobs_admom(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=shear_bands,
+    )
 
-#         if len(obslist) > 1:
-#             flags |= procflags.INCONSISTENT_BANDS
-#             continue
+    # make sure things are seeded and everything is copied out
+    # correctly
+    assert res["am_flags"] == (
+        res["am_psf_flags"] | res["am_obj_flags"]
+    )
 
-#         for obs in obslist:
-#             if not np.any(obs.weight > 0):
-#                 flags |= procflags.ZERO_WEIGHTS
+    rng = np.random.RandomState(seed=211324)
+    fitter = get_admom_fitter(rng)
+    pres = fitter.go(mbobs[shear_bands[0]][0].psf)
+    np.testing.assert_allclose(
+        res["am_psf_T"][0], pres["T"]
+    )
+    np.testing.assert_allclose(
+        res["am_psf_g"][0], pres["e"]
+    )
 
-#             if np.any((obs.bmask & bmask_flags) != 0):
-#                 flags |= procflags.EDGE_HIT
+    sobs = symmetrize_obs_weights(mbobs[shear_bands[0]][0])
+    gres = fitter.go(sobs)
+    np.testing.assert_array_equal(res["am_T_flags"][0], gres["T_flags"])
+    np.testing.assert_array_equal(res["am_T"][0], gres["T"])
+    np.testing.assert_array_equal(res["am_T_err"][0], gres["T_err"])
+    np.testing.assert_array_equal(
+        res["am_T_ratio"][0],
+        gres["T"]/pres["T"],
+    )
 
-#     if flags == 0:
-#         # first we coadd the shear bands
-#         coadd_obs, coadd_flags = make_coadd_obs(mbobs, shear_bands=shear_bands)
-#         flags |= coadd_flags
+    np.testing.assert_array_equal(res["am_obj_flags"][0], gres["flags"])
+    np.testing.assert_array_equal(res["am_s2n"][0], gres["s2n"])
+    np.testing.assert_array_equal(res["am_g"][0], gres["e"])
+    np.testing.assert_array_equal(res["am_g_cov"][0], gres["e_cov"])
 
-#     if flags == 0:
-#         # then fit the PSF
-#         pres = fitter.go(coadd_obs.psf)
-#         res["am_psf_flags"] = pres["flags"]
-#         if pres["flags"] == 0:
-#             res["am_psf_g"] = pres["e"]
-#             res["am_psf_T"] = pres["T"]
 
-#         # then fit the object
-#         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
-#         gres = fitter.go(sym_coadd_obs)
-#         res["am_T_flags"] = gres["T_flags"]
-#         if gres["T_flags"] == 0:
-#             res["am_T"] = gres["T"]
-#             res["am_T_err"] = gres["T_err"]
-#             if pres["flags"] == 0:
-#                 res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
+@pytest.mark.parametrize("shear_bands", [[0], [2], None, [1, 3, 2]])
+def test_fit_mbobs_admom_smoke(shear_bands):
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+    res = fit_mbobs_admom(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=shear_bands,
+    )
 
-#         res["am_obj_flags"] = gres["flags"]
-#         if gres["flags"] == 0:
-#             res["am_s2n"] = gres["s2n"]
-#             res["am_g"] = gres["e"]
-#             res["am_g_cov"] = gres["e_cov"]
+    # none of these fits should fail
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
 
-#         # this replaces the flags so they are zero and unsets the default of
-#         # no attempt
-#         res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
-#     else:
-#         # this branch ensures noattempt remains set
-#         res["am_flags"] |= flags
-
-#     return res
+    for col in res.dtype.names:
+        if col.endswith("band_flux_flags"):
+            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+        elif "band_flux" in col:
+            assert np.all(np.isnan(res[col])), (col, res[col])
+        elif col == "shear_bands":
+            assert np.all(
+                res[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res[col])
+        elif not col.endswith("flags"):
+            assert np.all(np.isfinite(res[col])), (col, res[col])
+        else:
+            assert np.all(res[col] == 0), (col, res[col])
