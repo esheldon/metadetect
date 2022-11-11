@@ -112,6 +112,8 @@ def fit_mbobs_admom(
     """
     fitter = get_admom_fitter(rng)
     nband = len(mbobs)
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
     res = get_wavg_output_struct(nband, "am", shear_bands=shear_bands)
 
     flags = 0

@@ -5,8 +5,8 @@ import pytest
 
 from .sim import make_mbobs_sim
 from ..fitting import (
-    # fit_mbobs_admom,
-    # fit_mbobs_list_joint,
+    fit_mbobs_admom,
+    fit_mbobs_list_joint,
     make_coadd_obs,
 )
 from .. import procflags
@@ -354,52 +354,101 @@ def test_make_coadd_obs_shear_bands(shear_bands):
     assert np.allclose(psf_image, coadd_obs.psf.image)
 
 
-# def fit_mbobs_list_joint(
-#     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
-# ):
-#     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
+def test_fit_mbobs_list_joint_errors():
+    mbobs_list = [
+        make_mbobs_sim(45, 3, wcs_var_scale=0),
+        make_mbobs_sim(46, 3, wcs_var_scale=0),
+    ]
+    rng = np.random.RandomState(seed=4235)
+    with pytest.raises(RuntimeError) as err:
+        fit_mbobs_list_joint(
+            mbobs_list=mbobs_list,
+            fitter_name="blah",
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+    assert "fitter 'blah'" in str(err.value)
 
-#     The fitter is run per object on the bands used for shear. A follow-up method
-#     is called to produce per-band fluxes if the fitter supports it.
 
-#     Parameters
-#     ----------
-#     mbobs_list : a list of ngmix.MultiBandObsList
-#         The observations to use for shear measurement.
-#     fitter_name : str
-#         The name of the fitter to use.
-#     bmask_flags : int
-#         Observations with these bits set in the bmask are not fit.
-#     shear_bands : list of int, optional
-#         A list of indices into each mbobs that denotes which band is used for shear.
-#         Default is to use all bands.
-#     rng : np.random.RandomState
-#         Random state for fitting.
+def test_fit_mbobs_list_joint_empty():
+    mbobs_list = []
+    rng = np.random.RandomState(seed=4235)
+    res = fit_mbobs_list_joint(
+        mbobs_list=mbobs_list,
+        fitter_name="am",
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=None,
+    )
+    assert res is None
 
-#     Returns
-#     -------
-#     res : np.ndarray
-#         A structured array of the fitting results.
-#     """
-#     if fitter_name in ["am", "admom"]:
-#         fit_func = fit_mbobs_admom
-#     else:
-#         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
 
-#     res = []
-#     for i, mbobs in enumerate(mbobs_list):
-#         _res = fit_func(
-#             mbobs=mbobs,
-#             bmask_flags=bmask_flags,
-#             shear_bands=shear_bands,
-#             rng=rng,
-#         )
-#         res.append(_res)
+@pytest.mark.parametrize("shear_bands", [None, [0, 1], [2, 3, 1]])
+@pytest.mark.parametrize("fname", ["am", "admom"])
+def test_fit_mbobs_list_joint_fits_all(shear_bands, fname):
+    mbobs_list = [
+        make_mbobs_sim(45, 4, wcs_var_scale=0),
+        make_mbobs_sim(46, 4, wcs_var_scale=0),
+        make_mbobs_sim(47, 4, wcs_var_scale=0),
+    ]
+    rng = np.random.RandomState(seed=4235)
+    res = fit_mbobs_list_joint(
+        mbobs_list=mbobs_list,
+        fitter_name=fname,
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=shear_bands,
+    )
+    assert res.shape == (3,)
 
-#     if len(res) > 0:
-#         return np.hstack(res)
-#     else:
-#         return None
+    if shear_bands is None:
+        shear_bands = list(range(4))
+    assert np.all(
+        res["shear_bands"]
+        == "".join(str(sb) for sb in sorted(shear_bands))
+    )
+
+    rng = np.random.RandomState(seed=4235)
+    for i in range(3):
+        res1 = fit_mbobs_admom(
+            mbobs=mbobs_list[i],
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=shear_bands,
+        )
+
+        for col in res.dtype.names:
+            np.testing.assert_array_equal(res[i:i+1][col], res1[col])
+
+
+@pytest.mark.parametrize("shear_bands", [None, [0, 1], [2, 3, 1]])
+@pytest.mark.parametrize("fname", ["am", "admom"])
+def test_fit_mbobs_list_joint_seeding(shear_bands, fname):
+    mbobs_list = [
+        make_mbobs_sim(45, 4, wcs_var_scale=0),
+        make_mbobs_sim(46, 4, wcs_var_scale=0),
+        make_mbobs_sim(47, 4, wcs_var_scale=0),
+    ]
+    rng = np.random.RandomState(seed=4235)
+    res = fit_mbobs_list_joint(
+        mbobs_list=mbobs_list,
+        fitter_name=fname,
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=shear_bands,
+    )
+
+    rng1 = np.random.RandomState(seed=4235)
+    res1 = fit_mbobs_list_joint(
+        mbobs_list=mbobs_list,
+        fitter_name=fname,
+        bmask_flags=0,
+        rng=rng1,
+        shear_bands=shear_bands,
+    )
+    for col in res.dtype.names:
+        np.testing.assert_array_equal(res[col], res1[col])
 
 
 # def fit_mbobs_admom(
