@@ -624,8 +624,9 @@ def test_metadetect_flux(model, nband, nshear):
     print("time per:", total_time/ntrial)
 
 
+@pytest.mark.parametrize("det_bands", [None, "shear_bands", "single"])
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "am"])
-def test_metadetect_multiband(model):
+def test_metadetect_multiband(model, det_bands):
     """
     test full metadetection w/ multiple bands
     """
@@ -655,6 +656,11 @@ def test_metadetect_multiband(model):
         ]
         res = metadetect.do_metadetect(
             config, mbobs, rng, shear_band_combs=shear_band_combs,
+            det_band_combs=(
+                det_bands
+                if det_bands != "single"
+                else [[0]] * len(shear_band_combs)
+            ),
         )
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)

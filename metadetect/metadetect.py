@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 def do_metadetect(
     config, mbobs, rng, shear_band_combs=None,
-    color_key_func=None, color_dep_mbobs=None
+    color_key_func=None, color_dep_mbobs=None,
+    det_band_combs=None,
 ):
     """Run metadetect on the multi-band observations.
 
@@ -45,6 +46,10 @@ def do_metadetect(
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    det_band_combs: list of list of int or str, optional
+        If given, the set of bands to use for detection. The default of None uses all
+        of the bands. If the string "shear_bands" is passed, the code uses the bands
+        used for shear.
     color_key_func: function, optional
         If given, a function that computes a color or tuple of colors to key the
         `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs.
@@ -62,6 +67,7 @@ def do_metadetect(
         shear_band_combs=shear_band_combs,
         color_key_func=color_key_func,
         color_dep_mbobs=color_dep_mbobs,
+        det_band_combs=det_band_combs,
     )
     md.go()
     return md.result
@@ -86,6 +92,9 @@ class Metadetect(dict):
              The shear measurement is a moment computed from the inverse variance
              weighted average across the bands.
 
+    am or admom - Use adaptive moments. The shear measurement is compute from fitting
+                  adaptive moments on a coadd of the bands used for shear.
+
     Parameters
     ----------
     config: dict
@@ -106,6 +115,10 @@ class Metadetect(dict):
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    det_band_combs: list of list of int or str, optional
+        If given, the set of bands to use for detection. The default of None uses all
+        of the bands. If the string "shear_bands" is passed, the code uses the bands
+        used for shear.
     color_key_func: function, optional
         If given, a function that computes a color or tuple of colors to key the
         `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs. If
@@ -119,6 +132,7 @@ class Metadetect(dict):
         shear_band_combs=None,
         color_key_func=None,
         color_dep_mbobs=None,
+        det_band_combs=None,
     ):
         self._show = show
 
@@ -146,6 +160,16 @@ class Metadetect(dict):
             ]
 
         self._shear_band_combs = shear_band_combs
+
+        if det_band_combs is None:
+            det_band_combs = (
+                [list(range(self.nband))]
+                * len(self._shear_band_combs)
+            )
+        elif det_band_combs == "shear_bands":
+            det_band_combs = self._shear_band_combs
+
+        self._det_bands_combs = det_band_combs
 
     def _set_config(self, config):
         """
@@ -325,11 +349,13 @@ class Metadetect(dict):
         # this indicates that a measurement should have been possible
         # we may find nothing, but that is a different thing
         all_res = {}
-        for shear_bands in self._shear_band_combs:
+        for shear_bands, det_bands in zip(
+            self._shear_band_combs, self._det_bands_combs
+        ):
             if self.color_key_func is not None and self.color_dep_mbobs is not None:
-                res = self._go_bands_with_color(shear_bands, mcal_res)
+                res = self._go_bands_with_color(shear_bands, mcal_res, det_bands)
             else:
-                res = self._go_bands(shear_bands, mcal_res)
+                res = self._go_bands(shear_bands, mcal_res, det_bands)
             if res is not None:
                 for k, v in res.items():
                     if v is None:
@@ -351,13 +377,14 @@ class Metadetect(dict):
 
         self._result = all_res
 
-    def _go_bands(self, shear_bands, mcal_res):
+    def _go_bands(self, shear_bands, mcal_res, det_bands):
         kdata = self._get_mbobs_data(None, shear_bands)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
             cat, mbobs_list = self._do_detect(
-                shear_mbobs, shear_bands
+                shear_mbobs,
+                det_bands,
             )
             _result[shear_str] = self._measure(
                 mbobs_list=mbobs_list,
@@ -372,7 +399,7 @@ class Metadetect(dict):
 
         return _result
 
-    def _go_bands_with_color(self, shear_bands, mcal_res):
+    def _go_bands_with_color(self, shear_bands, mcal_res, det_bands):
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
             if not self._fitter_is_wavg[0]:
@@ -382,7 +409,7 @@ class Metadetect(dict):
                 )
 
             # we first detect and get color of each detection
-            cat, mbobs_list = self._do_detect(shear_mbobs, shear_bands)
+            cat, mbobs_list = self._do_detect(shear_mbobs, det_bands)
             nocolor_data = fit_mbobs_list_wavg(
                 mbobs_list=mbobs_list,
                 fitter=self._fitters[0],
@@ -669,17 +696,17 @@ class Metadetect(dict):
 
         return newres
 
-    def _do_detect(self, mbobs, shear_bands):
+    def _do_detect(self, mbobs, det_bands):
         """
         use a MEDSifier to run detection
         """
         t0 = time.time()
-        shear_mbobs = ngmix.MultiBandObsList()
-        for band in shear_bands:
-            shear_mbobs.append(mbobs[band])
+        det_mbobs = ngmix.MultiBandObsList()
+        for band in det_bands:
+            det_mbobs.append(mbobs[band])
 
         medsifier = detect.MEDSifier(
-            mbobs=shear_mbobs,
+            mbobs=det_mbobs,
             sx_config=self.get('sx', None),
             meds_config=self['meds'],
             nodet_flags=self['nodet_flags'],
