@@ -171,6 +171,8 @@ def _check_result_array(res, shear, msk, model):
     for col in res[shear].dtype.names:
         if col == "shear_bands":
             assert np.all(res[shear][msk][col] == "012")
+        elif col == "det_bands":
+            assert np.all(res[shear][msk][col] == "012")
         else:
             # admom doesn't make band fluxes
             if model in ["admom", "am"] and "band_flux" in col:
@@ -607,11 +609,15 @@ def test_metadetect_flux(model, nband, nshear):
         for shear_bands in itertools.combinations(list(range(nband)), nshear):
             res = metadetect.do_metadetect(
                 config, mbobs, rng, shear_band_combs=[shear_bands],
+                det_band_combs="shear_bands",
             )
             for shear in ["noshear", "1p", "1m", "2p", "2m"]:
                 assert np.all(res[shear]["mfrac"] == 0)
                 assert np.all(
                     res[shear]["shear_bands"] == "".join("%s" % b for b in shear_bands)
+                )
+                assert np.all(
+                    res[shear]["det_bands"] == "".join("%s" % b for b in shear_bands)
                 )
                 for c in res[shear].dtype.names:
                     if c.endswith("band_flux"):
@@ -654,19 +660,32 @@ def test_metadetect_multiband(model, det_bands):
             list(shear_bands)
             for shear_bands in itertools.combinations(list(range(nband)), 1)
         ]
+        det_band_combs = (
+            det_bands
+            if det_bands != "single"
+            else [[0]] * len(shear_band_combs)
+        )
         res = metadetect.do_metadetect(
             config, mbobs, rng, shear_band_combs=shear_band_combs,
-            det_band_combs=(
-                det_bands
-                if det_bands != "single"
-                else [[0]] * len(shear_band_combs)
-            ),
+            det_band_combs=det_band_combs,
         )
+        if det_band_combs is None:
+            det_band_combs = [list(range(nband))] * len(shear_band_combs)
+        elif det_band_combs == "shear_bands":
+            det_band_combs = shear_band_combs
+
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             assert np.all(res[shear]["mfrac"] == 0)
-            for shear_bands in shear_band_combs:
+            for det_bands, shear_bands in zip(det_band_combs, shear_band_combs):
                 assert np.any(
-                    res[shear]["shear_bands"] == "".join("%s" % b for b in shear_bands)
+                    (
+                        res[shear]["shear_bands"]
+                        == "".join("%s" % b for b in shear_bands)
+                    )
+                    & (
+                        res[shear]["det_bands"]
+                        == "".join("%s" % b for b in det_bands)
+                    )
                 )
                 for c in res[shear].dtype.names:
                     if c.endswith("band_flux"):
@@ -722,7 +741,7 @@ def test_metadetect_with_color_is_same():
         for shear in ["noshear", "1p", "1m", "2p", "2m"]:
             for col in res[shear].dtype.names:
                 assert col in res_color[shear].dtype.names
-                if col == "shear_bands":
+                if col == "shear_bands" or col == "det_bands":
                     assert np.array_equal(
                         res[shear][col],
                         res_color[shear][col],

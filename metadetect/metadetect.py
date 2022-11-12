@@ -16,6 +16,7 @@ from .fitting import (
     fit_mbobs_list_wavg,
     combine_fit_res,
     fit_mbobs_list_joint,
+    MAX_NUM_SHEAR_BANDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -389,6 +390,7 @@ class Metadetect(dict):
             _result[shear_str] = self._measure(
                 mbobs_list=mbobs_list,
                 shear_bands=shear_bands,
+                det_bands=det_bands,
                 cat=cat,
                 shear_str=shear_str,
                 mfrac=kdata["mfrac"],
@@ -449,6 +451,7 @@ class Metadetect(dict):
                 _data = self._measure(
                     mbobs_list=mbobs_list,
                     shear_bands=shear_bands,
+                    det_bands=det_bands,
                     cat=cat[i:i+1],
                     shear_str=shear_str,
                     mfrac=kdata["mfrac"],
@@ -528,7 +531,7 @@ class Metadetect(dict):
 
     def _measure(
         self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,
-        ormask, psf_stats
+        ormask, psf_stats, det_bands,
     ):
 
         t0 = time.time()
@@ -565,13 +568,14 @@ class Metadetect(dict):
                 bmask=bmask,
                 ormask=ormask,
                 psf_stats=psf_stats,
+                det_bands=det_bands,
             )
         logger.info("src measurements took %s seconds", time.time() - t0)
 
         return res
 
     def _add_positions_and_psf(
-        self, *, cat, res, shear_str, mfrac, bmask, ormask, psf_stats
+        self, *, cat, res, shear_str, mfrac, bmask, ormask, psf_stats, det_bands,
     ):
         """
         add catalog positions to the result
@@ -589,6 +593,7 @@ class Metadetect(dict):
             ('ormask_noshear', 'i4'),
             ('mfrac_noshear', 'f4'),
             ('bmask_noshear', 'i4'),
+            ("det_bands", "U%d" % MAX_NUM_SHEAR_BANDS),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -600,6 +605,10 @@ class Metadetect(dict):
             res,
             new_dt,
         )
+
+        assert len(det_bands) <= MAX_NUM_SHEAR_BANDS
+        newres["det_bands"] = "".join("%s" % b for b in sorted(det_bands))
+
         if 'psfrec_flags' not in res.dtype.names:
             newres['psfrec_flags'] = procflags.NO_ATTEMPT
 
