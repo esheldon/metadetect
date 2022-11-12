@@ -169,7 +169,7 @@ class Metadetect(dict):
         elif det_band_combs == "shear_bands":
             det_band_combs = self._shear_band_combs
 
-        self._det_bands_combs = det_band_combs
+        self._det_band_combs = det_band_combs
 
     def _set_config(self, config):
         """
@@ -350,7 +350,7 @@ class Metadetect(dict):
         # we may find nothing, but that is a different thing
         all_res = {}
         for shear_bands, det_bands in zip(
-            self._shear_band_combs, self._det_bands_combs
+            self._shear_band_combs, self._det_band_combs
         ):
             if self.color_key_func is not None and self.color_dep_mbobs is not None:
                 res = self._go_bands_with_color(shear_bands, mcal_res, det_bands)
