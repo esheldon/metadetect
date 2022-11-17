@@ -175,7 +175,7 @@ def _check_result_array(res, shear, msk, model):
             assert np.all(res[shear][msk][col] == "012")
         else:
             # admom doesn't make band fluxes
-            if model in ["admom", "am"] and "band_flux" in col:
+            if model in ["admom", "am", "gauss"] and "band_flux" in col:
                 if col.endswith("band_flux_flags"):
                     assert np.array_equal(
                         res[shear][msk][col],
@@ -204,7 +204,7 @@ def _check_result_array(res, shear, msk, model):
                 )
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect(model):
     """
     test full metadetection
@@ -236,7 +236,7 @@ def test_metadetect(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_uberseg(model):
     """
     test full metadetection
@@ -271,7 +271,7 @@ def test_metadetect_uberseg(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
@@ -315,7 +315,7 @@ def test_metadetect_mfrac(model):
     print("time per:", total_time/ntrial)
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_mfrac_all(model):
     """
     test full metadetection w/ mfrac all 1
@@ -339,7 +339,7 @@ def test_metadetect_mfrac_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_zero_weight_all(model):
     """
     test full metadetection w/ all zero weight
@@ -364,7 +364,7 @@ def test_metadetect_zero_weight_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_zero_weight_some(model):
     """
     test full metadetection w/ some zero weight
@@ -389,7 +389,7 @@ def test_metadetect_zero_weight_some(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_nodet_flags_all(model):
     """
     test full metadetection w/ all bmask all nodet_flags
@@ -415,7 +415,7 @@ def test_metadetect_nodet_flags_all(model):
         assert res is None
 
 
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
 def test_metadetect_nodet_flags_some(model):
     """
     test full metadetection w/ some bmask nodet_flags
@@ -544,6 +544,7 @@ def test_metadetect_fitter_multi_meas():
         {"model": "pgauss", "weight": {"fwhm": 2.0}},
         {"model": "pgauss", "weight": {"fwhm": 2.0, "fwhm_reg": 0.8}},
         {"model": "am"},
+        {"model": "gauss"},
     ]
 
     rng = np.random.RandomState(seed=116)
@@ -559,6 +560,7 @@ def test_metadetect_fitter_multi_meas():
         msk_reg = res[shear][model + "_reg0.80_" + "flags"] == 0
         msk_wmom = res[shear]["wmom_flags"] == 0
         msk_admom = res[shear]["am_flags"] == 0
+        msk_gauss = res[shear]["gauss_flags"] == 0
         assert np.allclose(
             res[shear][model + "_reg0.80" + "_T"][msk_reg],
             res[shear][model + "_T"][msk]
@@ -575,6 +577,7 @@ def test_metadetect_fitter_multi_meas():
             res[shear]["wmom_g"][msk_wmom],
             res[shear][model + "_g"][msk]
         )
+
         # admom can fail so look at intersection
         assert not np.allclose(
             res[shear]["am_T"][msk_admom & msk],
@@ -583,6 +586,16 @@ def test_metadetect_fitter_multi_meas():
         assert not np.allclose(
             res[shear]["am_g"][msk_admom & msk],
             res[shear][model + "_g"][msk_admom & msk]
+        )
+
+        # gauss can fail so look at intersection
+        assert not np.allclose(
+            res[shear]["gauss_T"][msk_gauss & msk],
+            res[shear][model + "_T"][msk_gauss & msk]
+        )
+        assert not np.allclose(
+            res[shear]["gauss_g"][msk_gauss & msk],
+            res[shear][model + "_g"][msk_gauss & msk]
         )
 
 
@@ -631,7 +644,7 @@ def test_metadetect_flux(model, nband, nshear):
 
 
 @pytest.mark.parametrize("det_bands", [None, "shear_bands", "single"])
-@pytest.mark.parametrize("model", ["wmom", "pgauss", "am"])
+@pytest.mark.parametrize("model", ["wmom", "pgauss", "am", "gauss"])
 def test_metadetect_multiband(model, det_bands):
     """
     test full metadetection w/ multiple bands

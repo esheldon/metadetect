@@ -259,12 +259,12 @@ class Metadetect(dict):
                     **kwargs,
                 )
                 is_wavg = True
-            elif model in ["admom", "am"]:
-                # we pass the name to our codes, not an admom object
+            elif model in ["admom", "am", "gauss"]:
+                # we pass the name to our codes
                 fitter = model
                 is_wavg = False
 
-                # we set this defualt for admom
+                # we set this defualt
                 # it may be used to set the masked fraction measurement
                 # aperture
                 if "weight" not in cfg:
