@@ -403,7 +403,7 @@ def test_fit_mbobs_list_joint_empty():
 
 
 @pytest.mark.parametrize("shear_bands", [None, [0, 1], [2, 3, 1]])
-@pytest.mark.parametrize("fname", ["am", "admom", "gauss"])
+@pytest.mark.parametrize("fname", ["am", "admom"])
 def test_fit_mbobs_list_joint_fits_all(shear_bands, fname):
     mbobs_list = [
         make_mbobs_sim(45, 4, wcs_var_scale=0),
