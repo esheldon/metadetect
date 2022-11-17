@@ -117,14 +117,17 @@ def fit_mbobs_gauss(
                 pflags |= obs.psf.meta["result"]["flags"]
                 if obs.psf.meta["result"]["flags"] == 0:
                     msk = obs.weight > 0
-                    _wgt = np.median(obs.weight[msk])
-                    psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
-                    psf_g_sum += (
-                        obs.psf.meta["result"]["g"]
-                        * _wgt
-                        * obs.psf.meta["result"]["T"]
-                    )
-                    wgt_sum += _wgt
+                    if not np.any(msk):
+                        pflags |= procflags.ZERO_WEIGHTS
+                    else:
+                        _wgt = np.median(obs.weight[msk])
+                        psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
+                        psf_g_sum += (
+                            obs.psf.meta["result"]["g"]
+                            * _wgt
+                            * obs.psf.meta["result"]["T"]
+                        )
+                        wgt_sum += _wgt
 
         res["gauss_psf_flags"] = pflags
         if res["gauss_psf_flags"] == 0:
