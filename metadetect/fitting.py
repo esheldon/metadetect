@@ -109,25 +109,27 @@ def fit_mbobs_gauss(
         res["gauss_T_err"] = ores["T_err"]
 
         pflags = 0
-        psf_g = np.zeros(2)
-        psf_T = 0.0
-        wgt = 0.0
+        psf_g_sum = np.zeros(2)
+        psf_T_sum = 0.0
+        wgt_sum = 0.0
         for obslist in shear_mbobs:
             for obs in obslist:
                 pflags |= obs.psf.meta["result"]["flags"]
                 if obs.psf.meta["result"]["flags"] == 0:
                     msk = obs.weight > 0
                     _wgt = np.median(obs.weight[msk])
-                    psf_T += obs.psf.meta["result"]["T"] * _wgt
-                    psf_g += obs.psf.meta["result"]["g"] * _wgt
-                    wgt += _wgt
+                    psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
+                    psf_g_sum += (
+                        obs.psf.meta["result"]["g"]
+                        * _wgt
+                        * obs.psf.meta["result"]["T"]
+                    )
+                    wgt_sum += _wgt
 
         res["gauss_psf_flags"] = pflags
         if res["gauss_psf_flags"] == 0:
-            psf_T /= wgt
-            psf_g /= wgt
-            res["gauss_psf_T"] = psf_T
-            res["gauss_psf_g"] = psf_g
+            res["gauss_psf_T"] = psf_T_sum / wgt_sum
+            res["gauss_psf_g"] = psf_g_sum / psf_T_sum
             res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
 
         res["gauss_flags"] = res["gauss_obj_flags"] | res["gauss_psf_flags"]
