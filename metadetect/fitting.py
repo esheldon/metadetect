@@ -4,14 +4,15 @@ import copy
 import numpy as np
 
 import ngmix
-from ngmix.gexceptions import BootPSFFailure
+from ngmix.gexceptions import (
+    BootPSFFailure, PSFFluxFailure,
+)
 from ngmix.moments import make_mom_result, fwhm_to_T
 from pkg_resources import parse_version
 from ngmix.bootstrap import bootstrap
 from ngmix.runners import Runner, PSFRunner
-from ngmix.guessers import SimplePSFGuesser, TFluxAndPriorGuesser
+from ngmix.guessers import SimplePSFGuesser
 from ngmix.fitting import Fitter
-from ngmix.gaussmom import GaussMom
 
 from .util import Namer
 from . import procflags
@@ -90,11 +91,13 @@ def fit_mbobs_gauss(
                 psf_runner=_make_psf_runner(rng),
                 ignore_failed_psf=False,
             )
-        except Exception as e:
-            if isinstance(e, BootPSFFailure):
-                flags |= procflags.PSF_FAILURE
-            else:
-                flags |= procflags.OBJ_FAILURE
+        except BootPSFFailure:
+            flags |= procflags.PSF_FAILURE
+        except PSFFluxFailure:
+            flags |= procflags.PSF_FAILURE
+        except Exception:
+            flags |= procflags.OBJ_FAILURE
+            flags |= procflags.PSF_FAILURE
 
     if flags == 0:
         res["gauss_obj_flags"] = ores["flags"]
@@ -139,14 +142,7 @@ def _make_psf_runner(rng):
         rng=rng,
         guess_from_moms=True,
     )
-    psf_fitter = Fitter(
-        model="gauss",
-        fit_pars={
-            'maxfev': 2000,
-            'ftol': 1.0e-5,
-            'xtol': 1.0e-5
-        },
-    )
+    psf_fitter = Fitter(model="gauss")
     psf_runner = PSFRunner(
         fitter=psf_fitter,
         guesser=psf_guesser,
@@ -161,28 +157,10 @@ def _make_obj_runner(rng, mbobs):
     scale = obs.jacobian.get_scale()
     prior = _make_ml_prior(rng, scale, nband)
 
-    gm = GaussMom(1.2).go(obs)
-    if gm['flags'] == 0:
-        flux_guess = gm['flux']
-        Tguess = gm['T']
-    else:
-        gm = GaussMom(1.2).go(obs.psf)
-        if gm['flags'] == 0:
-            Tguess = 2 * gm['T']
-        else:
-            Tguess = 2
-        flux_guess = np.sum(obs.image)
-
-    guesser = TFluxAndPriorGuesser(
-        rng=rng, T=Tguess, flux=flux_guess, prior=prior,
-    )
-    fitter = Fitter(
-        model="gauss",
-        fit_pars={
-            'maxfev': 2000,
-            'xtol': 5.0e-5,
-            'ftol': 5.0e-5,
-        },
+    fitter = ngmix.fitting.Fitter(model='gauss', prior=prior)
+    guesser = ngmix.guessers.TPSFFluxGuesser(
+        rng=rng,
+        T=0.25,
         prior=prior,
     )
     runner = Runner(
@@ -206,21 +184,25 @@ def _make_ml_prior(rng, scale, nband):
     nband: int
         number of bands
     """
-    T_range = [-1.0, 1.e3]
-    F_range = [-100.0, 1.e9]
-
     g_prior = ngmix.priors.GPriorBA(sigma=0.3, rng=rng)
     cen_prior = ngmix.priors.CenPrior(
         cen1=0, cen2=0, sigma1=scale, sigma2=scale, rng=rng,
     )
-    T_prior = ngmix.priors.FlatPrior(
-        minval=T_range[0], maxval=T_range[1], rng=rng,
+    T_prior = ngmix.priors.TwoSidedErf(
+        minval=-10.0,
+        width_at_min=0.03,
+        maxval=1.0e6,
+        width_at_max=1.0e5,
+        rng=rng,
     )
-    F_prior = ngmix.priors.FlatPrior(
-        minval=F_range[0], maxval=F_range[1], rng=rng,
+    F_prior = ngmix.priors.TwoSidedErf(
+        minval=-1.0e4,
+        width_at_min=1.0,
+        maxval=1.0e9,
+        width_at_max=0.25e8,
+        rng=rng,
     )
-
-    F_prior = [F_prior]*nband
+    F_prior = [F_prior] * nband
 
     prior = ngmix.joint_prior.PriorSimpleSep(
         cen_prior=cen_prior,
