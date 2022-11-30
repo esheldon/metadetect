@@ -102,11 +102,12 @@ def fit_mbobs_gauss(
     if flags == 0:
         res["gauss_obj_flags"] = ores["flags"]
         res["gauss_T_flags"] = ores["flags"]
-        res["gauss_s2n"] = ores["s2n"]
-        res["gauss_g"] = ores["g"]
-        res["gauss_g_cov"] = ores["g_cov"]
-        res["gauss_T"] = ores["T"]
-        res["gauss_T_err"] = ores["T_err"]
+        if ores["flags"] == 0:
+            res["gauss_s2n"] = ores["s2n"]
+            res["gauss_g"] = ores["g"]
+            res["gauss_g_cov"] = ores["g_cov"]
+            res["gauss_T"] = ores["T"]
+            res["gauss_T_err"] = ores["T_err"]
 
         pflags = 0
         psf_g_sum = np.zeros(2)
@@ -133,7 +134,8 @@ def fit_mbobs_gauss(
         if res["gauss_psf_flags"] == 0:
             res["gauss_psf_T"] = psf_T_sum / wgt_sum
             res["gauss_psf_g"] = psf_g_sum / psf_T_sum
-            res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
+            if ores["flags"] == 0:
+                res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
 
         res["gauss_flags"] = res["gauss_obj_flags"] | res["gauss_psf_flags"]
     else:
@@ -338,31 +340,43 @@ def fit_mbobs_admom(
 
     if flags == 0:
         # then fit the PSF
-        pres = fitter.go(coadd_obs.psf)
-        res["am_psf_flags"] = pres["flags"]
-        if pres["flags"] == 0:
-            res["am_psf_g"] = pres["e"]
-            res["am_psf_T"] = pres["T"]
+        try:
+            pres = fitter.go(coadd_obs.psf)
+        except Exception:
+            flags |= procflags.PSF_FAILURE
+        else:
+            res["am_psf_flags"] = pres["flags"]
+            if pres["flags"] == 0:
+                res["am_psf_g"] = pres["e"]
+                res["am_psf_T"] = pres["T"]
 
+    if flags == 0:
         # then fit the object
         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
-        gres = fitter.go(sym_coadd_obs)
-        res["am_T_flags"] = gres["T_flags"]
-        if gres["T_flags"] == 0:
-            res["am_T"] = gres["T"]
-            res["am_T_err"] = gres["T_err"]
-            if pres["flags"] == 0:
-                res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
+        try:
+            gres = fitter.go(sym_coadd_obs)
+        except Exception:
+            flags |= procflags.OBJ_FAILURE
+            # replace no attempt
+            res["am_flags"] = flags
+        else:
+            res["am_T_flags"] = gres["T_flags"]
+            if gres["T_flags"] == 0:
+                res["am_T"] = gres["T"]
+                res["am_T_err"] = gres["T_err"]
+                if pres["flags"] == 0:
+                    res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
 
-        res["am_obj_flags"] = gres["flags"]
-        if gres["flags"] == 0:
-            res["am_s2n"] = gres["s2n"]
-            res["am_g"] = gres["e"]
-            res["am_g_cov"] = gres["e_cov"]
+            res["am_obj_flags"] = gres["flags"]
+            if gres["flags"] == 0:
+                res["am_s2n"] = gres["s2n"]
+                res["am_g"] = gres["e"]
+                res["am_g_cov"] = gres["e_cov"]
 
-        # this replaces the flags so they are zero and unsets the default of
-        # no attempt
-        res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
+            # this replaces the flags so they are zero and unsets the default of
+            # no attempt
+            res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
+
     else:
         # this branch ensures noattempt remains set
         res["am_flags"] |= flags
