@@ -10,6 +10,13 @@
 
 ### fixed
 
+## 0.10.0 - 2022-12-01
+
+### added
+
+ - Added code to use adaptive moments and Gaussian fits for metadetect.
+
+
 ## 0.9.0 - 2022-08-11
 
 ### added
