@@ -4,9 +4,15 @@ import copy
 import numpy as np
 
 import ngmix
-from ngmix.gexceptions import BootPSFFailure
+from ngmix.gexceptions import (
+    BootPSFFailure, PSFFluxFailure,
+)
 from ngmix.moments import make_mom_result, fwhm_to_T
 from pkg_resources import parse_version
+from ngmix.bootstrap import bootstrap
+from ngmix.runners import Runner, PSFRunner
+from ngmix.guessers import SimplePSFGuesser
+from ngmix.fitting import Fitter
 
 from .util import Namer
 from . import procflags
@@ -22,13 +28,205 @@ else:
     MOMNAME = "sums"
 
 
+def fit_mbobs_gauss(
+    *,
+    mbobs,
+    bmask_flags,
+    rng,
+    shear_bands=None,
+):
+    """Fit a multiband obs using a Gaussian fit.
+
+    Parameters
+    ----------
+    mbobs : ngmix.MultiBandObsList
+        The observation to use for shear measurement.
+    bmask_flags : int
+        Observations with these bits set in the bmask are not fit.
+    rng : np.random.RandomState
+        Random state for fitting.
+    shear_bands : list of int, optional
+        A list of indices into each mbobs that denotes which band is used for shear.
+        Default is to use all bands.
+
+    Returns
+    -------
+    res : np.ndarray
+        A structured array of the fitting results.
+    """
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
+
+    res = get_wavg_output_struct(len(mbobs), "gauss", shear_bands=shear_bands)
+
+    flags = 0
+    for obslist in mbobs:
+        if len(obslist) == 0:
+            flags |= procflags.MISSING_BAND
+            continue
+
+        if len(obslist) > 1:
+            flags |= procflags.INCONSISTENT_BANDS
+            continue
+
+        for obs in obslist:
+            if not np.any(obs.weight > 0):
+                flags |= procflags.ZERO_WEIGHTS
+
+            if np.any((obs.bmask & bmask_flags) != 0):
+                flags |= procflags.EDGE_HIT
+
+    if any(s >= len(mbobs) for s in shear_bands):
+        flags |= procflags.INCONSISTENT_BANDS
+
+    if flags == 0:
+        shear_mbobs = ngmix.MultiBandObsList()
+        for band in shear_bands:
+            shear_mbobs.append(mbobs[band])
+
+        try:
+            ores = bootstrap(
+                shear_mbobs,
+                _make_obj_runner(rng, shear_mbobs),
+                psf_runner=_make_psf_runner(rng),
+                ignore_failed_psf=False,
+            )
+        except BootPSFFailure:
+            flags |= procflags.PSF_FAILURE
+        except PSFFluxFailure:
+            flags |= procflags.PSF_FAILURE
+        except Exception:
+            flags |= procflags.OBJ_FAILURE
+            flags |= procflags.PSF_FAILURE
+
+    if flags == 0:
+        res["gauss_obj_flags"] = ores["flags"]
+        res["gauss_T_flags"] = ores["flags"]
+        if ores["flags"] == 0:
+            res["gauss_s2n"] = ores["s2n"]
+            res["gauss_g"] = ores["g"]
+            res["gauss_g_cov"] = ores["g_cov"]
+            res["gauss_T"] = ores["T"]
+            res["gauss_T_err"] = ores["T_err"]
+
+        pflags = 0
+        psf_g_sum = np.zeros(2)
+        psf_T_sum = 0.0
+        wgt_sum = 0.0
+        for obslist in shear_mbobs:
+            for obs in obslist:
+                pflags |= obs.psf.meta["result"]["flags"]
+                if obs.psf.meta["result"]["flags"] == 0:
+                    msk = obs.weight > 0
+                    if not np.any(msk):
+                        pflags |= procflags.ZERO_WEIGHTS
+                    else:
+                        _wgt = np.median(obs.weight[msk])
+                        psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
+                        psf_g_sum += (
+                            obs.psf.meta["result"]["g"]
+                            * _wgt
+                            * obs.psf.meta["result"]["T"]
+                        )
+                        wgt_sum += _wgt
+
+        res["gauss_psf_flags"] = pflags
+        if res["gauss_psf_flags"] == 0:
+            res["gauss_psf_T"] = psf_T_sum / wgt_sum
+            res["gauss_psf_g"] = psf_g_sum / psf_T_sum
+            if ores["flags"] == 0:
+                res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
+
+        res["gauss_flags"] = res["gauss_obj_flags"] | res["gauss_psf_flags"]
+    else:
+        res["gauss_flags"] |= flags
+
+    return res
+
+
+def _make_psf_runner(rng):
+    psf_guesser = SimplePSFGuesser(
+        rng=rng,
+        guess_from_moms=True,
+    )
+    psf_fitter = Fitter(model="gauss")
+    psf_runner = PSFRunner(
+        fitter=psf_fitter,
+        guesser=psf_guesser,
+        ntry=2,
+    )
+    return psf_runner
+
+
+def _make_obj_runner(rng, mbobs):
+    obs = mbobs[0][0]
+    nband = len(mbobs)
+    scale = obs.jacobian.get_scale()
+    prior = _make_ml_prior(rng, scale, nband)
+
+    fitter = ngmix.fitting.Fitter(model='gauss', prior=prior)
+    guesser = ngmix.guessers.TPSFFluxGuesser(
+        rng=rng,
+        T=0.25,
+        prior=prior,
+    )
+    runner = Runner(
+        fitter=fitter,
+        guesser=guesser,
+        ntry=2,
+    )
+
+    return runner
+
+
+def _make_ml_prior(rng, scale, nband):
+    """make the prior for the fitter.
+
+    Parameters
+    ----------
+    rng: np.random.RandomState
+        The random number generator
+    scale: float
+        Pixel scale
+    nband: int
+        number of bands
+    """
+    g_prior = ngmix.priors.GPriorBA(sigma=0.3, rng=rng)
+    cen_prior = ngmix.priors.CenPrior(
+        cen1=0, cen2=0, sigma1=scale, sigma2=scale, rng=rng,
+    )
+    T_prior = ngmix.priors.TwoSidedErf(
+        minval=-10.0,
+        width_at_min=0.03,
+        maxval=1.0e6,
+        width_at_max=1.0e5,
+        rng=rng,
+    )
+    F_prior = ngmix.priors.TwoSidedErf(
+        minval=-1.0e4,
+        width_at_min=1.0,
+        maxval=1.0e9,
+        width_at_max=0.25e8,
+        rng=rng,
+    )
+    F_prior = [F_prior] * nband
+
+    prior = ngmix.joint_prior.PriorSimpleSep(
+        cen_prior=cen_prior,
+        g_prior=g_prior,
+        T_prior=T_prior,
+        F_prior=F_prior,
+    )
+
+    return prior
+
+
 def fit_mbobs_list_joint(
     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
 
-    The fitter is run per object on the bands used for shear. A follow-up method
-    is called to produce per-band fluxes if the fitter supports it.
+    The fitter is run per object on the bands used for shear.
 
     Parameters
     ----------
@@ -51,6 +249,8 @@ def fit_mbobs_list_joint(
     """
     if fitter_name in ["am", "admom"]:
         fit_func = fit_mbobs_admom
+    elif fitter_name == "gauss":
+        fit_func = fit_mbobs_gauss
     else:
         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
 
@@ -140,31 +340,43 @@ def fit_mbobs_admom(
 
     if flags == 0:
         # then fit the PSF
-        pres = fitter.go(coadd_obs.psf)
-        res["am_psf_flags"] = pres["flags"]
-        if pres["flags"] == 0:
-            res["am_psf_g"] = pres["e"]
-            res["am_psf_T"] = pres["T"]
+        try:
+            pres = fitter.go(coadd_obs.psf)
+        except Exception:
+            flags |= procflags.PSF_FAILURE
+        else:
+            res["am_psf_flags"] = pres["flags"]
+            if pres["flags"] == 0:
+                res["am_psf_g"] = pres["e"]
+                res["am_psf_T"] = pres["T"]
 
+    if flags == 0:
         # then fit the object
         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
-        gres = fitter.go(sym_coadd_obs)
-        res["am_T_flags"] = gres["T_flags"]
-        if gres["T_flags"] == 0:
-            res["am_T"] = gres["T"]
-            res["am_T_err"] = gres["T_err"]
-            if pres["flags"] == 0:
-                res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
+        try:
+            gres = fitter.go(sym_coadd_obs)
+        except Exception:
+            flags |= procflags.OBJ_FAILURE
+            # replace no attempt
+            res["am_flags"] = flags
+        else:
+            res["am_T_flags"] = gres["T_flags"]
+            if gres["T_flags"] == 0:
+                res["am_T"] = gres["T"]
+                res["am_T_err"] = gres["T_err"]
+                if pres["flags"] == 0:
+                    res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
 
-        res["am_obj_flags"] = gres["flags"]
-        if gres["flags"] == 0:
-            res["am_s2n"] = gres["s2n"]
-            res["am_g"] = gres["e"]
-            res["am_g_cov"] = gres["e_cov"]
+            res["am_obj_flags"] = gres["flags"]
+            if gres["flags"] == 0:
+                res["am_s2n"] = gres["s2n"]
+                res["am_g"] = gres["e"]
+                res["am_g_cov"] = gres["e_cov"]
 
-        # this replaces the flags so they are zero and unsets the default of
-        # no attempt
-        res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
+            # this replaces the flags so they are zero and unsets the default of
+            # no attempt
+            res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
+
     else:
         # this branch ensures noattempt remains set
         res["am_flags"] |= flags

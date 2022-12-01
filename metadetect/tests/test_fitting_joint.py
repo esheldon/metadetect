@@ -10,6 +10,7 @@ from ..fitting import (
     make_coadd_obs,
     get_admom_fitter,
     symmetrize_obs_weights,
+    fit_mbobs_gauss,
 )
 from .. import procflags
 
@@ -440,7 +441,7 @@ def test_fit_mbobs_list_joint_fits_all(shear_bands, fname):
 
 
 @pytest.mark.parametrize("shear_bands", [None, [0, 1], [2, 3, 1]])
-@pytest.mark.parametrize("fname", ["am", "admom"])
+@pytest.mark.parametrize("fname", ["am", "admom", "gauss"])
 def test_fit_mbobs_list_joint_seeding(shear_bands, fname):
     mbobs_list = [
         make_mbobs_sim(45, 4, wcs_var_scale=0),
@@ -651,3 +652,135 @@ def test_fit_mbobs_admom_smoke(shear_bands):
             assert np.all(np.isfinite(res[col])), (col, res[col])
         else:
             assert np.all(res[col] == 0), (col, res[col])
+
+
+@pytest.mark.parametrize("shear_bands", [[0], [2], None, [1, 3, 2]])
+def test_fit_mbobs_gauss_smoke(shear_bands):
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+    res = fit_mbobs_gauss(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        shear_bands=shear_bands,
+    )
+
+    # none of these fits should fail
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
+
+    for col in res.dtype.names:
+        if col.endswith("band_flux_flags"):
+            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+        elif "band_flux" in col:
+            assert np.all(np.isnan(res[col])), (col, res[col])
+        elif col == "shear_bands":
+            assert np.all(
+                res[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res[col])
+        elif not col.endswith("flags"):
+            assert np.all(np.isfinite(res[col])), (col, res[col])
+        else:
+            assert np.all(res[col] == 0), (col, res[col])
+
+
+@pytest.mark.parametrize("case", [
+    "missing_band",
+    "too_many_bands",
+    "zero_weights",
+    "edge_hit",
+    "shear_bands",
+])
+def test_fit_mbobs_gauss_input_errors(case):
+    rng = np.random.RandomState(seed=211324)
+    ran_one = False
+
+    if case == "missing_band":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1] = ngmix.ObsList()
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.MISSING_BAND), (
+            procflags.get_procflags_str(res["gauss_flags"][0])
+        )
+    elif case == "too_many_bands":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        ol = ngmix.ObsList()
+        ol.append(mbobs[1][0])
+        ol.append(mbobs[1][0])
+        mbobs[1] = ol
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["gauss_flags"] == (
+            procflags.NO_ATTEMPT | procflags.INCONSISTENT_BANDS
+        ), (
+            procflags.get_procflags_str(res["gauss_flags"][0])
+        )
+    elif case == "zero_weights":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=np.zeros_like(mbobs[1][0].image),
+            ignore_zero_weight=False,
+            bmask=mbobs[1][0].bmask,
+        )
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.ZERO_WEIGHTS), (
+            procflags.get_procflags_str(res["gauss_flags"][0])
+        )
+    elif case == "edge_hit":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=mbobs[1][0].weight,
+            bmask=mbobs[1][0].bmask + 10,
+        )
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=10,
+            rng=rng,
+            shear_bands=None,
+        )
+        ran_one = True
+        assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.EDGE_HIT), (
+            procflags.get_procflags_str(res["gauss_flags"][0])
+        )
+    elif case == "shear_bands":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=[1, 2, 10],
+        )
+        ran_one = True
+        assert res["gauss_flags"] == (
+            procflags.NO_ATTEMPT | procflags.INCONSISTENT_BANDS
+        ), (
+            procflags.get_procflags_str(res["gauss_flags"][0])
+        )
+    else:
+        assert False, f"case {case} not found!"
+
+    assert ran_one, "No tests ran!"
