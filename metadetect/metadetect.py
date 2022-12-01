@@ -12,14 +12,20 @@ from . import procflags
 from . import shearpos
 from .util import Namer
 from .mfrac import measure_mfrac
-from .fitting import fit_mbobs_list_wavg, combine_fit_res
+from .fitting import (
+    fit_mbobs_list_wavg,
+    combine_fit_res,
+    fit_mbobs_list_joint,
+    MAX_NUM_SHEAR_BANDS,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def do_metadetect(
     config, mbobs, rng, shear_band_combs=None,
-    color_key_func=None, color_dep_mbobs=None
+    color_key_func=None, color_dep_mbobs=None,
+    det_band_combs=None,
 ):
     """Run metadetect on the multi-band observations.
 
@@ -41,6 +47,10 @@ def do_metadetect(
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    det_band_combs: list of list of int or str, optional
+        If given, the set of bands to use for detection. The default of None uses all
+        of the bands. If the string "shear_bands" is passed, the code uses the bands
+        used for shear.
     color_key_func: function, optional
         If given, a function that computes a color or tuple of colors to key the
         `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs.
@@ -58,6 +68,7 @@ def do_metadetect(
         shear_band_combs=shear_band_combs,
         color_key_func=color_key_func,
         color_dep_mbobs=color_dep_mbobs,
+        det_band_combs=det_band_combs,
     )
     md.go()
     return md.result
@@ -82,6 +93,9 @@ class Metadetect(dict):
              The shear measurement is a moment computed from the inverse variance
              weighted average across the bands.
 
+    am or admom - Use adaptive moments. The shear measurement is compute from fitting
+                  adaptive moments on a coadd of the bands used for shear.
+
     Parameters
     ----------
     config: dict
@@ -102,6 +116,10 @@ class Metadetect(dict):
         for shear measurement. Shear measurements will be made for each element of the
         outer list. If None, then shear measurements will be made for all entries in
         mbobs.
+    det_band_combs: list of list of int or str, optional
+        If given, the set of bands to use for detection. The default of None uses all
+        of the bands. If the string "shear_bands" is passed, the code uses the bands
+        used for shear.
     color_key_func: function, optional
         If given, a function that computes a color or tuple of colors to key the
         `color_dep_mbobs` dictionary given an input set of fluxes from the mbobs. If
@@ -115,6 +133,7 @@ class Metadetect(dict):
         shear_band_combs=None,
         color_key_func=None,
         color_dep_mbobs=None,
+        det_band_combs=None,
     ):
         self._show = show
 
@@ -142,6 +161,16 @@ class Metadetect(dict):
             ]
 
         self._shear_band_combs = shear_band_combs
+
+        if det_band_combs is None:
+            det_band_combs = (
+                [list(range(self.nband))]
+                * len(self._shear_band_combs)
+            )
+        elif det_band_combs == "shear_bands":
+            det_band_combs = self._shear_band_combs
+
+        self._det_band_combs = det_band_combs
 
     def _set_config(self, config):
         """
@@ -210,33 +239,48 @@ class Metadetect(dict):
         def _get_fitter(cfg):
             model = cfg.get('model', 'wmom')
 
-            if "fwhm_smooth" in cfg["weight"]:
+            if "fwhm_smooth" in cfg.get("weight", {}):
                 kwargs = {"fwhm_smooth": cfg["weight"]["fwhm_smooth"]}
             else:
                 kwargs = {}
 
             if model == 'wmom':
                 fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
+                is_wavg = True
             elif model == 'ksigma':
                 fitter = ngmix.prepsfmom.KSigmaMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
+                is_wavg = True
             elif model == "pgauss":
                 fitter = ngmix.prepsfmom.PGaussMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
+                is_wavg = True
+            elif model in ["admom", "am"]:
+                # we pass the name to our codes, not an admom object
+                fitter = model
+                is_wavg = False
+
+                # we set this defualt for admom
+                # it may be used to set the masked fraction measurement
+                # aperture
+                if "weight" not in cfg:
+                    cfg["weight"] = {}
+                if "fwhm" not in cfg["weight"]:
+                    cfg["weight"]["fwhm"] = 1.2
             else:
                 raise ValueError("bad model: '%s'" % model)
 
-            if "fwhm_reg" in cfg["weight"]:
+            if "fwhm_reg" in cfg.get("weight", {}):
                 fwhm_reg = cfg["weight"]["fwhm_reg"]
                 fitter.kind = fitter.kind + "_reg%0.2f" % cfg["weight"]["fwhm_reg"]
             else:
                 fwhm_reg = 0
 
-            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg
+            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg, is_wavg
 
         if "fitters" in self and ("model" in self or "weight" in self):
             raise RuntimeError("You can only specify one of fitters or model+weight!")
@@ -245,19 +289,23 @@ class Metadetect(dict):
             fitters = []
             fwhms = []
             fwhm_regs = []
+            fitter_is_wavg = []
             for fitter_cfg in self["fitters"]:
-                _, fitter, fwhm, fwhm_reg = _get_fitter(fitter_cfg)
+                _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(fitter_cfg)
                 fitters.append(fitter)
                 fwhms.append(fwhm)
                 fwhm_regs.append(fwhm_reg)
+                fitter_is_wavg.append(is_wavg)
             self._fitters = fitters
             self._fwhms = fwhms
             self._fwhm_regs = fwhm_regs
+            self._fitter_is_wavg = fitter_is_wavg
         else:
-            model, fitter, fwhm, fwhm_reg = _get_fitter(self)
+            _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(self)
             self._fitters = [fitter]
             self._fwhms = [fwhm]
             self._fwhm_regs = [fwhm_reg]
+            self._fitter_is_wavg = [is_wavg]
 
     @property
     def result(self):
@@ -302,11 +350,13 @@ class Metadetect(dict):
         # this indicates that a measurement should have been possible
         # we may find nothing, but that is a different thing
         all_res = {}
-        for shear_bands in self._shear_band_combs:
+        for shear_bands, det_bands in zip(
+            self._shear_band_combs, self._det_band_combs
+        ):
             if self.color_key_func is not None and self.color_dep_mbobs is not None:
-                res = self._go_bands_with_color(shear_bands, mcal_res)
+                res = self._go_bands_with_color(shear_bands, mcal_res, det_bands)
             else:
-                res = self._go_bands(shear_bands, mcal_res)
+                res = self._go_bands(shear_bands, mcal_res, det_bands)
             if res is not None:
                 for k, v in res.items():
                     if v is None:
@@ -328,15 +378,19 @@ class Metadetect(dict):
 
         self._result = all_res
 
-    def _go_bands(self, shear_bands, mcal_res):
+    def _go_bands(self, shear_bands, mcal_res, det_bands):
         kdata = self._get_mbobs_data(None, shear_bands)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
-            cat, mbobs_list = self._do_detect(shear_mbobs)
+            cat, mbobs_list = self._do_detect(
+                shear_mbobs,
+                det_bands,
+            )
             _result[shear_str] = self._measure(
                 mbobs_list=mbobs_list,
                 shear_bands=shear_bands,
+                det_bands=det_bands,
                 cat=cat,
                 shear_str=shear_str,
                 mfrac=kdata["mfrac"],
@@ -347,11 +401,17 @@ class Metadetect(dict):
 
         return _result
 
-    def _go_bands_with_color(self, shear_bands, mcal_res):
+    def _go_bands_with_color(self, shear_bands, mcal_res, det_bands):
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
+            if not self._fitter_is_wavg[0]:
+                raise RuntimeError(
+                    "Color-dependent metadetect can only run if first"
+                    " fitter is one of wmom, pgauss, or ksigma!"
+                )
+
             # we first detect and get color of each detection
-            cat, mbobs_list = self._do_detect(shear_mbobs)
+            cat, mbobs_list = self._do_detect(shear_mbobs, det_bands)
             nocolor_data = fit_mbobs_list_wavg(
                 mbobs_list=mbobs_list,
                 fitter=self._fitters[0],
@@ -384,11 +444,14 @@ class Metadetect(dict):
                     cat['box_size'][i:i+1],
                 )
                 mbm = _medsifier.get_multiband_meds()
-                mbobs_list = mbm.get_mbobs_list()
+                mbobs_list = mbm.get_mbobs_list(
+                    weight_type=self["meds"].get("weight_type", "weight"),
+                )
 
                 _data = self._measure(
                     mbobs_list=mbobs_list,
                     shear_bands=shear_bands,
+                    det_bands=det_bands,
                     cat=cat[i:i+1],
                     shear_str=shear_str,
                     mfrac=kdata["mfrac"],
@@ -468,19 +531,30 @@ class Metadetect(dict):
 
     def _measure(
         self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,
-        ormask, psf_stats
+        ormask, psf_stats, det_bands,
     ):
 
         t0 = time.time()
         all_res = []
-        for fitter, fwhm_reg in zip(self._fitters, self._fwhm_regs):
-            res = fit_mbobs_list_wavg(
-                mbobs_list=mbobs_list,
-                fitter=fitter,
-                shear_bands=shear_bands,
-                bmask_flags=self.get("bmask_flags", 0),
-                fwhm_reg=fwhm_reg,
-            )
+        for fitter, fwhm_reg, is_wavg in zip(
+            self._fitters, self._fwhm_regs, self._fitter_is_wavg
+        ):
+            if is_wavg:
+                res = fit_mbobs_list_wavg(
+                    mbobs_list=mbobs_list,
+                    fitter=fitter,
+                    shear_bands=shear_bands,
+                    bmask_flags=self.get("bmask_flags", 0),
+                    fwhm_reg=fwhm_reg,
+                )
+            else:
+                res = fit_mbobs_list_joint(
+                    mbobs_list=mbobs_list,
+                    fitter_name=fitter,
+                    shear_bands=shear_bands,
+                    bmask_flags=self.get("bmask_flags", 0),
+                    rng=self.rng,
+                )
             all_res.append(res)
 
         res = combine_fit_res(all_res)
@@ -494,13 +568,14 @@ class Metadetect(dict):
                 bmask=bmask,
                 ormask=ormask,
                 psf_stats=psf_stats,
+                det_bands=det_bands,
             )
         logger.info("src measurements took %s seconds", time.time() - t0)
 
         return res
 
     def _add_positions_and_psf(
-        self, *, cat, res, shear_str, mfrac, bmask, ormask, psf_stats
+        self, *, cat, res, shear_str, mfrac, bmask, ormask, psf_stats, det_bands,
     ):
         """
         add catalog positions to the result
@@ -518,6 +593,7 @@ class Metadetect(dict):
             ('ormask_noshear', 'i4'),
             ('mfrac_noshear', 'f4'),
             ('bmask_noshear', 'i4'),
+            ("det_bands", "U%d" % MAX_NUM_SHEAR_BANDS),
         ]
         if 'psfrec_flags' not in res.dtype.names:
             new_dt += [
@@ -529,6 +605,10 @@ class Metadetect(dict):
             res,
             new_dt,
         )
+
+        assert len(det_bands) <= MAX_NUM_SHEAR_BANDS
+        newres["det_bands"] = "".join("%s" % b for b in sorted(det_bands))
+
         if 'psfrec_flags' not in res.dtype.names:
             newres['psfrec_flags'] = procflags.NO_ATTEMPT
 
@@ -625,13 +705,17 @@ class Metadetect(dict):
 
         return newres
 
-    def _do_detect(self, mbobs):
+    def _do_detect(self, mbobs, det_bands):
         """
         use a MEDSifier to run detection
         """
         t0 = time.time()
+        det_mbobs = ngmix.MultiBandObsList()
+        for band in det_bands:
+            det_mbobs.append(mbobs[band])
+
         medsifier = detect.MEDSifier(
-            mbobs=mbobs,
+            mbobs=det_mbobs,
             sx_config=self.get('sx', None),
             meds_config=self['meds'],
             nodet_flags=self['nodet_flags'],
@@ -646,9 +730,13 @@ class Metadetect(dict):
             medsifier.cat['x'],
             medsifier.cat['y'],
             medsifier.cat['box_size'],
+            seg=medsifier.seg,
+            number=medsifier.cat['number'],
         )
         mbm = all_medsifier.get_multiband_meds()
-        mbobs_list = mbm.get_mbobs_list()
+        mbobs_list = mbm.get_mbobs_list(
+            weight_type=self["meds"].get("weight_type", "weight"),
+        )
         logger.info("detect took %s seconds", time.time() - t0)
 
         return medsifier.cat, mbobs_list

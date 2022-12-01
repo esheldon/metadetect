@@ -29,7 +29,10 @@ NAME_MAP[BAD_BBOX] = "problem making bounding box"
 NAME_MAP[ZERO_WEIGHTS] = "weights all zero"
 NAME_MAP[NO_DATA] = "no data"
 NAME_MAP[MISSING_BAND] = "missing data in one or more bands"
-NAME_MAP[INCONSISTENT_BANDS] = "# of bands for PSF vs shear vs flux is not correct"
+NAME_MAP[INCONSISTENT_BANDS] = (
+    "# of bands for PSF vs shear vs flux is not correct or "
+    "there was a stamp coadding issue"
+)
 NAME_MAP[CENTROID_FAILURE] = "finding the centroid failed"
 NAME_MAP[DEBLEND_FAILURE] = "The deblending failed"
 

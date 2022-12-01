@@ -22,6 +22,319 @@ else:
     MOMNAME = "sums"
 
 
+def fit_mbobs_list_joint(
+    *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
+):
+    """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
+
+    The fitter is run per object on the bands used for shear. A follow-up method
+    is called to produce per-band fluxes if the fitter supports it.
+
+    Parameters
+    ----------
+    mbobs_list : a list of ngmix.MultiBandObsList
+        The observations to use for shear measurement.
+    fitter_name : str
+        The name of the fitter to use.
+    bmask_flags : int
+        Observations with these bits set in the bmask are not fit.
+    shear_bands : list of int, optional
+        A list of indices into each mbobs that denotes which band is used for shear.
+        Default is to use all bands.
+    rng : np.random.RandomState
+        Random state for fitting.
+
+    Returns
+    -------
+    res : np.ndarray
+        A structured array of the fitting results.
+    """
+    if fitter_name in ["am", "admom"]:
+        fit_func = fit_mbobs_admom
+    else:
+        raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
+
+    res = []
+    for i, mbobs in enumerate(mbobs_list):
+        _res = fit_func(
+            mbobs=mbobs,
+            bmask_flags=bmask_flags,
+            shear_bands=shear_bands,
+            rng=rng,
+        )
+        res.append(_res)
+
+    if len(res) > 0:
+        return np.hstack(res)
+    else:
+        return None
+
+
+def get_admom_fitter(rng):
+    fitter = ngmix.admom.AdmomFitter(rng=rng)
+    guesser = ngmix.guessers.GMixPSFGuesser(
+        rng=rng, ngauss=1, guess_from_moms=True,
+    )
+    return ngmix.runners.Runner(
+        fitter=fitter, guesser=guesser,
+        ntry=2,
+    )
+
+
+def fit_mbobs_admom(
+    *,
+    mbobs,
+    bmask_flags,
+    rng,
+    shear_bands=None,
+):
+    """Fit a multiband obs using adaptive moments.
+
+    This function forms a coadd of the shear bands and then runs
+    adaptive moments on the coadd.
+
+    Parameters
+    ----------
+    mbobs : ngmix.MultiBandObsList
+        The observation to use for shear measurement.
+    bmask_flags : int
+        Observations with these bits set in the bmask are not fit.
+    rng : np.random.RandomState
+        Random state for fitting.
+    shear_bands : list of int, optional
+        A list of indices into each mbobs that denotes which band is used for shear.
+        Default is to use all bands.
+
+    Returns
+    -------
+    res : np.ndarray
+        A structured array of the fitting results.
+    """
+    fitter = get_admom_fitter(rng)
+    nband = len(mbobs)
+    if shear_bands is None:
+        shear_bands = list(range(len(mbobs)))
+    res = get_wavg_output_struct(nband, "am", shear_bands=shear_bands)
+
+    flags = 0
+    for obslist in mbobs:
+        if len(obslist) == 0:
+            flags |= procflags.MISSING_BAND
+            continue
+
+        if len(obslist) > 1:
+            flags |= procflags.INCONSISTENT_BANDS
+            continue
+
+        for obs in obslist:
+            if not np.any(obs.weight > 0):
+                flags |= procflags.ZERO_WEIGHTS
+
+            if np.any((obs.bmask & bmask_flags) != 0):
+                flags |= procflags.EDGE_HIT
+
+    if flags == 0:
+        # first we coadd the shear bands
+        coadd_obs, coadd_flags = make_coadd_obs(mbobs, shear_bands=shear_bands)
+        flags |= coadd_flags
+
+    if flags == 0:
+        # then fit the PSF
+        pres = fitter.go(coadd_obs.psf)
+        res["am_psf_flags"] = pres["flags"]
+        if pres["flags"] == 0:
+            res["am_psf_g"] = pres["e"]
+            res["am_psf_T"] = pres["T"]
+
+        # then fit the object
+        sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
+        gres = fitter.go(sym_coadd_obs)
+        res["am_T_flags"] = gres["T_flags"]
+        if gres["T_flags"] == 0:
+            res["am_T"] = gres["T"]
+            res["am_T_err"] = gres["T_err"]
+            if pres["flags"] == 0:
+                res["am_T_ratio"] = res["am_T"] / res["am_psf_T"]
+
+        res["am_obj_flags"] = gres["flags"]
+        if gres["flags"] == 0:
+            res["am_s2n"] = gres["s2n"]
+            res["am_g"] = gres["e"]
+            res["am_g_cov"] = gres["e_cov"]
+
+        # this replaces the flags so they are zero and unsets the default of
+        # no attempt
+        res["am_flags"] = (res["am_psf_flags"] | res["am_obj_flags"])
+    else:
+        # this branch ensures noattempt remains set
+        res["am_flags"] |= flags
+
+    return res
+
+
+def make_coadd_obs(mbobs, shear_bands=None):
+    """Coadd the observations in an ngmix mbobs assuming they all have the same
+    shaped images and same Jacobians.
+
+    Parameters
+    ----------
+    mbobs : ngmix.MultibandObsList
+        The observation to use for shear measurement.
+    shear_bands : list of int, optional
+        A list of indices into each mbobs that denotes which band is used for shear.
+        Default is to use all bands.
+
+    Returns
+    -------
+    coadd_obs : ngmix.Observation
+        The coadded observation with the PSF set.
+    flags : int
+        Any flags for errors in making the coadd obs.
+    """
+    nbands = len(mbobs)
+    flags = 0
+    if shear_bands is None:
+        shear_bands = list(range(nbands))
+
+    # if we have one input band, then simply
+    # return if if the data is consistent
+    if nbands == 1:
+        if shear_bands[0] == 0:
+            return mbobs[0][0], flags
+        else:
+            flags |= procflags.INCONSISTENT_BANDS
+            return None, flags
+
+    # if we ask for a single band for shear, then return that band
+    # if the data is consistent
+    if len(shear_bands) == 1:
+        if shear_bands[0] < nbands:
+            return mbobs[shear_bands[0]][0], flags
+        else:
+            flags |= procflags.INCONSISTENT_BANDS
+            return None, flags
+
+    # at this point, we are coadding more than one band
+    # let's check for consistent data
+
+    # we can't use shear bands we do not have
+    if any(s >= nbands for s in shear_bands):
+        flags |= procflags.INCONSISTENT_BANDS
+        return None, flags
+
+    # all of the image shapes and jacobians have to be the same
+    fobs = mbobs[shear_bands[0]][0]
+    for shear_band in shear_bands[1:]:
+        obs = mbobs[shear_band][0]
+        if (
+            (repr(fobs.jacobian) != repr(obs.jacobian))
+            or (fobs.image.shape != obs.image.shape)
+            or (not fobs.has_psf())
+            or (not obs.has_psf())
+            or (repr(fobs.psf.jacobian) != repr(obs.psf.jacobian))
+            or (fobs.psf.image.shape != obs.psf.image.shape)
+        ):
+            flags |= procflags.INCONSISTENT_BANDS
+            return None, flags
+
+    # if we get here, we need to coadd
+    # first make the weights
+    wgts = np.zeros(len(shear_bands))
+    for i, band in enumerate(shear_bands):
+        obs = mbobs[band][0]
+        msk = obs.weight > 0
+        if not np.any(msk):
+            flags |= procflags.ZERO_WEIGHTS
+            # let's not waste time since we are missing a band
+            return None, flags
+        else:
+            wgts[i] = np.median(obs.weight[msk])
+    wgts /= np.sum(wgts)
+
+    # finish coadding
+    image = np.zeros_like(mbobs[shear_bands[0]][0].image)
+    weight = np.zeros_like(mbobs[shear_bands[0]][0].weight)
+    mfrac = np.zeros_like(mbobs[shear_bands[0]][0].image)
+    nmfrac = 0
+    noise = np.zeros_like(mbobs[shear_bands[0]][0].image)
+    nnoise = 0
+    bmask = np.zeros_like(mbobs[shear_bands[0]][0].image, dtype=np.int32)
+    nbmask = 0
+    ormask = np.zeros_like(mbobs[shear_bands[0]][0].image, dtype=np.int32)
+    normask = 0
+    meta = {}
+    psf_meta = {}
+    psf_image = np.zeros_like(mbobs[shear_bands[0]][0].psf.image)
+
+    for i, shear_band in enumerate(shear_bands):
+        obs = mbobs[shear_band][0]
+        wgt = wgts[i]
+
+        meta.update(obs.meta)
+        meta.update(mbobs[shear_band].meta)
+        psf_meta.update(obs.psf.meta)
+
+        psf_image += (wgt * obs.psf.image)
+
+        image += (wgt * obs.image)
+        weight += (wgt**2 / obs.weight)
+
+        if obs.has_mfrac():
+            mfrac += (wgt * obs.mfrac)
+            nmfrac += 1
+
+        if obs.has_noise():
+            noise += (wgt * obs.noise)
+            nnoise += 1
+
+        if obs.has_bmask():
+            bmask |= obs.bmask
+            nbmask += 1
+
+        if obs.has_ormask():
+            ormask |= obs.ormask
+            normask += 1
+
+    weight = 1.0 / weight
+    msk = ~np.isfinite(weight)
+    if np.any(msk):
+        weight[msk] = 0
+
+    if np.all(weight == 0):
+        flags |= procflags.ZERO_WEIGHTS
+        return None, flags
+
+    for var in [nmfrac, nnoise, nbmask, normask]:
+        if var not in [0, len(shear_bands)]:
+            flags |= procflags.INCONSISTENT_BANDS
+            return None, flags
+
+    meta.update(mbobs.meta)
+
+    kwargs = {
+        "weight": weight,
+        "jacobian": mbobs[shear_bands[0]][0].jacobian,
+        "psf": ngmix.Observation(
+            psf_image,
+            jacobian=mbobs[shear_bands[0]][0].psf.jacobian,
+            meta=psf_meta,
+        ),
+        "meta": meta,
+    }
+    if nmfrac > 0:
+        kwargs["mfrac"] = mfrac
+    if nnoise > 0:
+        kwargs["noise"] = noise
+    if nbmask > 0:
+        kwargs["bmask"] = bmask
+    if normask > 0:
+        kwargs["ormask"] = ormask
+
+    cobs = ngmix.Observation(image, **kwargs)
+
+    return cobs, flags
+
+
 def get_coellip_ngauss(name):
     ngauss = int(name[7:])
     return ngauss
