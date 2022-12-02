@@ -34,6 +34,8 @@ def fit_mbobs_gauss(
     bmask_flags,
     rng,
     shear_bands=None,
+    obj_runner=None,
+    psf_runner=None,
 ):
     """Fit a multiband obs using a Gaussian fit.
 
@@ -87,9 +89,13 @@ def fit_mbobs_gauss(
         try:
             ores = bootstrap(
                 shear_mbobs,
-                _make_obj_runner(rng, shear_mbobs),
-                psf_runner=_make_psf_runner(rng),
-                ignore_failed_psf=False,
+                get_gauss_obj_runner(rng, shear_mbobs)
+                if obj_runner is None else obj_runner,
+                psf_runner=(
+                    get_gauss_psf_runner(rng)
+                    if psf_runner is None
+                    else psf_runner
+                ),
             )
         except BootPSFFailure:
             flags |= procflags.PSF_FAILURE
@@ -144,7 +150,7 @@ def fit_mbobs_gauss(
     return res
 
 
-def _make_psf_runner(rng):
+def get_gauss_psf_runner(rng):
     psf_guesser = SimplePSFGuesser(
         rng=rng,
         guess_from_moms=True,
@@ -158,7 +164,7 @@ def _make_psf_runner(rng):
     return psf_runner
 
 
-def _make_obj_runner(rng, mbobs):
+def get_gauss_obj_runner(rng, mbobs):
     obs = mbobs[0][0]
     nband = len(mbobs)
     scale = obs.jacobian.get_scale()
@@ -249,8 +255,13 @@ def fit_mbobs_list_joint(
     """
     if fitter_name in ["am", "admom"]:
         fit_func = fit_mbobs_admom
+        kwargs = {"runner": get_admom_runner(rng)}
     elif fitter_name == "gauss":
         fit_func = fit_mbobs_gauss
+        kwargs = {
+            "obj_runner": get_gauss_obj_runner(rng, mbobs_list[0]),
+            "psf_runner": get_gauss_psf_runner(rng),
+        }
     else:
         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
 
@@ -261,6 +272,7 @@ def fit_mbobs_list_joint(
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
             rng=rng,
+            **kwargs,
         )
         res.append(_res)
 
@@ -270,7 +282,7 @@ def fit_mbobs_list_joint(
         return None
 
 
-def get_admom_fitter(rng):
+def get_admom_runner(rng):
     fitter = ngmix.admom.AdmomFitter(rng=rng)
     guesser = ngmix.guessers.GMixPSFGuesser(
         rng=rng, ngauss=1, guess_from_moms=True,
@@ -287,6 +299,7 @@ def fit_mbobs_admom(
     bmask_flags,
     rng,
     shear_bands=None,
+    runner=None,
 ):
     """Fit a multiband obs using adaptive moments.
 
@@ -304,13 +317,16 @@ def fit_mbobs_admom(
     shear_bands : list of int, optional
         A list of indices into each mbobs that denotes which band is used for shear.
         Default is to use all bands.
+    runner : ngmix.runners.Runner, optional
+        If not None, the result of `get_admom_runner` is suggested. If None,
+        `get_admom_runner` is called.
 
     Returns
     -------
     res : np.ndarray
         A structured array of the fitting results.
     """
-    fitter = get_admom_fitter(rng)
+    runner = get_admom_runner(rng) if runner is None else runner
     nband = len(mbobs)
     if shear_bands is None:
         shear_bands = list(range(len(mbobs)))
@@ -341,7 +357,7 @@ def fit_mbobs_admom(
     if flags == 0:
         # then fit the PSF
         try:
-            pres = fitter.go(coadd_obs.psf)
+            pres = runner.go(coadd_obs.psf)
         except Exception:
             flags |= procflags.PSF_FAILURE
         else:
@@ -354,7 +370,7 @@ def fit_mbobs_admom(
         # then fit the object
         sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
         try:
-            gres = fitter.go(sym_coadd_obs)
+            gres = runner.go(sym_coadd_obs)
         except Exception:
             flags |= procflags.OBJ_FAILURE
             # replace no attempt
