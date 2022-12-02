@@ -89,7 +89,11 @@ def fit_mbobs_gauss(
         try:
             ores = bootstrap(
                 shear_mbobs,
-                get_gauss_obj_runner(rng, shear_mbobs)
+                get_gauss_obj_runner(
+                    rng,
+                    len(shear_mbobs),
+                    shear_mbobs[0][0].jacobian.get_scale()
+                )
                 if obj_runner is None else obj_runner,
                 psf_runner=(
                     get_gauss_psf_runner(rng)
@@ -164,10 +168,7 @@ def get_gauss_psf_runner(rng):
     return psf_runner
 
 
-def get_gauss_obj_runner(rng, mbobs):
-    obs = mbobs[0][0]
-    nband = len(mbobs)
-    scale = obs.jacobian.get_scale()
+def get_gauss_obj_runner(rng, nband, scale):
     prior = _make_ml_prior(rng, scale, nband)
 
     fitter = ngmix.fitting.Fitter(model='gauss', prior=prior)
@@ -258,15 +259,36 @@ def fit_mbobs_list_joint(
         kwargs = {"runner": get_admom_runner(rng)}
     elif fitter_name == "gauss":
         fit_func = fit_mbobs_gauss
-        kwargs = {
-            "obj_runner": get_gauss_obj_runner(rng, mbobs_list[0]),
-            "psf_runner": get_gauss_psf_runner(rng),
-        }
+        kwargs = None
     else:
         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
 
     res = []
     for i, mbobs in enumerate(mbobs_list):
+
+        # make the kwargs once here assuming we have data
+        # for some fitters
+        if kwargs is None:
+            if fitter_name == "gauss":
+                nband = (
+                    len(shear_bands)
+                    if shear_bands is not None
+                    else len(mbobs)
+                )
+                scale = None
+                for obsl in mbobs:
+                    for obs in obsl:
+                        scale = obs.jacobian.get_scale()
+                        break
+                    if scale is not None:
+                        break
+                if scale is not None:
+                    kwargs = {
+                        "obj_runner": get_gauss_obj_runner(rng, nband, scale),
+                        "psf_runner": get_gauss_psf_runner(rng),
+
+                    }
+
         _res = fit_func(
             mbobs=mbobs,
             bmask_flags=bmask_flags,
