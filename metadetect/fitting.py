@@ -291,7 +291,6 @@ def fit_mbobs_list_joint(
                     kwargs = {
                         "obj_runner": get_gauss_obj_runner(rng, nband, scale),
                         "psf_runner": get_gauss_psf_runner(rng),
-
                     }
 
         if kwargs is None:
