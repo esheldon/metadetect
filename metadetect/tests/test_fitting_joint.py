@@ -8,7 +8,7 @@ from ..fitting import (
     fit_mbobs_admom,
     fit_mbobs_list_joint,
     make_coadd_obs,
-    get_admom_fitter,
+    get_admom_runner,
     symmetrize_obs_weights,
     fit_mbobs_gauss,
 )
@@ -598,7 +598,7 @@ def test_fit_mbobs_admom_oneband(shear_bands):
     )
 
     rng = np.random.RandomState(seed=211324)
-    fitter = get_admom_fitter(rng)
+    fitter = get_admom_runner(rng)
     pres = fitter.go(mbobs[shear_bands[0]][0].psf)
     np.testing.assert_allclose(
         res["am_psf_T"][0], pres["T"]
