@@ -271,7 +271,6 @@ def fit_mbobs_list_joint(
 
     res = []
     for i, mbobs in enumerate(mbobs_list):
-
         # make the kwargs once here assuming we have data
         # for some fitters
         if kwargs is None:
@@ -295,12 +294,17 @@ def fit_mbobs_list_joint(
 
                     }
 
+        if kwargs is None:
+            _kwargs = {}
+        else:
+            _kwargs = kwargs
+
         _res = fit_func(
             mbobs=mbobs,
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
             rng=rng,
-            **kwargs,
+            **_kwargs,
         )
         res.append(_res)
 
