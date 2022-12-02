@@ -50,6 +50,12 @@ def fit_mbobs_gauss(
     shear_bands : list of int, optional
         A list of indices into each mbobs that denotes which band is used for shear.
         Default is to use all bands.
+    obj_runner : ngmix.runners.Runner, optional
+        If not None, the result of `get_gauss_obj_runner` is suggested. If None,
+        `get_gauss_obj_runner` is called.
+    psf_runner : ngmix.runners.PSFRunner, optional
+        If not None, the result of `get_gauss_psf_runner` is suggested. If None,
+        `get_gauss_psf_runner` is called.
 
     Returns
     -------
