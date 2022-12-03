@@ -247,18 +247,21 @@ class Metadetect(dict):
             if model == 'wmom':
                 fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
                 is_wavg = True
+                symmetrize = cfg.get("symmetrize", True)
             elif model == 'ksigma':
                 fitter = ngmix.prepsfmom.KSigmaMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
                 is_wavg = True
+                symmetrize = cfg.get("symmetrize", True)
             elif model == "pgauss":
                 fitter = ngmix.prepsfmom.PGaussMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
                 is_wavg = True
+                symmetrize = cfg.get("symmetrize", True)
             elif model in ["admom", "am", "gauss"]:
                 # we pass the name to our codes
                 fitter = model
@@ -271,6 +274,8 @@ class Metadetect(dict):
                     cfg["weight"] = {}
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
+
+                symmetrize = cfg.get("symmetrize", None)
             else:
                 raise ValueError("bad model: '%s'" % model)
 
@@ -280,7 +285,7 @@ class Metadetect(dict):
             else:
                 fwhm_reg = 0
 
-            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg, is_wavg
+            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg, is_wavg, symmetrize
 
         if "fitters" in self and ("model" in self or "weight" in self):
             raise RuntimeError("You can only specify one of fitters or model+weight!")
@@ -290,22 +295,28 @@ class Metadetect(dict):
             fwhms = []
             fwhm_regs = []
             fitter_is_wavg = []
+            fitter_symmetrize = []
             for fitter_cfg in self["fitters"]:
-                _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(fitter_cfg)
+                _, fitter, fwhm, fwhm_reg, is_wavg, symmetrize = _get_fitter(
+                    fitter_cfg
+                )
                 fitters.append(fitter)
                 fwhms.append(fwhm)
                 fwhm_regs.append(fwhm_reg)
                 fitter_is_wavg.append(is_wavg)
+                fitter_symmetrize.append(symmetrize)
             self._fitters = fitters
             self._fwhms = fwhms
             self._fwhm_regs = fwhm_regs
             self._fitter_is_wavg = fitter_is_wavg
+            self._fitter_symmetrize = fitter_symmetrize
         else:
-            _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(self)
+            _, fitter, fwhm, fwhm_reg, is_wavg, symmetrize = _get_fitter(self)
             self._fitters = [fitter]
             self._fwhms = [fwhm]
             self._fwhm_regs = [fwhm_reg]
             self._fitter_is_wavg = [is_wavg]
+            self._fitter_symmetrize = [symmetrize]
 
     @property
     def result(self):
@@ -536,8 +547,9 @@ class Metadetect(dict):
 
         t0 = time.time()
         all_res = []
-        for fitter, fwhm_reg, is_wavg in zip(
-            self._fitters, self._fwhm_regs, self._fitter_is_wavg
+        for fitter, fwhm_reg, is_wavg, symm in zip(
+            self._fitters, self._fwhm_regs,
+            self._fitter_is_wavg, self._fitter_symmetrize,
         ):
             if is_wavg:
                 res = fit_mbobs_list_wavg(
@@ -546,6 +558,7 @@ class Metadetect(dict):
                     shear_bands=shear_bands,
                     bmask_flags=self.get("bmask_flags", 0),
                     fwhm_reg=fwhm_reg,
+                    symmetrize=symm,
                 )
             else:
                 res = fit_mbobs_list_joint(
@@ -554,6 +567,7 @@ class Metadetect(dict):
                     shear_bands=shear_bands,
                     bmask_flags=self.get("bmask_flags", 0),
                     rng=self.rng,
+                    symmetrize=symm,
                 )
             all_res.append(res)
 

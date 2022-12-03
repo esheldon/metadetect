@@ -236,6 +236,7 @@ def _make_ml_prior(rng, scale, nband):
 
 def fit_mbobs_list_joint(
     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
+    symmetrize=True,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
 
@@ -254,6 +255,9 @@ def fit_mbobs_list_joint(
         Default is to use all bands.
     rng : np.random.RandomState
         Random state for fitting.
+    symmetrize : bool, optional
+        If True, apply 4-fold symmetry to the mask+weight map. Default is True.
+        Ignored for gaussian fits.
 
     Returns
     -------
@@ -262,7 +266,7 @@ def fit_mbobs_list_joint(
     """
     if fitter_name in ["am", "admom"]:
         fit_func = fit_mbobs_admom
-        kwargs = {"runner": get_admom_runner(rng)}
+        kwargs = {"runner": get_admom_runner(rng), 'symmetrize': symmetrize}
     elif fitter_name == "gauss":
         fit_func = fit_mbobs_gauss
         kwargs = None
@@ -331,6 +335,7 @@ def fit_mbobs_admom(
     rng,
     shear_bands=None,
     runner=None,
+    symmetrize=True,
 ):
     """Fit a multiband obs using adaptive moments.
 
@@ -351,6 +356,8 @@ def fit_mbobs_admom(
     runner : ngmix.runners.Runner, optional
         If not None, the result of `get_admom_runner` is suggested. If None,
         `get_admom_runner` is called.
+    symmetrize : bool, optional
+        If True, apply 4-fold symmetry to the mask+weight map. Default is True.
 
     Returns
     -------
@@ -399,7 +406,10 @@ def fit_mbobs_admom(
 
     if flags == 0:
         # then fit the object
-        sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
+        if symmetrize:
+            sym_coadd_obs = symmetrize_obs_weights(coadd_obs)
+        else:
+            sym_coadd_obs = coadd_obs
         try:
             gres = runner.go(sym_coadd_obs)
         except Exception:
@@ -634,7 +644,8 @@ def fit_all_psfs(mbobs, rng):
 
 
 def fit_mbobs_list_wavg(
-    *, mbobs_list, fitter, bmask_flags, shear_bands=None, fwhm_reg=0
+    *, mbobs_list, fitter, bmask_flags, shear_bands=None, fwhm_reg=0,
+    symmetrize=True,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a weighted average
     over bands.
@@ -660,6 +671,9 @@ def fit_mbobs_list_wavg(
 
         For Gaussians, this relationship is equivalent to smoothing by a round
         Gaussian with FWHM `fwhm_reg`.
+    symmetrize : bool, optional
+        If True, apply 4-fold symmetry to the mask+weight map. Default is True.
+        Ignored for gaussian fits.
 
     Returns
     -------
@@ -675,6 +689,7 @@ def fit_mbobs_list_wavg(
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
             fwhm_reg=fwhm_reg,
+            symmetrize=symmetrize,
         )
         res.append(_res)
 
@@ -691,6 +706,7 @@ def fit_mbobs_wavg(
     bmask_flags,
     shear_bands=None,
     fwhm_reg=0,
+    symmetrize=True,
 ):
     """Fit the object in the ngmix.MultiBandObsList using a weighted average
     over bands.
@@ -716,6 +732,9 @@ def fit_mbobs_wavg(
 
         For Gaussians, this relationship is equivalent to smoothing by a round
         Gaussian with FWHM `fwhm_reg`.
+    symmetrize : bool, optional
+        If True, apply 4-fold symmetry to the mask+weight map. Default is True.
+        Ignored for gaussian fits.
 
     Returns
     -------
@@ -741,6 +760,7 @@ def fit_mbobs_wavg(
             obslist=mbobs[band],
             fitter=fitter,
             bmask_flags=bmask_flags,
+            symmetrize=symmetrize,
         )
         all_wgts.append(fres["wgt"])
         all_res.append(fres["obj_res"])
@@ -764,6 +784,7 @@ def _fit_obslist(
     obslist,
     fitter,
     bmask_flags,
+    symmetrize,
 ):
     if len(obslist) == 0:
         # we will flag this later
@@ -779,6 +800,7 @@ def _fit_obslist(
             obs=obslist[0],
             fitter=fitter,
             bmask_flags=bmask_flags,
+            symmetrize=symmetrize,
         )
 
 
@@ -787,6 +809,7 @@ def _fit_obs(
     obs,
     fitter,
     bmask_flags,
+    symmetrize,
 ):
     if isinstance(fitter, ngmix.prepsfmom.PrePSFMom):
         psf_go_kwargs = {"no_psf": True}
@@ -796,7 +819,8 @@ def _fit_obs(
     res = {}
     flags = 0
 
-    obs = symmetrize_obs_weights(obs)
+    if symmetrize:
+        obs = symmetrize_obs_weights(obs)
 
     if not np.any(obs.weight > 0):
         flags |= procflags.ZERO_WEIGHTS
