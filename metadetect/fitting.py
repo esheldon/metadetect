@@ -165,7 +165,14 @@ def get_gauss_psf_runner(rng):
         rng=rng,
         guess_from_moms=True,
     )
-    psf_fitter = Fitter(model="gauss")
+    psf_fitter = Fitter(
+        model="gauss",
+        fit_pars={
+            "maxfev": 2000,
+            "xtol": 1.0e-5,
+            "ftol": 1.0e-5,
+        },
+    )
     psf_runner = PSFRunner(
         fitter=psf_fitter,
         guesser=psf_guesser,
@@ -177,7 +184,15 @@ def get_gauss_psf_runner(rng):
 def get_gauss_obj_runner(rng, nband, scale):
     prior = _make_ml_prior(rng, scale, nband)
 
-    fitter = ngmix.fitting.Fitter(model='gauss', prior=prior)
+    fitter = ngmix.fitting.Fitter(
+        model='gauss',
+        prior=prior,
+        fit_pars={
+            "maxfev": 2000,
+            "xtol": 5.0e-5,
+            "ftol": 5.0e-5,
+        },
+    )
     guesser = ngmix.guessers.TPSFFluxGuesser(
         rng=rng,
         T=0.25,
