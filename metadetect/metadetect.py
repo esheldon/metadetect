@@ -551,6 +551,7 @@ class Metadetect(dict):
             self._fitters, self._fwhm_regs,
             self._fitter_is_wavg, self._fitter_symmetrize,
         ):
+            ft0 = time.time()
             if is_wavg:
                 res = fit_mbobs_list_wavg(
                     mbobs_list=mbobs_list,
@@ -560,6 +561,8 @@ class Metadetect(dict):
                     fwhm_reg=fwhm_reg,
                     symmetrize=symm,
                 )
+                ft0 = time.time() - ft0
+                logger.info("fitter %s took %s seconds", fitter.kind, ft0)
             else:
                 res = fit_mbobs_list_joint(
                     mbobs_list=mbobs_list,
@@ -569,6 +572,8 @@ class Metadetect(dict):
                     rng=self.rng,
                     symmetrize=symm,
                 )
+                ft0 = time.time() - ft0
+                logger.info("fitter %s took %s seconds", fitter, ft0)
             all_res.append(res)
 
         res = combine_fit_res(all_res)
