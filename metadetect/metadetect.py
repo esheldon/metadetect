@@ -275,7 +275,7 @@ class Metadetect(dict):
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
 
-                symmetrize = cfg.get("symmetrize", None)
+                symmetrize = cfg.get("symmetrize", True)
             else:
                 raise ValueError("bad model: '%s'" % model)
 
