@@ -691,7 +691,6 @@ def fit_mbobs_list_wavg(
         Gaussian with FWHM `fwhm_reg`.
     symmetrize : bool, optional
         If True, apply 4-fold symmetry to the mask+weight map. Default is True.
-        Ignored for gaussian fits.
 
     Returns
     -------
