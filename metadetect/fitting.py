@@ -1366,7 +1366,6 @@ def symmetrize_obs_weights(obs):
     sym_obs : ngmix.Observation
         A copy of the input observation with a symmetrized weight map.
     """
-    print("symmetrize!", flush=True)
     sym_obs = obs.copy()
     if np.any(obs.weight <= 0):
         new_wgt = obs.weight.copy()
