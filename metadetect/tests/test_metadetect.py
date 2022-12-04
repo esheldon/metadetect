@@ -204,8 +204,50 @@ def _check_result_array(res, shear, msk, model):
                 )
 
 
+@pytest.mark.parametrize("model", ["gauss", "wmom"])
+def test_metadetect_coadd_faster(model):
+    """
+    test coadding is faster
+    """
+    config = {}
+    config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
+    del config["model"]
+    del config["weight"]
+    config["fitters"] = [
+        {"model": model, "coadd": False, "weight": {"fwhm": 1.2}}
+    ]
+
+    # warm up once
+    mbobs = Sim(np.random.RandomState(seed=116)).get_mbobs()
+    metadetect.do_metadetect(
+        config, mbobs, np.random.RandomState(seed=116)
+    )
+
+    mbobs = Sim(np.random.RandomState(seed=116)).get_mbobs()
+    tm0 = time.time()
+    metadetect.do_metadetect(
+        config, mbobs, np.random.RandomState(seed=116)
+    )
+    no_coadd_time = time.time() - tm0
+
+    config["fitters"][0]["coadd"] = True
+    mbobs = Sim(np.random.RandomState(seed=116)).get_mbobs()
+    tm0 = time.time()
+    metadetect.do_metadetect(
+        config, mbobs, np.random.RandomState(seed=116)
+    )
+    coadd_time = time.time() - tm0
+
+    print("coadd|nocoadd: %f|%f" % (coadd_time, no_coadd_time))
+
+    if model == "gauss":
+        assert coadd_time < no_coadd_time*0.7, (coadd_time, no_coadd_time)
+    else:
+        assert np.allclose(coadd_time, no_coadd_time, atol=0, rtol=0.2)
+
+
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
-def test_metadetect(model):
+def test_metadetect_smoke(model):
     """
     test full metadetection
     """
@@ -643,9 +685,10 @@ def test_metadetect_flux(model, nband, nshear):
     print("time per:", total_time/ntrial)
 
 
+@pytest.mark.parametrize("coadd", [True, False])
 @pytest.mark.parametrize("det_bands", [None, "shear_bands", "single"])
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "am", "gauss"])
-def test_metadetect_multiband(model, det_bands):
+def test_metadetect_multiband(model, det_bands, coadd):
     """
     test full metadetection w/ multiple bands
     """
@@ -659,6 +702,7 @@ def test_metadetect_multiband(model, det_bands):
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     config["model"] = model
+    config["coadd"] = coadd
 
     for trial in range(ntrial):
         print("trial: %d/%d" % (trial+1, ntrial))

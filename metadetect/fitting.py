@@ -275,7 +275,7 @@ def _make_ml_prior(rng, scale, nband):
 
 def fit_mbobs_list_joint(
     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
-    symmetrize=True,
+    symmetrize=True, coadd=True,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
 
@@ -297,6 +297,9 @@ def fit_mbobs_list_joint(
     symmetrize : bool, optional
         If True, apply 4-fold symmetry to the mask+weight map. Default is True.
         Ignored for gaussian fits.
+    coadd : bool, optional
+        If True, coadd the mbobs over all bands and then fit. Default is True.
+        Ignored for adaptive moments which always coadds.
 
     Returns
     -------
@@ -327,12 +330,23 @@ def fit_mbobs_list_joint(
                         break
                 if scale is not None:
                     kwargs = {
-                        "obj_runner": get_gauss_obj_runner(rng, 1, scale),
+                        "obj_runner": get_gauss_obj_runner(
+                            rng,
+                            1
+                            if coadd
+                            else (
+                                len(mbobs)
+                                if shear_bands is None
+                                else len(shear_bands)
+                            ),
+                            scale,
+                        ),
                         "psf_runner": get_gauss_psf_runner(rng),
+                        "coadd": coadd,
                     }
 
         if kwargs is None:
-            _kwargs = {}
+            _kwargs = {"coadd": coadd}
         else:
             _kwargs = kwargs
 
