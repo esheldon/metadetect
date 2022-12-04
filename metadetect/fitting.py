@@ -39,6 +39,7 @@ def fit_mbobs_gauss(
     shear_bands=None,
     obj_runner=None,
     psf_runner=None,
+    coadd=True,
 ):
     """Fit a multiband obs using a Gaussian fit.
 
@@ -59,6 +60,8 @@ def fit_mbobs_gauss(
     psf_runner : ngmix.runners.PSFRunner, optional
         If not None, the result of `get_gauss_psf_runner` is suggested. If None,
         `get_gauss_psf_runner` is called.
+    coadd : bool, optional
+        If True, coadd the mbobs over all bands and then fit. Default is True.
 
     Returns
     -------
@@ -90,18 +93,27 @@ def fit_mbobs_gauss(
     if any(s >= len(mbobs) for s in shear_bands):
         flags |= procflags.INCONSISTENT_BANDS
 
-    if flags == 0:
+    if coadd:
+        if flags == 0:
+            # first we coadd the shear bands
+            coadd_obs, coadd_flags = make_coadd_obs(mbobs, shear_bands=shear_bands)
+            flags |= coadd_flags
+
+        if flags == 0:
+            shear_mbobs = ngmix.observation.get_mb_obs(coadd_obs)
+    else:
         shear_mbobs = ngmix.MultiBandObsList()
         for band in shear_bands:
             shear_mbobs.append(mbobs[band])
 
+    if flags == 0:
         try:
             ores = bootstrap(
                 shear_mbobs,
                 get_gauss_obj_runner(
                     rng,
                     len(shear_mbobs),
-                    shear_mbobs[0][0].jacobian.get_scale()
+                    shear_mbobs[0][0].jacobian.get_scale(),
                 )
                 if obj_runner is None else obj_runner,
                 psf_runner=(
@@ -128,33 +140,42 @@ def fit_mbobs_gauss(
             res["gauss_T"] = ores["T"]
             res["gauss_T_err"] = ores["T_err"]
 
-        pflags = 0
-        psf_g_sum = np.zeros(2)
-        psf_T_sum = 0.0
-        wgt_sum = 0.0
-        for obslist in shear_mbobs:
-            for obs in obslist:
-                pflags |= obs.psf.meta["result"]["flags"]
-                if obs.psf.meta["result"]["flags"] == 0:
-                    msk = obs.weight > 0
-                    if not np.any(msk):
-                        pflags |= procflags.ZERO_WEIGHTS
-                    else:
-                        _wgt = np.median(obs.weight[msk])
-                        psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
-                        psf_g_sum += (
-                            obs.psf.meta["result"]["g"]
-                            * _wgt
-                            * obs.psf.meta["result"]["T"]
-                        )
-                        wgt_sum += _wgt
+        if coadd:
+            pres = shear_mbobs[0][0].psf.meta["result"]
+            res["gauss_psf_flags"] = pres["flags"]
+            if res["gauss_psf_flags"] == 0:
+                res["gauss_psf_T"] = pres["T"]
+                res["gauss_psf_g"] = pres["g"]
+                if ores["flags"] == 0:
+                    res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
+        else:
+            pflags = 0
+            psf_g_sum = np.zeros(2)
+            psf_T_sum = 0.0
+            wgt_sum = 0.0
+            for obslist in shear_mbobs:
+                for obs in obslist:
+                    pflags |= obs.psf.meta["result"]["flags"]
+                    if obs.psf.meta["result"]["flags"] == 0:
+                        msk = obs.weight > 0
+                        if not np.any(msk):
+                            pflags |= procflags.ZERO_WEIGHTS
+                        else:
+                            _wgt = np.median(obs.weight[msk])
+                            psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
+                            psf_g_sum += (
+                                obs.psf.meta["result"]["g"]
+                                * _wgt
+                                * obs.psf.meta["result"]["T"]
+                            )
+                            wgt_sum += _wgt
 
-        res["gauss_psf_flags"] = pflags
-        if res["gauss_psf_flags"] == 0:
-            res["gauss_psf_T"] = psf_T_sum / wgt_sum
-            res["gauss_psf_g"] = psf_g_sum / psf_T_sum
-            if ores["flags"] == 0:
-                res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
+            res["gauss_psf_flags"] = pflags
+            if res["gauss_psf_flags"] == 0:
+                res["gauss_psf_T"] = psf_T_sum / wgt_sum
+                res["gauss_psf_g"] = psf_g_sum / psf_T_sum
+                if ores["flags"] == 0:
+                    res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
 
         res["gauss_flags"] = res["gauss_obj_flags"] | res["gauss_psf_flags"]
     else:
@@ -297,11 +318,6 @@ def fit_mbobs_list_joint(
         # for some fitters
         if kwargs is None:
             if fitter_name == "gauss":
-                nband = (
-                    len(shear_bands)
-                    if shear_bands is not None
-                    else len(mbobs)
-                )
                 scale = None
                 for obsl in mbobs:
                     for obs in obsl:
@@ -311,7 +327,7 @@ def fit_mbobs_list_joint(
                         break
                 if scale is not None:
                     kwargs = {
-                        "obj_runner": get_gauss_obj_runner(rng, nband, scale),
+                        "obj_runner": get_gauss_obj_runner(rng, 1, scale),
                         "psf_runner": get_gauss_psf_runner(rng),
                     }
 
