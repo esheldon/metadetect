@@ -238,6 +238,7 @@ class Metadetect(dict):
 
         def _get_fitter(cfg):
             model = cfg.get('model', 'wmom')
+            symmetrize = cfg.get("symmetrize", True)
 
             if "fwhm_smooth" in cfg.get("weight", {}):
                 kwargs = {"fwhm_smooth": cfg["weight"]["fwhm_smooth"]}
@@ -247,7 +248,6 @@ class Metadetect(dict):
             if model == 'wmom':
                 fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
                 is_wavg = True
-                symmetrize = cfg.get("symmetrize", True)
                 coadd = False
             elif model == 'ksigma':
                 fitter = ngmix.prepsfmom.KSigmaMom(
@@ -255,7 +255,6 @@ class Metadetect(dict):
                     **kwargs,
                 )
                 is_wavg = True
-                symmetrize = cfg.get("symmetrize", True)
                 coadd = False
             elif model == "pgauss":
                 fitter = ngmix.prepsfmom.PGaussMom(
@@ -263,7 +262,6 @@ class Metadetect(dict):
                     **kwargs,
                 )
                 is_wavg = True
-                symmetrize = cfg.get("symmetrize", True)
                 coadd = False
             elif model in ["admom", "am", "gauss"]:
                 # we pass the name to our codes
@@ -278,7 +276,6 @@ class Metadetect(dict):
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
 
-                symmetrize = cfg.get("symmetrize", True)
                 coadd = cfg.get("coadd", True)
             else:
                 raise ValueError("bad model: '%s'" % model)
@@ -294,8 +291,16 @@ class Metadetect(dict):
                 is_wavg, symmetrize, coadd,
             )
 
-        if "fitters" in self and ("model" in self or "weight" in self):
-            raise RuntimeError("You can only specify one of fitters or model+weight!")
+        if "fitters" in self and (
+            "model" in self
+            or "weight" in self
+            or "symmetrize" in self
+            or "coadd" in self
+        ):
+            raise RuntimeError(
+                "You can only specify one of fitters or "
+                "model+weight+symmetrize+coadd!"
+            )
 
         if "fitters" in self:
             fitters = []
