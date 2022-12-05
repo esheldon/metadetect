@@ -2,6 +2,7 @@ import numpy as np
 import ngmix
 import galsim
 
+MAX_NBAND = 4
 DEFAULT_SIM_CONFIG = {
     'nobj': 4,
     'nband': 3,
@@ -45,7 +46,8 @@ class Sim(dict):
         all_band_obj = self._get_band_objects()
 
         mbobs = ngmix.MultiBandObsList()
-        for band in range(self['nband']):
+        for _band in range(self['nband']):
+            band = _band % MAX_NBAND
             band_objects = [o[band] for o in all_band_obj]
             obj = galsim.Sum(band_objects)
 
