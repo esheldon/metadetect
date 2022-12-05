@@ -245,6 +245,16 @@ def test_make_coadd_obs_single():
     assert flags == 0
 
 
+def test_make_coadd_obs_psf_weight():
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+
+    coadd_obs, flags = make_coadd_obs(mbobs)
+    assert np.allclose(
+        coadd_obs.psf.weight,
+        1.0/(np.sqrt(np.sum(coadd_obs.psf.image**2))/1000.0)**2
+    )
+
+
 def test_make_coadd_obs_symmetric():
     mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
 

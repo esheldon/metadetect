@@ -607,6 +607,10 @@ def make_coadd_obs(mbobs, shear_bands=None):
 
     meta.update(mbobs.meta)
 
+    # set non-zero weights for PSF
+    psf_nse = np.sqrt(np.sum(psf_image**2)) / 1000.0
+    psf_weight = psf_image*0 + 1.0/psf_nse**2
+
     kwargs = {
         "weight": weight,
         "jacobian": mbobs[shear_bands[0]][0].jacobian,
@@ -614,6 +618,7 @@ def make_coadd_obs(mbobs, shear_bands=None):
             psf_image,
             jacobian=mbobs[shear_bands[0]][0].psf.jacobian,
             meta=psf_meta,
+            weight=psf_weight,
         ),
         "meta": meta,
     }
