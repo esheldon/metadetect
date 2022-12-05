@@ -102,9 +102,10 @@ def fit_mbobs_gauss(
         if flags == 0:
             shear_mbobs = ngmix.observation.get_mb_obs(coadd_obs)
     else:
-        shear_mbobs = ngmix.MultiBandObsList()
-        for band in shear_bands:
-            shear_mbobs.append(mbobs[band])
+        if flags == 0:
+            shear_mbobs = ngmix.MultiBandObsList()
+            for band in shear_bands:
+                shear_mbobs.append(mbobs[band])
 
     if flags == 0:
         try:
