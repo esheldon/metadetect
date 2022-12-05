@@ -22,9 +22,6 @@ MAX_NUM_SHEAR_BANDS = 6
 
 logger = logging.getLogger(__name__)
 
-ngmix.prepsfmom.turn_on_kernel_caching()
-ngmix.prepsfmom.turn_on_fft_caching()
-
 if parse_version(ngmix.__version__) < parse_version("2.1.0"):
     MOMNAME = "mom"
 else:
