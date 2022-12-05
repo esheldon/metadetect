@@ -488,10 +488,6 @@ def test_fit_mbobs_list_joint_seeding(shear_bands, fname, coadd, symmetrize):
     )
 
     for col in res.dtype.names:
-        if not np.array_equal(res[col], res1[col]):
-            print(col, res[col], res1[col])
-
-    for col in res.dtype.names:
         np.testing.assert_array_equal(
             res[col],
             res1[col],
