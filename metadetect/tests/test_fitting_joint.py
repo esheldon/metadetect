@@ -664,6 +664,70 @@ def test_fit_mbobs_admom_smoke(shear_bands):
             assert np.all(res[col] == 0), (col, res[col])
 
 
+def test_fit_mbobs_admom_symmetrize():
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 1, wcs_var_scale=0)
+    wgt = mbobs[0][0].weight.copy()
+    msk = rng.uniform(size=wgt.shape) < 0.2
+    wgt[msk] = 0
+    wgt[:, 21:] = 0
+    mbobs[0][0].weight = wgt
+    assert np.any(mbobs[0][0].weight == 0)
+    res_nosym = fit_mbobs_admom(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        symmetrize=False,
+    )
+
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 1, wcs_var_scale=0)
+    wgt = mbobs[0][0].weight.copy()
+    msk = rng.uniform(size=wgt.shape) < 0.2
+    wgt[msk] = 0
+    wgt[:, 21:] = 0
+    mbobs[0][0].weight = wgt
+    assert np.any(mbobs[0][0].weight == 0)
+    res = fit_mbobs_admom(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        symmetrize=True,
+    )
+
+    shear_bands = list(range(len(mbobs)))
+    for col in res.dtype.names:
+        if col.endswith("band_flux_flags"):
+            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+            assert np.all(res_nosym[col] == procflags.NO_ATTEMPT), (col, res_nosym[col])
+        elif "band_flux" in col:
+            assert np.all(np.isnan(res[col])), (col, res[col])
+            assert np.all(np.isnan(res_nosym[col])), (col, res_nosym[col])
+        elif col == "shear_bands":
+            assert np.all(
+                res[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res[col])
+            assert np.all(
+                res_nosym[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res_nosym[col])
+        elif not col.endswith("flags"):
+            assert np.all(np.isfinite(res[col])), (col, res[col])
+            assert np.all(np.isfinite(res_nosym[col])), (col, res_nosym[col])
+            if "psf" not in col:
+                assert not np.allclose(res[col], res_nosym[col]), (
+                    col, res[col], res_nosym[col]
+                )
+        else:
+            assert np.all(res[col] == 0), (
+                col, res[col], procflags.get_procflags_str(res[col])
+            )
+            assert np.all(res_nosym[col] == 0), (
+                col, res_nosym[col], procflags.get_procflags_str(res_nosym[col])
+            )
+
+
 @pytest.mark.parametrize("shear_bands", [[0], [2], None, [1, 3, 2]])
 def test_fit_mbobs_gauss_smoke(shear_bands):
     rng = np.random.RandomState(seed=211324)
@@ -693,6 +757,54 @@ def test_fit_mbobs_gauss_smoke(shear_bands):
             assert np.all(np.isfinite(res[col])), (col, res[col])
         else:
             assert np.all(res[col] == 0), (col, res[col])
+
+
+def test_fit_mbobs_gauss_coadd():
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+    res = fit_mbobs_gauss(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        coadd=False,
+    )
+
+    rng = np.random.RandomState(seed=211324)
+    mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+    res_coadd = fit_mbobs_gauss(
+        mbobs=mbobs,
+        bmask_flags=0,
+        rng=rng,
+        coadd=True,
+    )
+
+    shear_bands = list(range(len(mbobs)))
+
+    for col in res.dtype.names:
+        if col.endswith("band_flux_flags"):
+            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+            assert np.all(res_coadd[col] == procflags.NO_ATTEMPT), (col, res_coadd[col])
+        elif "band_flux" in col:
+            assert np.all(np.isnan(res[col])), (col, res[col])
+            assert np.all(np.isnan(res_coadd[col])), (col, res_coadd[col])
+        elif col == "shear_bands":
+            assert np.all(
+                res[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res[col])
+            assert np.all(
+                res_coadd[col]
+                == "".join(f"{sb}" for sb in sorted(shear_bands))
+            ), (col, res_coadd[col])
+        elif not col.endswith("flags"):
+            assert np.all(np.isfinite(res[col])), (col, res[col])
+            assert np.all(np.isfinite(res_coadd[col])), (col, res_coadd[col])
+            assert not np.allclose(res[col], res_coadd[col]), (
+                col, res[col], res_coadd[col]
+            )
+        else:
+            assert np.all(res[col] == 0), (col, res[col])
+            assert np.all(res_coadd[col] == 0), (col, res_coadd[col])
 
 
 @pytest.mark.parametrize("coadd", [True, False])
