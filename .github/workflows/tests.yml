@@ -55,5 +55,7 @@ jobs:
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[wmom-1000000.0-7-64]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[ksigma-1000000.0-7-64]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[pgauss-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[am-1000000.0-7-64]
+          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[gauss-1000000.0-7-64]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_color[wmom-1000000.0-7-64]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_color[pgauss-1000000.0-7-64]
