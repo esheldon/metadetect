@@ -14,7 +14,7 @@
 
 ### changed
 
- - Gaussian fits are now done on coadds of the shear bands.
+ - Gaussian fits are now done on coadds instead of a join fit across all shear bands.
  - Symmetrization for various fitters is now optional.
  - The Gaussian and adaptive moments fitters are now reused if possible.
  - Tolerances for lmfit are looser when doing Gaussian fits.
