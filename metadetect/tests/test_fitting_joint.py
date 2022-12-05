@@ -471,6 +471,11 @@ def test_fit_mbobs_list_joint_seeding(shear_bands, fname, coadd, symmetrize):
         symmetrize=symmetrize,
     )
 
+    mbobs_list = [
+        make_mbobs_sim(45, 4, wcs_var_scale=0),
+        make_mbobs_sim(46, 4, wcs_var_scale=0),
+        make_mbobs_sim(47, 4, wcs_var_scale=0),
+    ]
     rng1 = np.random.RandomState(seed=4235)
     res1 = fit_mbobs_list_joint(
         mbobs_list=mbobs_list,
