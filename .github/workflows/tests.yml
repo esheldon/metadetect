@@ -50,7 +50,7 @@ jobs:
         shell: bash -l {0}
         run: |
           # don't run metadetect/lsst/tests
-          pytest -vvs --cov=metadetect --cov-report term-missing metadetect/tests
+          pytest -v -n 4 --cov=metadetect --cov-report term-missing metadetect/tests
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_timing --log-cli-level=info
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[wmom-1000000.0-7-64]
           pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple[ksigma-1000000.0-7-64]
