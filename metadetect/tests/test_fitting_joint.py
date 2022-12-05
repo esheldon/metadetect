@@ -455,6 +455,7 @@ def test_fit_mbobs_list_joint_seeding(shear_bands, fname):
         bmask_flags=0,
         rng=rng,
         shear_bands=shear_bands,
+        coadd=False,
     )
 
     rng1 = np.random.RandomState(seed=4235)
@@ -464,6 +465,7 @@ def test_fit_mbobs_list_joint_seeding(shear_bands, fname):
         bmask_flags=0,
         rng=rng1,
         shear_bands=shear_bands,
+        coadd=False,
     )
     for col in res.dtype.names:
         np.testing.assert_array_equal(
