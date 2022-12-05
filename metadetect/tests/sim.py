@@ -133,7 +133,8 @@ class Sim(dict):
             ).shear(g1=g1d, g2=g2d)
 
             band_objs = []
-            for band in range(self['nband']):
+            for _band in range(self['nband']):
+                band = _band % MAX_NBAND
                 band_disk = \
                     disk_obj.withFlux(flux_disk*self['disk_colors'][band])
                 band_bulge = \

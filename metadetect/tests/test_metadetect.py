@@ -219,14 +219,14 @@ def test_metadetect_coadd_faster(model):
 
     # warm up once
     mbobs = Sim(
-        np.random.RandomState(seed=116), config={"nband": 10}
+        np.random.RandomState(seed=116), config={"nband": 6}
     ).get_mbobs()
     metadetect.do_metadetect(
         config, mbobs, np.random.RandomState(seed=116)
     )
 
     mbobs = Sim(
-        np.random.RandomState(seed=116), config={"nband": 10}
+        np.random.RandomState(seed=116), config={"nband": 6}
     ).get_mbobs()
     tm0 = time.time()
     metadetect.do_metadetect(
@@ -236,7 +236,7 @@ def test_metadetect_coadd_faster(model):
 
     config["fitters"][0]["coadd"] = True
     mbobs = Sim(
-        np.random.RandomState(seed=116), config={"nband": 10}
+        np.random.RandomState(seed=116), config={"nband": 6}
     ).get_mbobs()
     tm0 = time.time()
     metadetect.do_metadetect(
