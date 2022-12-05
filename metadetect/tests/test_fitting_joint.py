@@ -695,14 +695,16 @@ def test_fit_mbobs_gauss_smoke(shear_bands):
             assert np.all(res[col] == 0), (col, res[col])
 
 
+@pytest.mark.parametrize("coadd", [True, False])
 @pytest.mark.parametrize("case", [
     "missing_band",
     "too_many_bands",
     "zero_weights",
     "edge_hit",
     "shear_bands",
+    "coadd_flags",
 ])
-def test_fit_mbobs_gauss_input_errors(case):
+def test_fit_mbobs_gauss_input_errors(case, coadd):
     rng = np.random.RandomState(seed=211324)
     ran_one = False
 
@@ -790,6 +792,36 @@ def test_fit_mbobs_gauss_input_errors(case):
         ), (
             procflags.get_procflags_str(res["gauss_flags"][0])
         )
+    elif case == "coadd_flags":
+        mbobs = make_mbobs_sim(45, 4, wcs_var_scale=0)
+        mbobs[1][0] = ngmix.Observation(
+            image=mbobs[1][0].image,
+            jacobian=mbobs[1][0].jacobian,
+            psf=mbobs[1][0].psf,
+            weight=mbobs[1][0].weight,
+            bmask=mbobs[1][0].bmask,
+            ormask=mbobs[1][0].ormask,
+            noise=mbobs[1][0].noise,
+            # missing mfrac so coadd fails
+        )
+        res = fit_mbobs_gauss(
+            mbobs=mbobs,
+            bmask_flags=0,
+            rng=rng,
+            shear_bands=None,
+            coadd=True,
+        )
+        ran_one = True
+        if coadd:
+            assert res["gauss_flags"] == (
+                procflags.NO_ATTEMPT | procflags.INCONSISTENT_BANDS
+            ), (
+                procflags.get_procflags_str(res["gauss_flags"][0])
+            )
+        else:
+            assert res["gauss_flags"] == 0, (
+                procflags.get_procflags_str(res["gauss_flags"][0])
+            )
     else:
         assert False, f"case {case} not found!"
 

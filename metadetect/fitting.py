@@ -311,51 +311,29 @@ def fit_mbobs_list_joint(
         kwargs = {"runner": get_admom_runner(rng), 'symmetrize': symmetrize}
     elif fitter_name == "gauss":
         fit_func = fit_mbobs_gauss
-        kwargs = None
+        kwargs = {"coadd": coadd}
+        if len(mbobs_list) > 0 and len(mbobs_list[0]) > 0 and len(mbobs_list[0][0]) > 0:
+            scale = mbobs_list[0][0][0].jacobian.get_scale()
+            if coadd:
+                nband = 1
+            else:
+                if shear_bands is None:
+                    nband = len(mbobs_list[0])
+                else:
+                    nband = len(shear_bands)
+            kwargs["obj_runner"] = get_gauss_obj_runner(rng, nband, scale)
+            kwargs["psf_runner"] = get_gauss_psf_runner(rng)
     else:
         raise RuntimeError("Joint fitter '%s' not recognized!" % fitter_name)
 
     res = []
     for i, mbobs in enumerate(mbobs_list):
-        # make the kwargs once here assuming we have data
-        # for some fitters
-        if kwargs is None:
-            if fitter_name == "gauss":
-                scale = None
-                for obsl in mbobs:
-                    for obs in obsl:
-                        scale = obs.jacobian.get_scale()
-                        break
-                    if scale is not None:
-                        break
-                if scale is not None:
-                    kwargs = {
-                        "obj_runner": get_gauss_obj_runner(
-                            rng,
-                            1
-                            if coadd
-                            else (
-                                len(mbobs)
-                                if shear_bands is None
-                                else len(shear_bands)
-                            ),
-                            scale,
-                        ),
-                        "psf_runner": get_gauss_psf_runner(rng),
-                        "coadd": coadd,
-                    }
-
-        if kwargs is None:
-            _kwargs = {"coadd": coadd}
-        else:
-            _kwargs = kwargs
-
         _res = fit_func(
             mbobs=mbobs,
             bmask_flags=bmask_flags,
             shear_bands=shear_bands,
             rng=rng,
-            **_kwargs,
+            **kwargs,
         )
         res.append(_res)
 
