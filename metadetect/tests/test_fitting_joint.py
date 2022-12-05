@@ -716,6 +716,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=0,
             rng=rng,
             shear_bands=None,
+            coadd=coadd,
         )
         ran_one = True
         assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.MISSING_BAND), (
@@ -732,6 +733,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=0,
             rng=rng,
             shear_bands=None,
+            coadd=coadd,
         )
         ran_one = True
         assert res["gauss_flags"] == (
@@ -754,6 +756,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=0,
             rng=rng,
             shear_bands=None,
+            coadd=coadd,
         )
         ran_one = True
         assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.ZERO_WEIGHTS), (
@@ -773,6 +776,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=10,
             rng=rng,
             shear_bands=None,
+            coadd=coadd,
         )
         ran_one = True
         assert res["gauss_flags"] == (procflags.NO_ATTEMPT | procflags.EDGE_HIT), (
@@ -785,6 +789,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=0,
             rng=rng,
             shear_bands=[1, 2, 10],
+            coadd=coadd,
         )
         ran_one = True
         assert res["gauss_flags"] == (
@@ -809,7 +814,7 @@ def test_fit_mbobs_gauss_input_errors(case, coadd):
             bmask_flags=0,
             rng=rng,
             shear_bands=None,
-            coadd=True,
+            coadd=coadd,
         )
         ran_one = True
         if coadd:
