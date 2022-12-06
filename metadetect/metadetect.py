@@ -238,6 +238,7 @@ class Metadetect(dict):
 
         def _get_fitter(cfg):
             model = cfg.get('model', 'wmom')
+            symmetrize = cfg.get("symmetrize", True)
 
             if "fwhm_smooth" in cfg.get("weight", {}):
                 kwargs = {"fwhm_smooth": cfg["weight"]["fwhm_smooth"]}
@@ -247,18 +248,21 @@ class Metadetect(dict):
             if model == 'wmom':
                 fitter = ngmix.gaussmom.GaussMom(fwhm=cfg["weight"]["fwhm"])
                 is_wavg = True
+                coadd = False
             elif model == 'ksigma':
                 fitter = ngmix.prepsfmom.KSigmaMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
                 is_wavg = True
+                coadd = False
             elif model == "pgauss":
                 fitter = ngmix.prepsfmom.PGaussMom(
                     fwhm=cfg["weight"]["fwhm"],
                     **kwargs,
                 )
                 is_wavg = True
+                coadd = False
             elif model in ["admom", "am", "gauss"]:
                 # we pass the name to our codes
                 fitter = model
@@ -271,6 +275,8 @@ class Metadetect(dict):
                     cfg["weight"] = {}
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
+
+                coadd = cfg.get("coadd", True)
             else:
                 raise ValueError("bad model: '%s'" % model)
 
@@ -280,32 +286,53 @@ class Metadetect(dict):
             else:
                 fwhm_reg = 0
 
-            return model, fitter, cfg["weight"]["fwhm"], fwhm_reg, is_wavg
+            return (
+                model, fitter, cfg["weight"]["fwhm"], fwhm_reg,
+                is_wavg, symmetrize, coadd,
+            )
 
-        if "fitters" in self and ("model" in self or "weight" in self):
-            raise RuntimeError("You can only specify one of fitters or model+weight!")
+        if "fitters" in self and (
+            "model" in self
+            or "weight" in self
+            or "symmetrize" in self
+            or "coadd" in self
+        ):
+            raise RuntimeError(
+                "You can only specify one of fitters or "
+                "model+weight+symmetrize+coadd!"
+            )
 
         if "fitters" in self:
             fitters = []
             fwhms = []
             fwhm_regs = []
             fitter_is_wavg = []
+            fitter_symmetrize = []
+            fitter_coadd = []
             for fitter_cfg in self["fitters"]:
-                _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(fitter_cfg)
+                _, fitter, fwhm, fwhm_reg, is_wavg, symmetrize, coadd = _get_fitter(
+                    fitter_cfg
+                )
                 fitters.append(fitter)
                 fwhms.append(fwhm)
                 fwhm_regs.append(fwhm_reg)
                 fitter_is_wavg.append(is_wavg)
+                fitter_symmetrize.append(symmetrize)
+                fitter_coadd.append(coadd)
             self._fitters = fitters
             self._fwhms = fwhms
             self._fwhm_regs = fwhm_regs
             self._fitter_is_wavg = fitter_is_wavg
+            self._fitter_symmetrize = fitter_symmetrize
+            self._fitter_coadd = fitter_coadd
         else:
-            _, fitter, fwhm, fwhm_reg, is_wavg = _get_fitter(self)
+            _, fitter, fwhm, fwhm_reg, is_wavg, symmetrize, coadd = _get_fitter(self)
             self._fitters = [fitter]
             self._fwhms = [fwhm]
             self._fwhm_regs = [fwhm_reg]
             self._fitter_is_wavg = [is_wavg]
+            self._fitter_symmetrize = [symmetrize]
+            self._fitter_coadd = [coadd]
 
     @property
     def result(self):
@@ -536,9 +563,12 @@ class Metadetect(dict):
 
         t0 = time.time()
         all_res = []
-        for fitter, fwhm_reg, is_wavg in zip(
-            self._fitters, self._fwhm_regs, self._fitter_is_wavg
+        for fitter, fwhm_reg, is_wavg, symm, coadd in zip(
+            self._fitters, self._fwhm_regs,
+            self._fitter_is_wavg, self._fitter_symmetrize,
+            self._fitter_coadd,
         ):
+            ft0 = time.time()
             if is_wavg:
                 res = fit_mbobs_list_wavg(
                     mbobs_list=mbobs_list,
@@ -546,6 +576,7 @@ class Metadetect(dict):
                     shear_bands=shear_bands,
                     bmask_flags=self.get("bmask_flags", 0),
                     fwhm_reg=fwhm_reg,
+                    symmetrize=symm,
                 )
             else:
                 res = fit_mbobs_list_joint(
@@ -554,7 +585,17 @@ class Metadetect(dict):
                     shear_bands=shear_bands,
                     bmask_flags=self.get("bmask_flags", 0),
                     rng=self.rng,
+                    symmetrize=symm,
+                    coadd=coadd,
                 )
+            ft0 = time.time() - ft0
+            logger.info(
+                "fitter %s took %s seconds",
+                fitter.kind
+                if hasattr(fitter, "kind")
+                else fitter,
+                ft0,
+            )
             all_res.append(res)
 
         res = combine_fit_res(all_res)
