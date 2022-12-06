@@ -249,7 +249,7 @@ def test_metadetect_coadd_faster(model):
     if model == "gauss":
         assert coadd_time < no_coadd_time*0.7, (coadd_time, no_coadd_time)
     else:
-        assert np.allclose(coadd_time, no_coadd_time, atol=0, rtol=0.2)
+        assert np.allclose(coadd_time, no_coadd_time, atol=0, rtol=0.3)
 
 
 @pytest.mark.parametrize("model", ["wmom", "pgauss", "ksigma", "am", "gauss"])
