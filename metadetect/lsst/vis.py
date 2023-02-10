@@ -341,3 +341,28 @@ def show_multi_mbexp(mbexp, sources=None):
                 )
 
     mplt.show()
+
+
+def show_image_and_mask(mbexp, band=0):
+    """
+    Show images from a ngmix.MultiBandObsList
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The data
+    """
+    import matplotlib.pyplot as mplt
+
+    fig, axs = mplt.subplots(ncols=2)
+    axs[0].axis('off')
+    axs[1].axis('off')
+
+    bname = mbexp.filters[band]
+    exp = mbexp[bname]
+
+    noise = np.sqrt(np.median(exp.variance.array))
+    minval = 0.1 * noise
+    axs[0].imshow(np.log(exp.image.array.clip(min=minval)))
+    axs[1].imshow(exp.mask.array)
+    mplt.show()
