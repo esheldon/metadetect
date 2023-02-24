@@ -244,9 +244,9 @@ def fit_mbobs_gauss(
                                 )
 
             if wavg:
-                res["gauss_obj_flags"] = oflags
-                res["gauss_T_flags"] = oflags
-                if ores["flags"] == 0:
+                res["gauss_obj_flags"] = oflags | pflags
+                res["gauss_T_flags"] = oflags | pflags
+                if res["gauss_obj_flags"] == 0:
                     res["gauss_s2n"] = obj_flux_sum / np.sqrt(obj_flux_var_sum)
                     res["gauss_g"] = obj_g_sum / wgt_sum
                     res["gauss_g_cov"] = obj_g_cov_sum / wgt_sum**2
