@@ -257,7 +257,7 @@ def fit_mbobs_gauss(
             if res["gauss_psf_flags"] == 0:
                 res["gauss_psf_T"] = psf_T_sum / wgt_sum
                 res["gauss_psf_g"] = psf_g_sum / wgt_sum
-                if ores["flags"] == 0:
+                if res["gauss_obj_flags"] == 0:
                     res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
 
         res["gauss_flags"] = res["gauss_obj_flags"] | res["gauss_psf_flags"]
