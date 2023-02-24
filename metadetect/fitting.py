@@ -37,6 +37,7 @@ def fit_mbobs_gauss(
     obj_runner=None,
     psf_runner=None,
     coadd=True,
+    wavg=False,
 ):
     """Fit a multiband obs using a Gaussian fit.
 
@@ -59,6 +60,9 @@ def fit_mbobs_gauss(
         `get_gauss_psf_runner` is called.
     coadd : bool, optional
         If True, coadd the mbobs over all bands and then fit. Default is True.
+    wavg : bool, False
+        If True and `coadd` is False, then do fits per band and take a weighted
+        average.
 
     Returns
     -------
@@ -105,38 +109,66 @@ def fit_mbobs_gauss(
                 shear_mbobs.append(mbobs[band])
 
     if flags == 0:
-        try:
-            ores = bootstrap(
-                shear_mbobs,
-                get_gauss_obj_runner(
-                    rng,
-                    len(shear_mbobs),
-                    shear_mbobs[0][0].jacobian.get_scale(),
+        if wavg:
+            ores_list = []
+            for obslist in shear_mbobs:
+                try:
+                    ores_list.append(bootstrap(
+                        shear_mbobs,
+                        get_gauss_obj_runner(
+                            rng,
+                            1,
+                            shear_mbobs[0][0].jacobian.get_scale(),
+                        )
+                        if obj_runner is None else obj_runner,
+                        psf_runner=(
+                            get_gauss_psf_runner(rng)
+                            if psf_runner is None
+                            else psf_runner
+                        ),
+                    ))
+                except BootPSFFailure:
+                    flags |= procflags.PSF_FAILURE
+                except PSFFluxFailure:
+                    flags |= procflags.PSF_FAILURE
+                except Exception:
+                    flags |= procflags.OBJ_FAILURE
+                    flags |= procflags.PSF_FAILURE
+
+        else:
+            try:
+                ores = bootstrap(
+                    shear_mbobs,
+                    get_gauss_obj_runner(
+                        rng,
+                        len(shear_mbobs),
+                        shear_mbobs[0][0].jacobian.get_scale(),
+                    )
+                    if obj_runner is None else obj_runner,
+                    psf_runner=(
+                        get_gauss_psf_runner(rng)
+                        if psf_runner is None
+                        else psf_runner
+                    ),
                 )
-                if obj_runner is None else obj_runner,
-                psf_runner=(
-                    get_gauss_psf_runner(rng)
-                    if psf_runner is None
-                    else psf_runner
-                ),
-            )
-        except BootPSFFailure:
-            flags |= procflags.PSF_FAILURE
-        except PSFFluxFailure:
-            flags |= procflags.PSF_FAILURE
-        except Exception:
-            flags |= procflags.OBJ_FAILURE
-            flags |= procflags.PSF_FAILURE
+            except BootPSFFailure:
+                flags |= procflags.PSF_FAILURE
+            except PSFFluxFailure:
+                flags |= procflags.PSF_FAILURE
+            except Exception:
+                flags |= procflags.OBJ_FAILURE
+                flags |= procflags.PSF_FAILURE
 
     if flags == 0:
-        res["gauss_obj_flags"] = ores["flags"]
-        res["gauss_T_flags"] = ores["flags"]
-        if ores["flags"] == 0:
-            res["gauss_s2n"] = ores["s2n"]
-            res["gauss_g"] = ores["g"]
-            res["gauss_g_cov"] = ores["g_cov"]
-            res["gauss_T"] = ores["T"]
-            res["gauss_T_err"] = ores["T_err"]
+        if not wavg:
+            res["gauss_obj_flags"] = ores["flags"]
+            res["gauss_T_flags"] = ores["flags"]
+            if ores["flags"] == 0:
+                res["gauss_s2n"] = ores["s2n"]
+                res["gauss_g"] = ores["g"]
+                res["gauss_g_cov"] = ores["g_cov"]
+                res["gauss_T"] = ores["T"]
+                res["gauss_T_err"] = ores["T_err"]
 
         if coadd:
             pres = shear_mbobs[0][0].psf.meta["result"]
@@ -148,10 +180,23 @@ def fit_mbobs_gauss(
                     res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
         else:
             pflags = 0
+
             psf_g_sum = np.zeros(2)
             psf_T_sum = 0.0
+            if wavg:
+                assert all(len(ol) == 1 for ol in shear_mbobs), (
+                    "A weighted average Gaussian shape only "
+                    "works for one image per band."
+                )
+                oflags = 0
+                obj_g_sum = np.zeros(2)
+                obj_g_cov_sum = np.zeros((2, 2))
+                obj_T_sum = 0.0
+                obj_T_var_sum = 0.0
+                obj_flux_sum = 0.0
+                obj_flux_var_sum = 0.0
             wgt_sum = 0.0
-            for obslist in shear_mbobs:
+            for i, obslist in enumerate(shear_mbobs):
                 for obs in obslist:
                     pflags |= obs.psf.meta["result"]["flags"]
                     if obs.psf.meta["result"]["flags"] == 0:
@@ -160,18 +205,58 @@ def fit_mbobs_gauss(
                             pflags |= procflags.ZERO_WEIGHTS
                         else:
                             _wgt = np.median(obs.weight[msk])
+                            wgt_sum += _wgt
+
                             psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
                             psf_g_sum += (
                                 obs.psf.meta["result"]["g"]
                                 * _wgt
-                                * obs.psf.meta["result"]["T"]
                             )
-                            wgt_sum += _wgt
+
+                            if wavg:
+                                oflags |= ores_list[i]["flags"]
+
+                                obj_g_sum += (
+                                    ores_list[i]["g"]
+                                    * _wgt
+                                )
+                                obj_g_cov_sum += (
+                                    ores_list[i]["g_cov"]
+                                    * _wgt**2
+                                )
+
+                                obj_T_sum += (
+                                    ores_list[i]["T"]
+                                    * _wgt
+                                )
+                                obj_T_var_sum += (
+                                    ores_list[i]["T_err"]**2
+                                    * _wgt**2
+                                )
+
+                                obj_flux_sum += (
+                                    ores_list[i]["flux"][0]
+                                    * _wgt
+                                )
+                                obj_flux_var_sum += (
+                                    ores_list[i]["flux_err"][0]**2
+                                    * _wgt**2
+                                )
+
+            if wavg:
+                res["gauss_obj_flags"] = oflags
+                res["gauss_T_flags"] = oflags
+                if ores["flags"] == 0:
+                    res["gauss_s2n"] = obj_flux_sum / np.sqrt(obj_flux_var_sum)
+                    res["gauss_g"] = obj_g_sum / wgt_sum
+                    res["gauss_g_cov"] = obj_g_cov_sum / wgt_sum**2
+                    res["gauss_T"] = obj_T_sum / wgt_sum
+                    res["gauss_T_err"] = np.sqrt(obj_T_var_sum) / wgt_sum
 
             res["gauss_psf_flags"] = pflags
             if res["gauss_psf_flags"] == 0:
                 res["gauss_psf_T"] = psf_T_sum / wgt_sum
-                res["gauss_psf_g"] = psf_g_sum / psf_T_sum
+                res["gauss_psf_g"] = psf_g_sum / wgt_sum
                 if ores["flags"] == 0:
                     res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
 
@@ -273,7 +358,7 @@ def _make_ml_prior(rng, scale, nband):
 
 def fit_mbobs_list_joint(
     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
-    symmetrize=True, coadd=True,
+    symmetrize=True, coadd=True, wavg=False,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
 
@@ -298,6 +383,9 @@ def fit_mbobs_list_joint(
     coadd : bool, optional
         If True, coadd the mbobs over all bands and then fit. Default is True.
         Ignored for adaptive moments which always coadds.
+    wavg : bool, False
+        If True and `coadd` is False, then do fits per band and take a weighted
+        average.
 
     Returns
     -------
@@ -309,7 +397,7 @@ def fit_mbobs_list_joint(
         kwargs = {"runner": get_admom_runner(rng), 'symmetrize': symmetrize}
     elif fitter_name == "gauss":
         fit_func = fit_mbobs_gauss
-        kwargs = {"coadd": coadd}
+        kwargs = {"coadd": coadd, "wavg": wavg}
         if len(mbobs_list) > 0 and len(mbobs_list[0]) > 0 and len(mbobs_list[0][0]) > 0:
             scale = mbobs_list[0][0][0].jacobian.get_scale()
             if coadd:
