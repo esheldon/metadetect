@@ -276,7 +276,7 @@ class Metadetect(dict):
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
 
-                coadd = cfg.get("coadd", True)
+                coadd = cfg.get("coadd", False)
             else:
                 raise ValueError("bad model: '%s'" % model)
 
@@ -501,7 +501,13 @@ class Metadetect(dict):
 
         if key is None:
             mbobs = self.mbobs
+
+            if self.color_key_func is None and self.color_dep_mbobs is None:
+                cache_it = False
+            else:
+                cache_it = True
         else:
+            cache_it = True
             mbobs = self.color_dep_mbobs[key]
             # the caching will miss cases where the input mbobs is passed as one
             # of the color dependent ones as well
@@ -554,7 +560,13 @@ class Metadetect(dict):
             self._mbobs_data_cache[key][sbkey]["ormask"] = ormask
             self._mbobs_data_cache[key][sbkey]["psf_stats"] = psf_stats
 
-        return self._mbobs_data_cache[key][sbkey]
+        if cache_it:
+            return self._mbobs_data_cache[key][sbkey]
+        else:
+            data = self._mbobs_data_cache[key].pop(sbkey)
+            delattr(self, "_mbobs_data_cache")
+            delattr(self, "_mcalpsf_data_cache")
+            return data
 
     def _measure(
         self, *, mbobs_list, shear_bands, cat, shear_str, mfrac, bmask,

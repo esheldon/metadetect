@@ -36,7 +36,7 @@ def fit_mbobs_gauss(
     shear_bands=None,
     obj_runner=None,
     psf_runner=None,
-    coadd=True,
+    coadd=False,
 ):
     """Fit a multiband obs using a Gaussian fit.
 
@@ -58,7 +58,7 @@ def fit_mbobs_gauss(
         If not None, the result of `get_gauss_psf_runner` is suggested. If None,
         `get_gauss_psf_runner` is called.
     coadd : bool, optional
-        If True, coadd the mbobs over all bands and then fit. Default is True.
+        If True, coadd the mbobs over all bands and then fit. Default is False.
 
     Returns
     -------
