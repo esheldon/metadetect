@@ -366,7 +366,10 @@ class Metadetect(dict):
             return
 
         # we do metacal on everything so we can get fluxes for non-shear bands later
-        mcal_res = self._get_mbobs_data(None, list(range(self.nband)))["mcal_res"]
+        if self.color_key_func is None and self.color_dep_mbobs is None:
+            mcal_res = self._get_all_metacal(self.mbobs)
+        else:
+            mcal_res = self._get_mbobs_data(None, list(range(self.nband)))["mcal_res"]
 
         if mcal_res is None:
             self._result = None
@@ -406,7 +409,7 @@ class Metadetect(dict):
         self._result = all_res
 
     def _go_bands(self, shear_bands, mcal_res, det_bands):
-        kdata = self._get_mbobs_data(None, shear_bands)
+        kdata = self._get_mbobs_data(None, shear_bands, nomcal=True)
 
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
@@ -496,7 +499,7 @@ class Metadetect(dict):
 
         return _result
 
-    def _get_mbobs_data(self, key, shear_bands):
+    def _get_mbobs_data(self, key, shear_bands, nomcal=False):
         logger.info("computing mbobs data: %s %s", key, shear_bands)
 
         if key is None:
@@ -535,8 +538,9 @@ class Metadetect(dict):
             self._mcalpsf_data_cache[key]["psf_fit_flags"] = _psf_fit_flags
             logger.info("PSF fits took %s seconds", time.time() - t0)
 
-            mcal_res = self._get_all_metacal(mbobs)
-            self._mcalpsf_data_cache[key]["mcal_res"] = mcal_res
+            if not nomcal:
+                mcal_res = self._get_all_metacal(mbobs)
+                self._mcalpsf_data_cache[key]["mcal_res"] = mcal_res
 
         sbkey = tuple(sorted(shear_bands))
         if sbkey not in self._mbobs_data_cache[key]:
