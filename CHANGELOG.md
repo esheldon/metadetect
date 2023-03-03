@@ -10,6 +10,13 @@
 
 ### fixed
 
+## 0.12.0 - 2023-04-03
+
+### changed
+
+ - Turned off coadding for joint fits by default.
+ - Changed LSST codes to use new DM APIs for filter labels.
+
 ## 0.11.0 - 2022-12-05
 
 ### changed
