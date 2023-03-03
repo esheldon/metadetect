@@ -36,7 +36,7 @@ def fit_mbobs_gauss(
     shear_bands=None,
     obj_runner=None,
     psf_runner=None,
-    coadd=True,
+    coadd=False,
 ):
     """Fit a multiband obs using a Gaussian fit.
 
@@ -58,7 +58,7 @@ def fit_mbobs_gauss(
         If not None, the result of `get_gauss_psf_runner` is suggested. If None,
         `get_gauss_psf_runner` is called.
     coadd : bool, optional
-        If True, coadd the mbobs over all bands and then fit. Default is True.
+        If True, coadd the mbobs over all bands and then fit. Default is False.
 
     Returns
     -------
@@ -273,7 +273,7 @@ def _make_ml_prior(rng, scale, nband):
 
 def fit_mbobs_list_joint(
     *, mbobs_list, fitter_name, bmask_flags, rng, shear_bands=None,
-    symmetrize=True, coadd=True,
+    symmetrize=True, coadd=False,
 ):
     """Fit the ojects in a list of ngmix.MultiBandObsList using a joint fitter.
 
@@ -296,7 +296,7 @@ def fit_mbobs_list_joint(
         If True, apply 4-fold symmetry to the mask+weight map. Default is True.
         Ignored for gaussian fits.
     coadd : bool, optional
-        If True, coadd the mbobs over all bands and then fit. Default is True.
+        If True, coadd the mbobs over all bands and then fit. Default is False.
         Ignored for adaptive moments which always coadds.
 
     Returns

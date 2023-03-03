@@ -276,7 +276,7 @@ class Metadetect(dict):
                 if "fwhm" not in cfg["weight"]:
                     cfg["weight"]["fwhm"] = 1.2
 
-                coadd = cfg.get("coadd", True)
+                coadd = cfg.get("coadd", False)
             else:
                 raise ValueError("bad model: '%s'" % model)
 
