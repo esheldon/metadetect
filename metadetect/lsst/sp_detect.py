@@ -1,8 +1,5 @@
 import logging
 import warnings
-import numpy as np
-import esutil as eu
-import ngmix
 
 import lsst.afw.table as afw_table
 from lsst.meas.algorithms import SourceDetectionTask, SourceDetectionConfig
