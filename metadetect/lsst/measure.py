@@ -390,7 +390,7 @@ def _get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
     lsst.afw.image.ExposureF
     """
 
-    bbox = _get_bbox(mbexp, source, stamp_size, clip=clip)
+    bbox = get_mbexp_stamp_bbox(mbexp, source, stamp_size, clip=clip)
 
     mbobs = ngmix.MultiBandObsList()
     for band in mbexp.filters:
@@ -406,115 +406,6 @@ def _get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
         mbobs.append(obslist)
 
     return mbobs
-
-
-def _get_bbox(mbexp, source, stamp_size, clip=False):
-    """
-    Get a bounding box at the location of the specified source.
-
-    Parameters
-    ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The exposures
-    source: lsst.afw.table.SourceRecord
-        The source for which to get the stamp
-    stamp_size: int
-        If sent, a bounding box is created with about this size rather than
-        using the footprint bounding box. Typically the returned size is
-        stamp_size + 1
-    clip: bool, optional
-        If set to True, clip the bbox to fit into the exposure.
-
-        If clip is False and the bbox does not fit, a
-        lsst.pex.exceptions.LengthError is raised
-
-        Only relevant if stamp_size is sent.  Default False
-
-    Returns
-    -------
-    lsst.geom.Box2I
-    """
-
-    fp = source.getFootprint()
-    peak = fp.getPeaks()[0]
-
-    x_peak, y_peak = peak.getIx(), peak.getIy()
-
-    bbox = geom.Box2I(
-        geom.Point2I(x_peak, y_peak),
-        geom.Extent2I(1, 1),
-    )
-    bbox.grow(stamp_size // 2)
-
-    exp_bbox = mbexp.getBBox()
-    if clip:
-        bbox.clip(exp_bbox)
-    else:
-        if not exp_bbox.contains(bbox):
-            source_id = source.getId()
-            raise LengthError(
-                f'requested stamp size {stamp_size} for source '
-                f'{source_id} does not fit into the exposoure.  '
-                f'Use clip=True to clip the bbox to fit'
-            )
-
-    return bbox
-
-
-def extract_psf_image(exposure, orig_cen):
-    """
-    get the psf associated with this image.
-
-    coadded psfs from DM are generally not square, but the coadd in cells code
-    makes them so.  We will assert they are square and odd dimensions
-
-    Parameters
-    ----------
-    exposure: lsst.afw.image.ExposureF
-        The exposure data
-    orig_cen: lsst.geom.Point2D
-        The location at which to draw the image
-
-    Returns
-    -------
-    ndarray
-    """
-    try:
-        psfobj = exposure.getPsf()
-        psfim = psfobj.computeKernelImage(orig_cen).array
-    except InvalidParameterError:
-        raise MissingDataError("could not reconstruct PSF")
-
-    psfim = np.array(psfim, dtype='f4', copy=False)
-
-    shape = psfim.shape
-    assert shape[0] == shape[1], 'require square psf images'
-    assert shape[0] % 2 != 0, 'require odd psf images'
-
-    return psfim
-
-
-def _extract_psf_image_fix(exposure, orig_cen):
-    """
-    get the psf associated with this image
-
-    coadded psfs are generally not square, so we will
-    trim it to be square and preserve the center to
-    be at the new canonical center
-
-    TODO: should we really trim the psf to be even?  will this
-    cause a shift due being off-center?
-    """
-    try:
-        psfobj = exposure.getPsf()
-        psfim = psfobj.computeKernelImage(orig_cen).array
-    except InvalidParameterError:
-        raise MissingDataError("could not reconstruct PSF")
-
-    psfim = np.array(psfim, dtype='f4', copy=False)
-
-    psfim = util.trim_odd_image(psfim)
-    return psfim
 
 
 def _extract_weight(exp):
