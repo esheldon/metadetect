@@ -102,6 +102,8 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
+    pytest.importorskip("sxdes")
+
     rng = np.random.RandomState(seed=45)
 
     tm0 = time.time()
@@ -143,6 +145,8 @@ def test_detect_masking(ntrial=1, show=False):
     """
     just test the detection
     """
+    pytest.importorskip("sxdes")
+
     rng = np.random.RandomState(seed=45)
 
     sim = Sim(rng)
@@ -209,6 +213,8 @@ def test_metadetect_coadd_faster(model):
     """
     test coadding is faster
     """
+    pytest.importorskip("sxdes")
+
     config = {}
     config.update(copy.deepcopy(TEST_METADETECT_CONFIG))
     del config["model"]
@@ -257,6 +263,8 @@ def test_metadetect_smoke(model):
     """
     test full metadetection
     """
+    pytest.importorskip("sxdes")
+
     ntrial = 1
     rng = np.random.RandomState(seed=116)
 
@@ -289,6 +297,8 @@ def test_metadetect_uberseg(model):
     """
     test full metadetection
     """
+    pytest.importorskip("sxdes")
+
     ntrial = 1
     rng = np.random.RandomState(seed=116)
 
@@ -324,6 +334,8 @@ def test_metadetect_mfrac(model):
     """
     test full metadetection w/ mfrac
     """
+    pytest.importorskip("sxdes")
+
     ntrial = 1
     rng = np.random.RandomState(seed=53341)
 
@@ -496,6 +508,8 @@ def test_metadetect_nodet_flags_some(model):
 )
 @pytest.mark.parametrize("model", ["pgauss", "ksigma"])
 def test_metadetect_fitter_fwhm_smooth(model):
+    pytest.importorskip("sxdes")
+
     nband = 3
     rng = np.random.RandomState(seed=116)
 
@@ -537,6 +551,8 @@ def test_metadetect_fitter_fwhm_smooth(model):
 
 @pytest.mark.parametrize("model", ["pgauss", "ksigma"])
 def test_metadetect_fitter_fwhm_reg(model):
+    pytest.importorskip("sxdes")
+
     nband = 3
     rng = np.random.RandomState(seed=116)
 
@@ -577,6 +593,8 @@ def test_metadetect_fitter_fwhm_reg(model):
 
 
 def test_metadetect_fitter_multi_meas():
+    pytest.importorskip("sxdes")
+
     nband = 3
     rng = np.random.RandomState(seed=116)
 
@@ -653,6 +671,8 @@ def test_metadetect_flux(model, nband, nshear):
     """
     test full metadetection w/ fluxes
     """
+    pytest.importorskip("sxdes")
+
     ntrial = 1
     rng = np.random.RandomState(seed=116)
 
@@ -698,6 +718,8 @@ def test_metadetect_multiband(model, det_bands, coadd):
     """
     test full metadetection w/ multiple bands
     """
+    pytest.importorskip("sxdes")
+
     nband = 3
     ntrial = 1
     rng = np.random.RandomState(seed=116)
@@ -762,6 +784,8 @@ def test_metadetect_multiband(model, det_bands, coadd):
 
 
 def test_metadetect_with_color_is_same():
+    pytest.importorskip("sxdes")
+
     model = "wmom"
     nband = 3
     ntrial = 1
