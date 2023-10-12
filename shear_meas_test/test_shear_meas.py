@@ -405,6 +405,8 @@ def run_sim_color(seed, mdet_seed, model, **kwargs):
     ]
 )
 def test_shear_meas_color(model, snr, ngrid, ntrial):
+    pytest.importorskip("sxdes")
+
     nsub = max(ntrial // 100, 8)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
@@ -494,6 +496,8 @@ def test_shear_meas_color(model, snr, ngrid, ntrial):
     ]
 )
 def test_shear_meas_simple(model, snr, ngrid, ntrial):
+    pytest.importorskip("sxdes")
+
     nsub = max(ntrial // 128, 8)
     nitr = ntrial // nsub
     rng = np.random.RandomState(seed=116)
@@ -578,6 +582,8 @@ def test_shear_meas_simple(model, snr, ngrid, ntrial):
     ]
 )
 def test_shear_meas_timing(model, snr, ngrid):
+    pytest.importorskip("sxdes")
+
     rng = np.random.RandomState(seed=116)
     seeds = rng.randint(low=1, high=2**29, size=1)
     mdet_seeds = rng.randint(low=1, high=2**29, size=1)
