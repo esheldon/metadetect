@@ -1,0 +1,31 @@
+name: "Check that the 'lsst-dev' branch was not merged into the development branch"
+on: pull_request
+
+jobs:
+  rebase-checker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check that 'lsst-dev' is not merged into the development branch
+        uses: gsactions/commit-message-checker@v2
+        with:
+          excludeDescription: "true"  # optional: this excludes the description body of a pull request
+          excludeTitle: "true"  # optional: this excludes the title of a pull request
+          checkAllCommitMessages: "true"  # optional: this checks all commits associated with a pull request
+          accessToken: ${{ secrets.GITHUB_TOKEN }}  # github access token is only required if checkAllCommitMessages is true
+          # Check for patterns that emerge from
+          # 1) git pull origin lsst-dev, as well as
+          # 2) hitting "Update branch" button on GitHub.
+          pattern: ^(?!Merge branch 'lsst-dev')
+          error: |
+            "This step failed because you merged the 'lsst-dev' branch into the development branch,
+             likely by clicking the 'Update branch' button on the GitHub pull request page.
+
+             In order to bring this pull request to a mergeable state,
+             update the 'lsst-dev' branch locally and rebase against it.
+             See https://developer.lsst.io/work/flow.html#pushing-code for detailed instructions.
+
+             To avoid this error in the future, rebase against the latest 'lsst-dev' branch
+             by following the instructions above, or
+             use the little down arrow on the right side of 'Update branch' and click
+             'Update with rebase' option."
