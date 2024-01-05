@@ -3,6 +3,8 @@ name: tests-ngmix-upstream
 on:
   push:
     branches:
+      - lsst-dev
+      - main
       - master
   pull_request: null
 

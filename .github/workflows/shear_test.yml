@@ -3,6 +3,8 @@ name: shear-tests
 on:
   push:
     branches:
+      - lsst-dev
+      - main
       - master
   workflow_dispatch: null
 
