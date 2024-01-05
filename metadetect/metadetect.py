@@ -6,7 +6,6 @@ import ngmix
 from ngmix.gexceptions import BootPSFFailure
 import esutil as eu
 
-from . import detect
 from . import fitting
 from . import procflags
 from . import shearpos
@@ -429,6 +428,8 @@ class Metadetect(dict):
         return _result
 
     def _go_bands_with_color(self, shear_bands, mcal_res, det_bands):
+        from . import detect
+
         _result = {}
         for shear_str, shear_mbobs in mcal_res.items():
             if not self._fitter_is_wavg[0]:
@@ -750,6 +751,8 @@ class Metadetect(dict):
         """
         use a MEDSifier to run detection
         """
+        from . import detect
+
         t0 = time.time()
         det_mbobs = ngmix.MultiBandObsList()
         for band in det_bands:
