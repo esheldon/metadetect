@@ -1,0 +1,13 @@
+# -*- python -*-
+from lsst.sconsUtils import scripts
+
+# Do not attempt automated test discovery.
+# Limit to metadetect/tests directory, as most tests in metadetect/lsst/tests/
+# cannot be run in rubin-env environment.
+scripts.BasicSConscript.tests(
+    pyList=None,
+    pySingles=[
+        "metadetect/lsst/tests/test_import.py",
+        "metadetect/tests/test_lsst_configs.py",
+    ],
+)
