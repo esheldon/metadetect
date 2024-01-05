@@ -13,7 +13,6 @@ from packaging import version
 import ngmix
 import numpy as np
 
-from metadetect import detect
 from metadetect import metadetect
 from metadetect import fitting
 from metadetect import procflags
@@ -102,7 +101,9 @@ def test_detect(ntrial=1, show=False):
     """
     just test the detection
     """
+    pytest.importorskip("meds")
     pytest.importorskip("sxdes")
+    from .. import detect
 
     rng = np.random.RandomState(seed=45)
 
@@ -145,7 +146,9 @@ def test_detect_masking(ntrial=1, show=False):
     """
     just test the detection
     """
+    pytest.importorskip("meds")
     pytest.importorskip("sxdes")
+    from .. import detect
 
     rng = np.random.RandomState(seed=45)
 
