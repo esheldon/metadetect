@@ -1,10 +1,12 @@
 import numpy as np
 import ngmix
-
-from ..mfrac import measure_mfrac
+import pytest
 
 
 def test_measure_mfrac_neg_bbox():
+    pytest.importorskip("meds")
+    from ..mfrac import measure_mfrac
+
     rng = np.random.RandomState(seed=100)
     cen = (201-1)/2
     mfrac = rng.uniform(size=(201, 201), low=0.2, high=0.8)
