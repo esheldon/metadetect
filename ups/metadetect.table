@@ -1,0 +1,5 @@
+setupRequired(meas_base)
+setupRequired(meas_deblender)
+setupRequired(pex_exceptions)
+
+envPrepend(PYTHONPATH, ${PRODUCT_DIR})

@@ -1,7 +1,6 @@
 import ngmix
 import numpy as np
 
-from .detect import CatalogMEDSifier
 from .defaults import BMASK_EDGE
 
 
@@ -45,6 +44,8 @@ def measure_mfrac(
     mfracs : np.ndarray
         The weighted averages at each input location.
     """
+    from .detect import CatalogMEDSifier
+
     if fwhm is None:
         fwhm = 1.2
 
