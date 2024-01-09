@@ -3,8 +3,12 @@ name: lsst-tests-ngmix-upstream
 on:
   push:
     branches:
+      - lsst-dev
+      - main
       - master
   pull_request: null
+  schedule:
+    - cron: 0 23 * * 4
 
 jobs:
   lsst-tests-ngmix-upstream:
