@@ -3,7 +3,6 @@
 [![tests](https://github.com/lsst-dm/metadetect/actions/workflows/tests.yml/badge.svg)](https://github.com/lsst-dm/metadetect/actions/workflows/tests.yml)
 [![shear-tests](https://github.com/lsst-dm/metadetect/actions/workflows/shear_test.yml/badge.svg)](https://github.com/lsst-dm/metadetect/actions/workflows/shear_test.yml)
 [![lsst-tests](https://github.com/lsst-dm/metadetect/actions/workflows/lsst-tests.yml/badge.svg)](https://github.com/lsst-dm/metadetect/actions/workflows/lsst-tests.yml)
-[![lsst-tests](https://github.com/lsst-dm/metadetect/actions/workflows/lsst-tests-ngmix-upstream.yml/badge.svg)](https://github.com/lsst-dm/metadetect/actions/workflows/lsst-tests-ngmix-upstream.yml)
 
 Library for meta-detection, combining detection and metacalibration.
 The algorithm is explained in detail in [Sheldon et al., (2020)](https://ui.adsabs.harvard.edu/abs/2020ApJ...902..138S/abstract) and its applicability with LSST data structures is demonstrated using simulations in [Sheldon et al., (2023)](https://ui.adsabs.harvard.edu/abs/2023OJAp....6E..17S/abstract).
