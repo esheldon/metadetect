@@ -111,6 +111,7 @@ def detect_and_deblend(
     # the variance
     # detection_config.thresholdType = 'variance'
     detection_config.thresholdValue = thresh
+    detection_config.thresholdType = 'stdev'
 
     # these will be ignored when finding the image standard deviation
     detection_config.statsMask = util.get_stats_mask(detexp)
