@@ -54,3 +54,8 @@ jobs:
         run: |
           # we run metadetect/tests and metadetect/lsst/tests
           pytest -v -n 4 --cov=metadetect --cov-report term-missing metadetect
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
