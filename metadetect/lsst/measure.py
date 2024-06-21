@@ -101,6 +101,8 @@ def detect_and_deblend(
         config=meas_config,
         schema=schema,
     )
+    # avoids a warning spamming for every object
+    afw_table.CoordKey.addErrorFields(schema)
 
     detection_config = SourceDetectionConfig()
     detection_config.reEstimateBackground = False
