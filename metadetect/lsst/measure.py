@@ -123,18 +123,16 @@ def detect_and_deblend(
     # other tasks using the same schema are run because schema is modified in
     # place by tasks, and the constructor does a check that fails if we do this
     # afterward
-
+    deblend_config = SourceDeblendConfig()
+    deblend_config.maxFootprintArea = 0
     deblend_task = SourceDeblendTask(
-        config=SourceDeblendConfig(),
+        config=deblend_config,
         schema=schema,
     )
 
     table = afw_table.SourceTable.make(schema)
 
     result = detection_task.run(table, detexp)
-
-    if show:
-        vis.show_exp(detexp)
 
     if result is not None:
         sources = result.sources
@@ -154,6 +152,9 @@ def detect_and_deblend(
 
     else:
         sources = []
+
+    if show:
+        vis.show_exp(detexp, use_mpl=True, sources=sources)
 
     return sources, detexp
 
