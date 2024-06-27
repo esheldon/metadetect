@@ -296,6 +296,10 @@ def test_lsst_metadetect_fullcoadd_smoke():
 
 
 def test_lsst_zero_weights(show=False):
+    """
+    To make sure in the case of inf variance but not marked as bright
+    we are detecting (should not happen)
+    """
     nobj = []
     seed = 55
     for do_zero in [False, True]:
@@ -306,6 +310,45 @@ def test_lsst_zero_weights(show=False):
         if do_zero:
             data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
             data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
+
+            if show:
+                import matplotlib.pyplot as mplt
+                fig, axs = mplt.subplots(ncols=2)
+                axs[0].imshow(data['mbexp']['i'].image.array)
+                axs[1].imshow(data['mbexp']['i'].variance.array)
+                mplt.show()
+
+        resdict = run_metadetect(rng=rng, config=None, **data)
+
+        if do_zero:
+            for shear_type, tres in resdict.items():
+                assert np.any(tres['wmom_flags'] & procflags.ZERO_WEIGHTS != 0)
+                assert np.any(tres['wmom_psf_flags'] & procflags.NO_ATTEMPT != 0)
+        else:
+            for shear_type, tres in resdict.items():
+                # 5x5 grid
+                assert tres.size == 25
+
+        nobj.append(resdict['noshear'].size)
+
+    assert nobj[0] == nobj[1]
+
+
+def test_lsst_masked_as_bright(show=False):
+    nobj = []
+    seed = 55
+    afw_image.Mask.addMaskPlane('BRIGHT')
+    bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
+    for do_zero in [False, True]:
+        rng = np.random.RandomState(seed)
+        sim_data = make_lsst_sim(seed, mag=23)
+        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=False)
+
+        if do_zero:
+            data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
+            data['mbexp']['i'].mask.array[50:100, 50:100] |= bright
+            data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
+            data['noise_mbexp']['i'].mask.array[50:100, 50:100] |= bright
 
         resdict = run_metadetect(rng=rng, config=None, **data)
 
@@ -326,8 +369,7 @@ def test_lsst_zero_weights(show=False):
 
         if do_zero:
             for shear_type, tres in resdict.items():
-                assert np.any(tres['wmom_flags'] & procflags.ZERO_WEIGHTS != 0)
-                assert np.any(tres['wmom_psf_flags'] & procflags.NO_ATTEMPT != 0)
+                assert tres.size == 25
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
@@ -335,7 +377,7 @@ def test_lsst_zero_weights(show=False):
 
         nobj.append(resdict['noshear'].size)
 
-    assert nobj[0] == nobj[1]
+    # assert nobj[0] == nobj[1]
 
 
 @pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
@@ -403,6 +445,6 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 if __name__ == '__main__':
-    test_lsst_zero_weights(show=True)
+    test_lsst_masked_as_bright(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
     # test_lsst_metadetect_mfrac_ormask(show=True)

@@ -105,13 +105,35 @@ def detect_and_deblend(
     afw_table.CoordKey.addErrorFields(schema)
 
     detection_config = SourceDetectionConfig()
+
+    # DM does not have config default stability.  Set all of them explicitly
+    detection_config.minPixels = 1
+    detection_config.isotropicGrow = True
+    detection_config.combinedGrow = True
+    detection_config.nSigmaToGrow = 2.4
+    detection_config.returnOriginalFootprints = False
+    detection_config.includeThresholdMultiplier = 1.0
+    detection_config.thresholdPolarity = "positive"
+    detection_config.adjustBackground = 0.0
+    detection_config.reEstimateBackground = True
+    # these are ignored since we are doing reEstimateBackground = False
+    # detection_config.background
+    # detection_config.tempLocalBackground
+    # detection_config.doTempLocalBackground
+    # detection_config.tempWideBackground
+    # detection_config.doTempWideBackground
+
+    detection_config.nPeaksMaxSimple = 1
+    detection_config.nSigmaForKernel = 7.0
+    detection_config.excludeMaskPlanes = []
+
+    # the defaults changed from from stdev to pixel_std but
+    # we don't want that
+
+    detection_config.thresholdType = "stdev"
+    # our changes from defaults
     detection_config.reEstimateBackground = False
-    # variance here actually means relative to the sqrt(variance)
-    # from the variance plane.
-    # TODO this would include poisson
-    # TODO detection doesn't work right when we tell it to trust
-    # the variance
-    # detection_config.thresholdType = 'variance'
+
     detection_config.thresholdValue = thresh
 
     # these will be ignored when finding the image standard deviation
