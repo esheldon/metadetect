@@ -38,7 +38,8 @@ jobs:
           conda config --set always_yes yes
           mamba install --quiet --yes --file requirements.txt
           mamba install --quiet --yes --file dev-requirements.txt
-          mamba install -q -y stackvana=0 lsstdesc-weaklensingdeblending
+          # mamba install -q -y stackvana=0 lsstdesc-weaklensingdeblending
+          mamba install -q -y stackvana=0.2024.24 lsstdesc-weaklensingdeblending
 
           pip install --no-deps git+https://github.com/LSSTDESC/descwl-shear-sims.git
           pip install --no-deps git+https://github.com/LSSTDESC/descwl_coadd.git

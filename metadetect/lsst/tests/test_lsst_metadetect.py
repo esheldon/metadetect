@@ -307,14 +307,22 @@ def test_lsst_zero_weights(show=False):
             data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
             data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
 
-            if show:
-                import matplotlib.pyplot as mplt
-                fig, axs = mplt.subplots(ncols=2)
-                axs[0].imshow(data['mbexp']['i'].image.array)
-                axs[1].imshow(data['mbexp']['i'].variance.array)
-                mplt.show()
-
         resdict = run_metadetect(rng=rng, config=None, **data)
+
+        if show:
+            import matplotlib.pyplot as mplt
+            fig, axs = mplt.subplots(ncols=2)
+            axs[0].imshow(data['mbexp']['i'].image.array)
+            axs[1].imshow(data['mbexp']['i'].variance.array)
+
+            axs[0].scatter(
+                resdict['noshear']['col'] - resdict['noshear']['col0'],
+                resdict['noshear']['row'] - resdict['noshear']['row0'],
+                s=4,
+                c='red',
+            )
+            mplt.show()
+            # import IPython; IPython.embed()
 
         if do_zero:
             for shear_type, tres in resdict.items():
@@ -395,6 +403,6 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 if __name__ == '__main__':
-    # test_lsst_zero_weights(show=True)
+    test_lsst_zero_weights(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
-    test_lsst_metadetect_mfrac_ormask(show=True)
+    # test_lsst_metadetect_mfrac_ormask(show=True)
