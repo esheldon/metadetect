@@ -335,7 +335,9 @@ def test_lsst_zero_weights(show=False):
 
 
 def test_lsst_masked_as_bright(show=False):
-    nobj = []
+    """
+    Make sure we don't detect in areas marked BRIGHT
+    """
     seed = 55
     afw_image.Mask.addMaskPlane('BRIGHT')
     bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
@@ -365,7 +367,6 @@ def test_lsst_masked_as_bright(show=False):
                 c='red',
             )
             mplt.show()
-            # import IPython; IPython.embed()
 
         if do_zero:
             for shear_type, tres in resdict.items():
@@ -374,10 +375,6 @@ def test_lsst_masked_as_bright(show=False):
             for shear_type, tres in resdict.items():
                 # 5x5 grid
                 assert tres.size == 25
-
-        nobj.append(resdict['noshear'].size)
-
-    # assert nobj[0] == nobj[1]
 
 
 @pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
