@@ -143,11 +143,7 @@ def get_metacal_exps(exp, types=None, rot=False):
 
     cen, _ = get_integer_center(exp.getWcs(), exp.getBBox(), as_double=True)
 
-    # wcs = exp.getWcs()
-
     gwcs = get_galsim_jacobian_wcs(exp=exp, cen=cen)
-    # pixel = gwcs.toWorld(galsim.Pixel(scale=1))
-    # pixel_inv = galsim.Deconvolve(pixel)
 
     psf_image_array = get_psf_kernel_image(exp=exp, cen=cen)
     psf_flux = psf_image_array.sum()
@@ -171,13 +167,9 @@ def get_metacal_exps(exp, types=None, rot=False):
         galsim.Deconvolve(psf_int),
     )
 
-    # psf_int_nopix = galsim.Convolve([psf_int, pixel_inv])
-    # gauss_psf = _get_gauss_target_psf(psf_int_nopix, flux=psf_flux)
     gauss_psf = _get_gauss_target_psf(psf_int, flux=psf_flux)
 
     dilation = 1.0 + 2.0*STEP
-    # psf_dilated_nopix = gauss_psf.dilate(dilation)
-    # psf_dilated = galsim.Convolve(psf_dilated_nopix, pixel)
     psf_dilated = gauss_psf.dilate(dilation)
 
     psf_dilated_image = psf_image.copy()
