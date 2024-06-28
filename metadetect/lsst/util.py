@@ -825,6 +825,35 @@ def get_stats_mask(exp):
     return stats_mask
 
 
+def get_detection_mask(exp):
+    """
+    Get a mask for detection, regions with these
+    flags will not be searched for objects. If BRIGHT
+    is found in the mask plane it is added to the usual
+
+    ['EDGE', 'NO_DATA']
+
+    Parameters
+    ----------
+    exp: lsst.afw.image.ExposureF
+        The exposure
+
+    Returns
+    -------
+    A list of mask planes
+    """
+
+    # these will be ignored when finding the image standard deviation
+    # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
+
+    mask = ['EDGE', 'NO_DATA']
+
+    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
+        mask += ['BRIGHT']
+
+    return mask
+
+
 def extract_multiband_coadd_data(coadd_data_list):
     """
     Convert a list of coadd data for a set of bands into MultibandExposure data

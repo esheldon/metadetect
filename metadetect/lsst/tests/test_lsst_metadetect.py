@@ -341,6 +341,7 @@ def test_lsst_masked_as_bright(show=False):
     seed = 55
     afw_image.Mask.addMaskPlane('BRIGHT')
     bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
+    print('bright:', bright)
     for do_zero in [False, True]:
         rng = np.random.RandomState(seed)
         sim_data = make_lsst_sim(seed, mag=23)
@@ -370,7 +371,7 @@ def test_lsst_masked_as_bright(show=False):
 
         if do_zero:
             for shear_type, tres in resdict.items():
-                assert tres.size == 25
+                assert tres.size == 24
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
@@ -442,7 +443,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 if __name__ == '__main__':
-    test_lsst_metadetect_am()
-    # test_lsst_masked_as_bright(show=True)
+    # test_lsst_metadetect_am()
+    test_lsst_masked_as_bright(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
     # test_lsst_metadetect_mfrac_ormask(show=True)

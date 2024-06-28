@@ -125,7 +125,7 @@ def detect_and_deblend(
 
     detection_config.nPeaksMaxSimple = 1
     detection_config.nSigmaForKernel = 7.0
-    detection_config.excludeMaskPlanes = []
+    detection_config.excludeMaskPlanes = util.get_detection_mask(detexp)
 
     # the defaults changed from from stdev to pixel_std but
     # we don't want that
