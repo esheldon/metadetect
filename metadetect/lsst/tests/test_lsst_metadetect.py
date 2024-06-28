@@ -341,7 +341,6 @@ def test_lsst_masked_as_bright(show=False):
     seed = 55
     afw_image.Mask.addMaskPlane('BRIGHT')
     bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
-    print('bright:', bright)
     for do_zero in [False, True]:
         rng = np.random.RandomState(seed)
         sim_data = make_lsst_sim(seed, mag=23)
