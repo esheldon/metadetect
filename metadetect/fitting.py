@@ -1056,10 +1056,14 @@ def _sum_bands_wavg(
                 # weight function to peak at 1 for flux measurements (and only care
                 # about the object).
 
-                raw_mom += (wgt * flux_mom_ratio / mom_norm * res[MOMNAME])
+                # we added an extra sum for AM, for rho4
+                rmoms = res[MOMNAME][:raw_mom.size]
+                rcovs = res[MOMNAME + '_cov'][:raw_mom.size, :raw_mom.size]
+
+                raw_mom += (wgt * flux_mom_ratio / mom_norm * rmoms)
                 raw_mom_cov += (
                     (wgt * flux_mom_ratio / mom_norm)**2
-                    * res[MOMNAME+"_cov"]
+                    * rcovs
                 )
                 wgt_sum += wgt
 
