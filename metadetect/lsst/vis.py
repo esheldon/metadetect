@@ -50,7 +50,7 @@ def show_exp(exp, mess=None, use_mpl=False, sources=None):
             )
 
         if mess is not None:
-            axs.suptitle(mess)
+            fig.suptitle(mess)
 
         mplt.show()
 

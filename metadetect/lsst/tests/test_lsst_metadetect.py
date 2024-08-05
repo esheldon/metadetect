@@ -297,8 +297,11 @@ def test_lsst_metadetect_fullcoadd_smoke():
 
 def test_lsst_zero_weights(show=False):
     """
-    To make sure in the case of inf variance but not marked as bright
-    we are detecting (should not happen)
+    At time of writing, DM stack will still detect in regions with inf
+    variance.  Test this continues to be true.
+
+    However, we don't have detections in BRIGHT, see test
+    test_lsst_masked_as_bright
     """
     nobj = []
     seed = 55
