@@ -74,10 +74,7 @@ def run_metadetect(
 
     fitter = get_fitter(config, rng=rng)
 
-    if 'types' in config['metacal']:
-        metacal_types = config['metacal']['types']
-    else:
-        metacal_types = None
+    metacal_types = config['metacal'].get('types', None)
 
     mdict, noise_mdict = get_metacal_mbexps_fixnoise(
         mbexp=mbexp, noise_mbexp=noise_mbexp, types=metacal_types,
