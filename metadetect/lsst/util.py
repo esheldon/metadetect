@@ -827,11 +827,14 @@ def get_stats_mask(exp):
 
 def get_detection_mask(exp):
     """
-    Get a mask for detection, regions with these
-    flags will not be searched for objects. If BRIGHT
-    is found in the mask plane it is added to the usual
+    Get a mask for detection. Regions with these flags set will not be searched
+    for objects.
 
-    ['EDGE', 'NO_DATA']
+    Default is ['EDGE', 'NO_DATA']
+
+    BRIGHT is defined in descwl_coadd, so it is not guaranteed to be present in
+    the global mask bit space.  Only add BRIGHT to detection mask BRIGHT if it
+    is found in the global mask plane dict
 
     Parameters
     ----------
