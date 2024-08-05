@@ -846,9 +846,6 @@ def get_detection_mask(exp):
     A list of mask planes
     """
 
-    # these will be ignored when finding the image standard deviation
-    # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
-
     mask = ['EDGE', 'NO_DATA']
 
     if 'BRIGHT' in exp.mask.getMaskPlaneDict():
