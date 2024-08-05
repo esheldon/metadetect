@@ -9,7 +9,7 @@ COLOR = 'red'
 EDGECOLOR = 'white'
 
 
-def show_exp(exp, mess=None):
+def show_exp(exp, mess=None, use_mpl=False, sources=None):
     """
     show the image in ds9
 
@@ -20,17 +20,51 @@ def show_exp(exp, mess=None):
     mess: str, optional
         A message to use as title to plot
     """
+    import matplotlib.pyplot as mplt
     import lsst.afw.display as afw_display
 
-    display = afw_display.getDisplay(backend='ds9')
-    display.mtv(exp)
-    display.scale('log', 'minmax')
+    if use_mpl:
+        fig, axs = mplt.subplots(ncols=3)
+        image = exp.image.array
 
-    prompt = 'hit enter'
-    if mess is not None:
-        prompt = '%s: (%s)' % (mess, prompt)
+        noise = np.sqrt(np.median(exp.variance.array))
 
-    input(prompt)
+        noise = np.sqrt(np.median(exp.variance.array))
+        minval = 0.1 * noise
+        axs[0].imshow(np.log(image.clip(min=minval)))
+
+        axs[1].imshow(exp.variance.array)
+        axs[1].set_title('variance')
+
+        axs[2].imshow(exp.mask.array)
+        axs[2].set_title('mask')
+
+        if sources is not None:
+            from pprint import pprint
+            bbox = exp.getBBox()
+            pprint(exp.mask.getMaskPlaneDict())
+            axs[0].scatter(
+                sources['base_SdssCentroid_x'] - bbox.beginX,
+                sources['base_SdssCentroid_y'] - bbox.beginY,
+                color='red',
+            )
+
+        if mess is not None:
+            fig.suptitle(mess)
+
+        mplt.show()
+
+    else:
+
+        display = afw_display.getDisplay(backend='ds9')
+        display.mtv(exp)
+        display.scale('log', 'minmax')
+
+        prompt = 'hit enter'
+        if mess is not None:
+            prompt = '%s: (%s)' % (mess, prompt)
+
+        input(prompt)
 
 
 def show_mbexp(

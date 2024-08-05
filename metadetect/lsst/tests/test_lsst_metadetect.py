@@ -313,6 +313,13 @@ def test_lsst_metadetect_fullcoadd_smoke():
 
 
 def test_lsst_zero_weights(show=False):
+    """
+    At time of writing, DM stack will still detect in regions with inf
+    variance.  Test this continues to be true.
+
+    However, we don't have detections in BRIGHT, see test
+    test_lsst_masked_as_bright
+    """
     nobj = []
     seed = 55
     for do_zero in [False, True]:
@@ -345,6 +352,49 @@ def test_lsst_zero_weights(show=False):
         nobj.append(resdict['noshear'].size)
 
     assert nobj[0] == nobj[1]
+
+
+def test_lsst_masked_as_bright(show=False):
+    """
+    Make sure we don't detect in areas marked BRIGHT
+    """
+    seed = 55
+    afw_image.Mask.addMaskPlane('BRIGHT')
+    bright = afw_image.Mask.getPlaneBitMask('BRIGHT')
+    for do_zero in [False, True]:
+        rng = np.random.RandomState(seed)
+        sim_data = make_lsst_sim(seed, mag=23)
+        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=False)
+
+        if do_zero:
+            data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
+            data['mbexp']['i'].mask.array[50:100, 50:100] |= bright
+            data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
+            data['noise_mbexp']['i'].mask.array[50:100, 50:100] |= bright
+
+        resdict = run_metadetect(rng=rng, config=None, **data)
+
+        if show:
+            import matplotlib.pyplot as mplt
+            fig, axs = mplt.subplots(ncols=2)
+            axs[0].imshow(data['mbexp']['i'].image.array)
+            axs[1].imshow(data['mbexp']['i'].variance.array)
+
+            axs[0].scatter(
+                resdict['noshear']['col'] - resdict['noshear']['col0'],
+                resdict['noshear']['row'] - resdict['noshear']['row0'],
+                s=4,
+                c='red',
+            )
+            mplt.show()
+
+        if do_zero:
+            for shear_type, tres in resdict.items():
+                assert tres.size == 24
+        else:
+            for shear_type, tres in resdict.items():
+                # 5x5 grid
+                assert tres.size == 25
 
 
 @pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
@@ -412,6 +462,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 if __name__ == '__main__':
-    # test_lsst_zero_weights(show=True)
+    # test_lsst_metadetect_am()
+    test_lsst_masked_as_bright(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
-    test_lsst_metadetect_mfrac_ormask(show=True)
+    # test_lsst_metadetect_mfrac_ormask(show=True)
