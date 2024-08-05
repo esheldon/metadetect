@@ -122,7 +122,9 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
     assert np.all(res['noshear']['bmask'] & detected == 0)
 
     for metacal_type in metacal_types:
-        assert metacal_type in res.keys(), f"metacal_type={metacal_type} not in res.keys()"
+        assert (
+            metacal_type in res.keys()
+            ), f"metacal_type={metacal_type} not in res.keys()"
 
     if meas_type is None:
         front = 'wmom'
