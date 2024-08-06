@@ -88,7 +88,8 @@ def do_coadding(rng, sim_data, nowarp):
 
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
-def test_lsst_metadetect_smoke(meas_type, subtract_sky):
+@pytest.mark.parametrize("metacal_types_option", [None, "1p1m", "full"])
+def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
@@ -103,11 +104,27 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     if meas_type is not None:
         config['meas_type'] = meas_type
 
+    if metacal_types_option is not None:
+        if metacal_types_option == "1p1m":
+            metacal_types = ['noshear', '1p', '1m']
+            config['metacal'] = {}
+        elif metacal_types_option == "full":
+            metacal_types = ['noshear', '1p', '1m', '2p', '2m']
+            config['metacal'] = {}
+        config['metacal']['types'] = metacal_types
+    else:
+        metacal_types = ['noshear', '1p', '1m']
+
     detected = afw_image.Mask.getPlaneBitMask('DETECTED')
     res = run_metadetect(rng=rng, config=config, **data)
 
     # we remove the DETECTED bit
     assert np.all(res['noshear']['bmask'] & detected == 0)
+
+    for metacal_type in metacal_types:
+        assert (
+            metacal_type in res.keys()
+        ), f"metacal_type={metacal_type} not in res.keys()"
 
     if meas_type is None:
         front = 'wmom'
@@ -118,7 +135,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky):
     flux_name = f'{front}_band_flux'
     assert gname in res['noshear'].dtype.names
 
-    for shear in ('noshear', '1p', '1m'):
+    for shear in metacal_types:
         # 5x5 grid
         assert res[shear].size == 25
 
