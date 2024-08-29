@@ -60,3 +60,18 @@ jobs:
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
+
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'schedule') && needs.lsst-tests.result == 'failure' }}
+    needs:
+      - lsst-tests
+    steps:
+    - uses: actions/checkout@v2
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        MSG_MINIMAL: actions url
+        SLACK_FOOTER: ""
+        SLACK_TITLE: LSST metadetect tests failing on lsst-dev
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
