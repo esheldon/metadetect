@@ -56,6 +56,23 @@ jobs:
           pytest -v -n 4 --cov=metadetect --cov-report=xml --cov-report=term-missing --cov-branch metadetect
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ always() && (github.event_name == 'push' || github.event_name == 'schedule') && needs.lsst-tests.result == 'failure' }}
+    needs:
+      - lsst-tests
+    steps:
+    - uses: actions/checkout@v4
+    - name: Slack Notification
+      uses: rtCamp/action-slack-notify@v2
+      env:
+        MSG_MINIMAL: actions url
+        SLACK_FOOTER: ""
+        SLACK_TITLE: LSST metadetect tests failing on lsst-dev
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
