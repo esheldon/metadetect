@@ -825,7 +825,7 @@ def get_stats_mask(exp):
     return stats_mask
 
 
-def get_detection_mask(exp):
+def get_detection_mask(exp=None):
     """
     Get a mask for detection. Regions with these flags set will not be searched
     for objects.
@@ -838,7 +838,7 @@ def get_detection_mask(exp):
 
     Parameters
     ----------
-    exp: lsst.afw.image.ExposureF
+    exp: lsst.afw.image.ExposureF, optional
         The exposure
 
     Returns
@@ -848,7 +848,7 @@ def get_detection_mask(exp):
 
     mask = ['EDGE', 'NO_DATA']
 
-    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
+    if exp is not None and 'BRIGHT' in exp.mask.getMaskPlaneDict():
         mask += ['BRIGHT']
 
     return mask
