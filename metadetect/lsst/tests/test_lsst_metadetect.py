@@ -1,21 +1,22 @@
 """
 test using lsst simple sim
 """
+import logging
 import sys
+
+import descwl_shear_sims
+import lsst.afw.image as afw_image
+import ngmix
 import numpy as np
 import pytest
-
-import logging
-import ngmix
-import metadetect
-from metadetect import procflags
-from metadetect.lsst.metadetect import run_metadetect, get_fitter
-from metadetect.lsst.configs import get_config
-from metadetect.lsst import util
-import descwl_shear_sims
 from descwl_coadd.coadd import make_coadd
 from descwl_coadd.coadd_nowarp import make_coadd_nowarp
-import lsst.afw.image as afw_image
+
+import metadetect
+from metadetect import procflags
+from metadetect.lsst import util
+from metadetect.lsst.configs import get_config
+from metadetect.lsst.metadetect import get_fitter, run_metadetect
 
 ngmix_v = float(ngmix.__version__[:3])
 
@@ -431,7 +432,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
     rng = np.random.RandomState(seed=116)
 
     ntrial = 1
-    flag = 2**31
+    flag = 2**31-1
 
     for trial in range(ntrial):
         sim_data = make_lsst_sim(rng.randint(0, 2**30))
