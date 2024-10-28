@@ -431,7 +431,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
     rng = np.random.RandomState(seed=116)
 
     ntrial = 1
-    flag = 2**31
+    flag = 2**30
 
     for trial in range(ntrial):
         sim_data = make_lsst_sim(rng.randint(0, 2**30))
