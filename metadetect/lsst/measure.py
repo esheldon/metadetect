@@ -37,6 +37,7 @@ def detect_and_deblend(
     rng,
     thresh=DEFAULT_THRESH,
     show=False,
+    config=None,
 ):
     """
     run detection and deblending of peaks, as well as basic measurments such as

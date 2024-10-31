@@ -25,7 +25,7 @@ class ContextNoiseReplacer(object):
         # do something
     """
 
-    def __init__(self, exposure, sources, rng, noise_image=None):
+    def __init__(self, exposure, sources, rng, config=None, noise_image=None):
         from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
         import lsst.afw.detection as afw_det
 
@@ -39,11 +39,12 @@ class ContextNoiseReplacer(object):
         # making the field the same for all metacal images we reduce variance in
         # the calculation of the response
 
-        config = NoiseReplacerConfig()
+        if config is None:
+            config = NoiseReplacerConfig()
 
-        # TODO DM needs to fix the crash
-        # config.noiseSource = 'variance'
-        config.noiseSeedMultiplier = rng.randint(0, 2**24)
+            # TODO DM needs to fix the crash
+            # config.noiseSource = 'variance'
+            config.noiseSeedMultiplier = rng.randint(0, 2**24)
 
         if noise_image is None:
             # TODO remove_poisson should be true for real data

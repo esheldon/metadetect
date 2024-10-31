@@ -30,7 +30,7 @@ def determine_and_subtract_sky(exp):
     return background
 
 
-def subtract_sky_mbexp(mbexp, thresh=DEFAULT_THRESH):
+def subtract_sky_mbexp(mbexp, thresh=DEFAULT_THRESH, config=None):
     """
     subtract sky
 
@@ -49,7 +49,7 @@ def subtract_sky_mbexp(mbexp, thresh=DEFAULT_THRESH):
 
 
 def iterate_detection_and_skysub(
-    exposure, thresh, niter=2,
+    exposure, thresh, niter=2, config=None
 ):
     """
     Iterate detection and sky subtraction
