@@ -2,15 +2,32 @@ import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure
+from lsst.pex.config import (
+    Config,
+    ChoiceField,
+    ConfigField,
+    ConfigurableField,
+    Field,
+    FieldValidationError,
+    ListField,
+)
+from lsst.pipe.base import Task
+from lsst.meas.algorithms import SourceDetectionTask
 
 from .. import procflags
 
 from .skysub import subtract_sky_mbexp
 
-from .configs import get_config
+from .defaults import (
+    DEFAULT_FWHM_REG,
+    DEFAULT_FWHM_SMOOTH,
+    DEFAULT_STAMP_SIZES,
+    DEFAULT_SUBTRACT_SKY,
+    DEFAULT_WEIGHT_FWHMS,
+)
 from . import measure
 from .metacal_exposures import get_metacal_mbexps_fixnoise
-from .util import get_integer_center, get_jacobian
+from .util import get_integer_center, get_jacobian, override_config
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -58,50 +75,217 @@ def run_metadetect(
         metacal_psf is set to 'fitgauss' and the fitting fails
     """
 
-    config = get_config(config)
+    config_override = config if config is not None else {}
+    config = MetadetectConfig()
+    config.setDefaults()
 
-    ormask = combine_ormasks(mbexp, ormasks)
-    mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
+    override_config(config, config_override)
 
-    if config['subtract_sky']:
-        subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
+    config.freeze()
+    config.validate()
+    task = MetadetectTask(config=config)
+    result = task.run(mbexp, noise_mbexp, rng, mfrac_mbexp, ormasks, show=show,)
+    return result
 
-    psf_stats = fit_original_psfs_mbexp(
-        mbexp=mbexp,
-        wgts=wgts,
-        rng=rng,
+
+class WeightConfig(Config):
+    fwhm = Field[float](
+        doc="FWHM of the Gaussian weight function (in pixel units)",
+        default=None,
+    )
+    fwhm_smooth = Field[float](
+        doc="FWHM of the Gaussian smoothing function (in pixel units)",
+        default=DEFAULT_FWHM_SMOOTH,
+    )
+    fwhm_reg = Field[float](
+        doc="FWHM of the Gaussian regularization function (in pixel units)",
+        default=DEFAULT_FWHM_REG,
     )
 
-    fitter = get_fitter(config, rng=rng)
 
-    metacal_types = config['metacal'].get('types', None)
-
-    mdict, noise_mdict = get_metacal_mbexps_fixnoise(
-        mbexp=mbexp, noise_mbexp=noise_mbexp, types=metacal_types,
+class LmParseConfig(Config):
+    maxfev = Field[int](
+        doc="Maximum number of function evaluations",
+        default=4000,
+    )
+    ftol = Field[float](
+        doc="Relative error desired in the sum of squares",
+        default=1.0e-5,
+    )
+    xtol = Field[float](
+        doc="Relative error desired in the approximate solution",
+        default=1.0e-5,
     )
 
-    result = {}
-    for shear_str, mcal_mbexp in mdict.items():
 
-        res = detect_deblend_and_measure(
-            mbexp=mcal_mbexp,
-            fitter=fitter,
-            config=config,
+class PsfConfig(Config):
+    """Config class for fitting original PSFs."""
+    model = ChoiceField[str](
+        doc="Model for fitting original PSFs",
+        default="am",
+        allowed={
+            "am": "Adaptive moments",  # TODO: What are the other possible values?
+            "gauss": "Gaussian",
+        },
+        optional=False,
+    )
+    ntry = Field[int](
+        doc="Number of tries for fitting original PSFs",
+        default=4,
+    )
+    lm_pars = ConfigField[LmParseConfig](
+        doc="Config for Levenberg-Marquardt fitting",
+    )
+
+
+class MetacalConfig(Config):
+    use_noise_image = Field[bool](
+        doc="Whether to use the noise image",
+        default=True,
+    )
+    psf = ChoiceField[str](
+        doc="PSF model",
+        default="fitgauss",
+        allowed={
+            "fitgauss": "Fit a Gaussian to the PSF",
+        }
+    )
+    types = ListField[str](
+        doc="List of artificial shears to apply.",
+        default=["noshear", "1p", "1m",],
+    )
+
+    def validate(self):
+        super().validate()
+        if not set(self.types).issubset({"noshear", "1p", "1m", "2p", "2m"}):
+            raise FieldValidationError(
+                self.__class__.types,
+                self,
+                "types must be a list consisting of any combinations of "
+                "{'noshear', '1p', '1m', '2p', '2m'}",
+            )
+
+
+class MetadetectConfig(Config):
+    subtract_sky = Field[bool](
+        doc="Whether to subtract the sky before running metadetect",
+        default=DEFAULT_SUBTRACT_SKY,
+    )
+    meas_type = ChoiceField[str](
+        doc="Measurement type",
+        default="wmom",
+        allowed={
+            "wmom": "Weighted moments",
+            "ksigma": "Fourier moments",  # TODO: improve docstring
+            "pgauss": "Pre-seeing moments",
+            "am": "Adaptive moments",
+        }
+    )
+
+    weight = ConfigField[WeightConfig](
+        doc="FWHM of the Gaussian weight function (in pixel units)",
+    )
+
+    psf = ConfigField[PsfConfig](
+        doc="Config for fitting the original PSFs",
+    )
+
+    detect = ConfigurableField(
+        doc="Detection config",
+        target=SourceDetectionTask,
+    )
+    metacal = ConfigField[MetacalConfig](
+        doc="Config for metacal",
+    )
+
+    @property
+    def stamp_size(self):
+        # Caution: This provides a backdoor entry to change the behavior
+        # by changing the DEFAULT_STAMP_SIZES.
+        return DEFAULT_STAMP_SIZES[self.meas_type]
+
+    def setDefaults(self):
+        super().setDefaults()
+        self.weight.fwhm = DEFAULT_WEIGHT_FWHMS.get(self.meas_type, None)
+
+    def validate(self):
+        super().validate()
+
+        if self.stamp_size != DEFAULT_STAMP_SIZES[self.meas_type]:
+            raise FieldValidationError(
+                self.__class__.stamp_size,
+                self,
+                f"stamp_size must be {DEFAULT_STAMP_SIZES[self.meas_type]} "
+                f"for meas_type {self.meas_type}",
+            )
+
+
+class MetadetectTask(Task):
+    ConfigClass = MetadetectConfig
+    _DefaultName = "metadetect"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.makeSubtask("detect")
+
+    def run(
+        self,
+        mbexp,
+        noise_mbexp,
+        rng,
+        mfrac_mbexp=None,
+        ormasks=None,
+        show=False,
+    ):
+
+        # This is to support methods that are not yet refactored.
+        config = self.config.toDict()
+        # Because this is a property and not a Field, we set this explicitly.
+        config['stamp_size'] = self.config.stamp_size
+        config['detect']['thresh'] = self.detect.config.thresholdValue
+
+        ormask = combine_ormasks(mbexp, ormasks)
+        mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
+
+        if self.config.subtract_sky:
+            subtract_sky_mbexp(mbexp=mbexp, thresh=self.config.detect.thresholdValue)
+
+        psf_stats = fit_original_psfs_mbexp(
+            mbexp=mbexp,
+            wgts=wgts,
             rng=rng,
-            show=show,
         )
 
-        if res is not None:
-            band = mcal_mbexp.filters[0]
-            exp = mcal_mbexp[band]
+        fitter = get_fitter(config, rng=rng)
 
-            add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
-            add_ormask(ormask, res)
-            add_original_psf(psf_stats, res)
+        metacal_types = config['metacal'].get('types', None)
 
-        result[shear_str] = res
+        mdict, noise_mdict = get_metacal_mbexps_fixnoise(
+            mbexp=mbexp, noise_mbexp=noise_mbexp, types=metacal_types,
+        )
 
-    return result
+        result = {}
+        for shear_str, mcal_mbexp in mdict.items():
+
+            res = detect_deblend_and_measure(
+                mbexp=mcal_mbexp,
+                fitter=fitter,
+                config=config,
+                rng=rng,
+                show=show,
+            )
+
+            if res is not None:
+                band = mcal_mbexp.filters[0]
+                exp = mcal_mbexp[band]
+
+                add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
+                add_ormask(ormask, res)
+                add_original_psf(psf_stats, res)
+
+            result[shear_str] = res
+
+        return result
 
 
 def detect_deblend_and_measure(
@@ -419,7 +603,6 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
     This can fail and flags will be set, but we proceed
     """
-    from .measure import extract_psf_image
 
     assert len(wgts) == len(mbexp)
     wsum = sum(wgts)
@@ -445,7 +628,7 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
             )
             jac = get_jacobian(exp=exp, cen=cen)
 
-            psf_im = extract_psf_image(exp, cen)
+            psf_im = measure.extract_psf_image(exp, cen)
 
             psf_cen = (np.array(psf_im.shape)-1.0)/2.0
             psf_jacob = jac.copy()
