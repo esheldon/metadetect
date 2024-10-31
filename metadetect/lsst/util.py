@@ -905,3 +905,31 @@ def extract_multiband_coadd_data(coadd_data_list):
         'mfrac_mbexp': mfrac_mbexp,
         'ormasks': ormasks,
     }
+
+
+def override_config(config, config_override: dict):
+    """Override the values in a Config instance with those in a dict.
+
+    The `config` object can have arbitrary level of nesting, and to override
+    the values, `config_override` should have the same nested structure.
+    To allow for arbitrary nesting, this function calls itself recursively.
+
+    Parameters
+    ----------
+    config : `lsst.pex.config.Config`
+        The configuration object to override.
+    config_override : `dict`
+        The dictionary of values to override the configuration with.
+
+    Raises
+    ------
+    AttributeError
+        Raised if a key in `config_override` is not an attribute of `config`.
+    """
+    for key, value in config_override.items():
+        if isinstance(value, dict):
+            subconfig = getattr(config, key)
+            # Use recursion to allow for arbitrarily nested config objects.
+            override_config(subconfig, value)
+        else:
+            setattr(config, key, value)
