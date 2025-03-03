@@ -90,15 +90,15 @@ def run_metadetect(
 
 class WeightConfig(Config):
     fwhm = Field[float](
-        doc="FWHM of the Gaussian weight function (in pixel units)",
+        doc="FWHM of the Gaussian weight function (in arcseconds)",
         default=None,
     )
     fwhm_smooth = Field[float](
-        doc="FWHM of the Gaussian smoothing function (in pixel units)",
+        doc="FWHM of the Gaussian smoothing function (in arcseconds)",
         default=DEFAULT_FWHM_SMOOTH,
     )
     fwhm_reg = Field[float](
-        doc="FWHM of the Gaussian regularization function (in pixel units)",
+        doc="FWHM of the Gaussian regularization function (in arcseconds)",
         default=DEFAULT_FWHM_REG,
     )
 
@@ -183,7 +183,7 @@ class MetadetectConfig(Config):
     )
 
     weight = ConfigField[WeightConfig](
-        doc="FWHM of the Gaussian weight function (in pixel units)",
+        doc="FWHM of the Gaussian weight function (in arcseconds)",
     )
 
     psf = ConfigField[PsfConfig](
