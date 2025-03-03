@@ -102,7 +102,6 @@ class DetectAndDeblendConfig(Config):
         self.detect.includeThresholdMultiplier = 1.0
         self.detect.thresholdPolarity = "positive"
         self.detect.adjustBackground = 0.0
-        self.detect.reEstimateBackground = True
         # these are ignored since we are doing reEstimateBackground = False
         # detection_config.background
         # detection_config.tempLocalBackground
