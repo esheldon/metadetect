@@ -205,14 +205,3 @@ def iterate_detection_and_skysub(
     task = IterateDetectionSkySubTask(config=config)
     result = task.run(exposure)
     return result
-
-
-class SkySubtractionTask(Task):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.makeSubtask("subtract_background")
-        self.makeSubtask("detect_sources")
-
-    def run(self, exposure, **kwargs):
-        return self._sky_sub(exposure, **kwargs)
