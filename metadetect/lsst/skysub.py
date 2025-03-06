@@ -4,23 +4,13 @@ from lsst.meas.algorithms import (
     SubtractBackgroundConfig,
     SourceDetectionTask,
 )
-from lsst.meas.algorithms import SourceDetectionConfig as OriginalSourceDetectionConfig
 from lsst.pex.config import Config, ConfigurableField, Field
 from lsst.pex.exceptions import RuntimeError as LSSTRuntimeError
 from lsst.pipe.base import Task, TaskError
 
 from .defaults import DEFAULT_THRESH
+from .measure import SourceDetectionConfig
 from . import util
-
-
-class SourceDetectionConfig(OriginalSourceDetectionConfig):
-    @property
-    def thresholdValue(self):
-        return self.thresholdValue
-
-    @thresholdValue.setter
-    def thresholdValue(self, value):
-        self.thresholdValue = value
 
 
 SourceDetectionTask.ConfigClass = SourceDetectionConfig
