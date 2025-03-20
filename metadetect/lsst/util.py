@@ -25,7 +25,7 @@ class ContextNoiseReplacer(object):
         # do something
     """
 
-    def __init__(self, exposure, sources, rng, noise_image=None):
+    def __init__(self, exposure, sources, rng, config=None, noise_image=None):
         from lsst.meas.base import NoiseReplacerConfig, NoiseReplacer
         import lsst.afw.detection as afw_det
 
@@ -39,11 +39,12 @@ class ContextNoiseReplacer(object):
         # making the field the same for all metacal images we reduce variance in
         # the calculation of the response
 
-        config = NoiseReplacerConfig()
+        if config is None:
+            config = NoiseReplacerConfig()
 
-        # TODO DM needs to fix the crash
-        # config.noiseSource = 'variance'
-        config.noiseSeedMultiplier = rng.randint(0, 2**24)
+            # TODO DM needs to fix the crash
+            # config.noiseSource = 'variance'
+            config.noiseSeedMultiplier = rng.randint(0, 2**24)
 
         if noise_image is None:
             # TODO remove_poisson should be true for real data
@@ -797,17 +798,11 @@ def get_integer_center(wcs, bbox, as_double=False):
     return pixcen, skycen
 
 
-def get_stats_mask(exp):
+def get_stats_mask(*args, **kwargs):
     """
-    Get a stats mask for use in getting image statistics.  If BRIGHT
-    is found in the mask plane it is added to the usual
+    Get a stats mask for use in getting image statistics.
 
-    ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
-
-    Parameters
-    ----------
-    exp: lsst.afw.image.ExposureF
-        The exposure
+    ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA', 'BRIGHT']
 
     Returns
     -------
@@ -817,39 +812,32 @@ def get_stats_mask(exp):
     # these will be ignored when finding the image standard deviation
     # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
 
-    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA']
-
-    if 'BRIGHT' in exp.mask.getMaskPlaneDict():
-        stats_mask += ['BRIGHT']
+    import lsst.afw.image as afw_image
+    afw_image.Mask.addMaskPlane('BRIGHT')
+    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA', 'BRIGHT']
 
     return stats_mask
 
 
-def get_detection_mask(exp=None):
+def get_detection_mask(*args, **kwargs):
     """
     Get a mask for detection. Regions with these flags set will not be searched
     for objects.
 
-    Default is ['EDGE', 'NO_DATA']
+    Default is ['EDGE', 'NO_DATA', 'BRIGHT]
 
     BRIGHT is defined in descwl_coadd, so it is not guaranteed to be present in
-    the global mask bit space.  Only add BRIGHT to detection mask BRIGHT if it
-    is found in the global mask plane dict
-
-    Parameters
-    ----------
-    exp: lsst.afw.image.ExposureF, optional
-        The exposure
+    the global mask bit space.  We add BRIGHT to detection mask. If it already
+    exists, it does not add a new plane and is harmless.
 
     Returns
     -------
     A list of mask planes
     """
 
-    mask = ['EDGE', 'NO_DATA']
-
-    if exp is not None and 'BRIGHT' in exp.mask.getMaskPlaneDict():
-        mask += ['BRIGHT']
+    import lsst.afw.image as afw_image
+    afw_image.Mask.addMaskPlane('BRIGHT')
+    mask = ['EDGE', 'NO_DATA', 'BRIGHT']
 
     return mask
 
@@ -905,3 +893,31 @@ def extract_multiband_coadd_data(coadd_data_list):
         'mfrac_mbexp': mfrac_mbexp,
         'ormasks': ormasks,
     }
+
+
+def override_config(config, config_override: dict):
+    """Override the values in a Config instance with those in a dict.
+
+    The `config` object can have arbitrary level of nesting, and to override
+    the values, `config_override` should have the same nested structure.
+    To allow for arbitrary nesting, this function calls itself recursively.
+
+    Parameters
+    ----------
+    config : `lsst.pex.config.Config`
+        The configuration object to override.
+    config_override : `dict`
+        The dictionary of values to override the configuration with.
+
+    Raises
+    ------
+    AttributeError
+        Raised if a key in `config_override` is not an attribute of `config`.
+    """
+    for key, value in config_override.items():
+        if isinstance(value, dict):
+            subconfig = getattr(config, key)
+            # Use recursion to allow for arbitrarily nested config objects.
+            override_config(subconfig, value)
+        else:
+            setattr(config, key, value)
