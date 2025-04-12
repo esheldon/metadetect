@@ -80,7 +80,7 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
     )
 
     if res is not None:
-        band = mbexp.filters[0]
+        band = mbexp.bands[0]
         exp = mbexp[band]
 
         add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)

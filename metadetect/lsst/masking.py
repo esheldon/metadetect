@@ -31,7 +31,7 @@ def apply_apodized_edge_masks_mbexp(
     afw_image.Mask.addMaskPlane('APODIZED_EDGE')
     edge = afw_image.Mask.getPlaneBitMask('APODIZED_EDGE')
 
-    bands = mbexp.filters
+    bands = mbexp.bands
     band0 = bands[0]
     ap_mask = np.ones_like(mbexp[band0].image.array)
     _build_square_apodization_mask(AP_RAD, ap_mask)
@@ -82,7 +82,7 @@ def apply_apodized_bright_masks_mbexp(
     from ..masking import (
         make_foreground_apodization_mask, make_foreground_bmask,
     )
-    bands = mbexp.filters
+    bands = mbexp.bands
 
     afw_image.Mask.addMaskPlane('BRIGHT')
     afw_image.Mask.addMaskPlane('BRIGHT_EXPANDED')

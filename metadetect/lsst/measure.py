@@ -275,7 +275,7 @@ def measure(
     if len(sources) == 0:
         return None
 
-    nband = len(mbexp.filters)
+    nband = len(mbexp.bands)
     exp_bbox = mbexp.getBBox()
     wcs = mbexp.singles[0].getWcs()
     results = []
@@ -476,7 +476,7 @@ def _get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
     bbox = _get_bbox(mbexp, source, stamp_size, clip=clip)
 
     mbobs = ngmix.MultiBandObsList()
-    for band in mbexp.filters:
+    for band in mbexp.bands:
 
         subexp = mbexp[band][bbox]
         obs = extract_obs(
