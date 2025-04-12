@@ -9,11 +9,11 @@ from ngmix.gexceptions import (
     BootPSFFailure, PSFFluxFailure,
 )
 from ngmix.moments import make_mom_result, fwhm_to_T
-from pkg_resources import parse_version
 from ngmix.bootstrap import bootstrap
 from ngmix.runners import Runner, PSFRunner
 from ngmix.guessers import SimplePSFGuesser
 from ngmix.fitting import Fitter
+from packaging.version import parse
 
 from .util import Namer
 from . import procflags
@@ -22,7 +22,7 @@ MAX_NUM_SHEAR_BANDS = 6
 
 logger = logging.getLogger(__name__)
 
-if parse_version(ngmix.__version__) < parse_version("2.1.0"):
+if parse(ngmix.__version__) < parse("2.1.0"):
     MOMNAME = "mom"
 else:
     MOMNAME = "sums"
