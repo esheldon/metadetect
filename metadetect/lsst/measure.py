@@ -102,6 +102,7 @@ class DetectAndDeblendConfig(Config):
         self.detect.includeThresholdMultiplier = 1.0
         self.detect.thresholdPolarity = "positive"
         self.detect.adjustBackground = 0.0
+        self.detect.doApplyFlatBackgroundRatio = False
         # these are ignored since we are doing reEstimateBackground = False
         # detection_config.background
         # detection_config.tempLocalBackground
@@ -567,7 +568,7 @@ def extract_psf_image(exposure, orig_cen):
     except InvalidParameterError:
         raise MissingDataError("could not reconstruct PSF")
 
-    psfim = np.array(psfim, dtype='f4', copy=False)
+    psfim = np.asarray(psfim, dtype='f4')
 
     shape = psfim.shape
     assert shape[0] == shape[1], 'require square psf images'
@@ -593,7 +594,7 @@ def _extract_psf_image_fix(exposure, orig_cen):
     except InvalidParameterError:
         raise MissingDataError("could not reconstruct PSF")
 
-    psfim = np.array(psfim, dtype='f4', copy=False)
+    psfim = np.asarray(psfim, dtype='f4')
 
     psfim = util.trim_odd_image(psfim)
     return psfim
