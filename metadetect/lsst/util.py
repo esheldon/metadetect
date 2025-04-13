@@ -333,7 +333,7 @@ def copy_mbexp(mbexp, clear=False):
     new_mbexp = mbexp.clone()
 
     # clone does not copy the psfs
-    for band in mbexp.filters:
+    for band in mbexp.bands:
         psf = try_clone_psf(mbexp[band].getPsf())
         new_mbexp[band].setPsf(psf)
 

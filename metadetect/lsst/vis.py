@@ -157,7 +157,7 @@ def _extract_xy(mbexp, sources):
         y0 = bbox.getBeginY()
         x = []
         y = []
-        for source in sources[mbexp.filters[0]]:
+        for source in sources[mbexp.bands[0]]:
             peak = source.getFootprint().getPeaks()[0]
             cen = peak.getCentroid()
             x.append(cen.getX() - x0)
@@ -191,7 +191,7 @@ def compare_mbexp(
     if isinstance(model, list):
         mold = model
         model = copy_mbexp(mbexp)
-        for iband, band in enumerate(model.filters):
+        for iband, band in enumerate(model.bands):
             model[band].image.array[:, :] = mold[iband]
 
     fig, axs = mplt.subplots(nrows=2, ncols=2, figsize=(12, 12))
@@ -353,7 +353,7 @@ def show_multi_mbexp(mbexp, sources=None):
     if sources is not None:
         x, y = _extract_xy(mbexp, sources)
 
-    for iband, band in enumerate(mbexp.filters):
+    for iband, band in enumerate(mbexp.bands):
         exp = mbexp[band]
 
         noise = np.sqrt(np.median(exp.variance.array))
@@ -392,7 +392,7 @@ def show_image_and_mask(mbexp, band=0):
     axs[0].axis('off')
     axs[1].axis('off')
 
-    bname = mbexp.filters[band]
+    bname = mbexp.bands[band]
     exp = mbexp[bname]
 
     noise = np.sqrt(np.median(exp.variance.array))

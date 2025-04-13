@@ -276,7 +276,7 @@ class MetadetectTask(Task):
             )
 
             if res is not None:
-                band = mcal_mbexp.filters[0]
+                band = mcal_mbexp.bands[0]
                 exp = mcal_mbexp[band]
 
                 add_mfrac(config=config, mfrac=mfrac, res=res, exp=exp)
@@ -543,7 +543,7 @@ def combine_ormasks(mbexp, ormasks):
     versions for each band
     """
     if ormasks is None:
-        bands = mbexp.filters
+        bands = mbexp.bands
         dims = mbexp[bands[0]].image.array.shape
         ormask = np.zeros(dims, dtype='i4')
     else:

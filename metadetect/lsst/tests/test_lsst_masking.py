@@ -83,7 +83,7 @@ def test_apply_apodized_bright_masks(show=False):
         sim_data = make_lsst_sim(rng=rng, dim=dim)
         data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-        bands = data['mbexp'].filters
+        bands = data['mbexp'].bands
 
         dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
 
@@ -128,7 +128,7 @@ def test_apply_apodized_bright_masks(show=False):
         bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
 
         ygrid, xgrid = np.mgrid[0:dim, 0:dim]
-        for iband, band in enumerate(data['mbexp'].filters):
+        for iband, band in enumerate(data['mbexp'].bands):
             exp_orig = sim_data['band_data'][band][0]
             exp = data['mbexp'][band]
             assert exp_orig is not exp
@@ -195,7 +195,7 @@ def extract_cell_mbexp(mbexp, cell_size, start_x, start_y):
     )
 
     subexps = []
-    for band in mbexp.filters:
+    for band in mbexp.bands:
         exp = mbexp[band]
         # we need to make a copy of it
         subexp = exp[new_bbox]
@@ -223,7 +223,7 @@ def test_apply_apodized_bright_masks_subexp(show=False):
     sim_data = make_lsst_sim(rng=rng, dim=dim)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    bands = data['mbexp'].filters
+    bands = data['mbexp'].bands
 
     dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
 
@@ -294,7 +294,7 @@ def test_apply_apodized_bright_masks_subexp(show=False):
 
     ygrid, xgrid = np.mgrid[0:cell_size, 0:cell_size]
 
-    for iband, band in enumerate(data['mbexp'].filters):
+    for iband, band in enumerate(data['mbexp'].bands):
         exp = sub_mbexp[band]
         nexp = nsub_mbexp[band]
         ormask = ormasks[iband]
@@ -362,7 +362,7 @@ def test_apply_apodized_edge_masks(show=False):
     if show:
         vis.show_multi_mbexp(data['mbexp'])
 
-    band0 = data['mbexp'].filters[0]
+    band0 = data['mbexp'].bands[0]
     edge = data['mbexp'][band0].mask.getPlaneBitMask('APODIZED_EDGE')
 
     ygrid, xgrid = np.mgrid[0:dim, 0:dim]
@@ -374,7 +374,7 @@ def test_apply_apodized_edge_masks(show=False):
         (xgrid > (dim - ap_range - 1)) |
         (ygrid > (dim - ap_range - 1))
     )
-    for iband, band in enumerate(data['mbexp'].filters):
+    for iband, band in enumerate(data['mbexp'].bands):
         exp_orig = sim_data['band_data'][band][0]
         exp = data['mbexp'][band]
         assert exp_orig is not exp
@@ -415,7 +415,7 @@ def test_apply_apodized_bright_masks_metadetect(show=False):
 
         data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-        bands = data['mbexp'].filters
+        bands = data['mbexp'].bands
 
         dtype = [('ra', 'f8'), ('dec', 'f8'), ('radius_pixels', 'f8')]
 
