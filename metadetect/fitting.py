@@ -131,9 +131,9 @@ def fit_mbobs_gauss(
     if flags == 0:
         res["gauss_obj_flags"] = ores["flags"]
         res["gauss_T_flags"] = ores["flags"]
-        res["gauss_band_flux_flags"] = ores["flags"]
-        res["gauss_band_flux"] = ores["flux"]
-        res["gauss_band_flux_err"] = ores["flux_err"]
+        res["gauss_band_flux_flags"][0, shear_bands] = ores["flags"]
+        res["gauss_band_flux"][0, shear_bands] = ores["flux"]
+        res["gauss_band_flux_err"][0, shear_bands] = ores["flux_err"]
         if ores["flags"] == 0:
             res["gauss_s2n"] = ores["s2n"]
             res["gauss_g"] = ores["g"]
