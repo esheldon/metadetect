@@ -289,8 +289,7 @@ def test_lsst_metadetect_am():
 def test_lsst_metadetect_gauss():
     rng = np.random.RandomState(seed=918)
 
-    # only single band for am currently
-    bands = ['i']
+    bands = ['r', 'i', 'z']
     sim_data = make_lsst_sim(116, bands=bands)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
@@ -307,12 +306,11 @@ def test_lsst_metadetect_gauss():
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear][f"{meas_type}_flags"] == 0)
+        assert np.all(res[shear][f"{meas_type}_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
-        assert len(res[shear][flux_name].shape) == len(bands)
-        with pytest.raises(TypeError):
-            len(res[shear][flux_name][0])
+        assert res[shear][flux_name].shape[1] == len(bands)
+        assert np.all(np.isfinite(res[shear][flux_name]))
 
 
 def test_lsst_metadetect_fullcoadd_smoke():
