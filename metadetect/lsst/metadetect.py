@@ -179,6 +179,7 @@ class MetadetectConfig(Config):
             "ksigma": "Fourier moments",  # TODO: improve docstring
             "pgauss": "Pre-seeing moments",
             "am": "Adaptive moments",
+            "gauss": "Gaussian Fit",
         }
     )
 
@@ -340,6 +341,7 @@ def detect_deblend_and_measure(
         fitter=fitter,
         stamp_size=config['stamp_size'],
         fwhm_reg=fwhm_reg,
+        rng=rng,
     )
 
     return results
@@ -507,8 +509,8 @@ def get_fitter(config, rng=None):
         # TODO is there a better way?
         fitter.kind = 'am'
 
-    elif meas_type == 'em':
-        fitter = None
+    elif meas_type == 'gauss':
+        fitter = 'gauss'
     else:
         fwhm = config['weight']['fwhm']
 
