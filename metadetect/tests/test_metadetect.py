@@ -175,7 +175,7 @@ def _check_result_array(res, shear, msk, model):
             assert np.all(res[shear][msk][col] == "012")
         else:
             # admom doesn't make band fluxes
-            if model in ["admom", "am", "gauss"] and "band_flux" in col:
+            if model in ["admom", "am"] and "band_flux" in col:
                 if col.endswith("band_flux_flags"):
                     assert np.array_equal(
                         res[shear][msk][col],
