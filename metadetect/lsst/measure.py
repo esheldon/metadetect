@@ -305,9 +305,18 @@ def measure(
 
             # TODO do something with bmask_flags?
             if fitter == 'gauss':
+                psf_fitter = ngmix.admom.AdmomFitter(rng=rng)
+                psf_guesser = ngmix.guessers.GMixPSFGuesser(
+                    rng=rng, ngauss=1, guess_from_moms=True,
+                )
+                psf_runner = ngmix.runners.PSFRunner(
+                    fitter=psf_fitter, guesser=psf_guesser, ntry=4,
+                )
+
                 this_res = fit_mbobs_gauss(
                     mbobs=mbobs,
                     bmask_flags=0,
+                    psf_runner=psf_runner,
                     rng=rng,
                 )
             else:
