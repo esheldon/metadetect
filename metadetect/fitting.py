@@ -136,8 +136,8 @@ def fit_mbobs_gauss(
         res["gauss_band_flux_err"] = ores["flux_err"]
         if ores["flags"] == 0:
             res["gauss_s2n"] = ores["s2n"]
-            res["gauss_g"] = _extract_g(ores)
-            res["gauss_g_cov"] = ores['g_cov']
+            res["gauss_g"] = ores["g"]
+            res["gauss_g_cov"] = ores["g_cov"]
             res["gauss_T"] = ores["T"]
             res["gauss_T_err"] = ores["T_err"]
 
