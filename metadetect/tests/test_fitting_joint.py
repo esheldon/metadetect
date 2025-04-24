@@ -764,15 +764,13 @@ def test_fit_mbobs_gauss_smoke(shear_bands):
         shear_bands = list(range(len(mbobs)))
 
     for col in res.dtype.names:
-        # if col.endswith("band_flux_flags"):
-        #     assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
-        # elif "band_flux" in col:
-        #     assert np.all(np.isnan(res[col])), (col, res[col])
         if col.endswith("band_flux_flags"):
-            # assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
             assert np.all(res[col][0, shear_bands] == 0), (col, res[col])
             if len(shear_bands) != len(mbobs):
-                assert np.any(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+                tocheck = [i for i in range(len(mbobs)) if i not in shear_bands]
+                assert np.all(
+                    res[col][:, tocheck] == procflags.NO_ATTEMPT
+                ), (col, res[col])
 
         elif "band_flux" in col:
             assert np.all(np.isfinite(res[col][0, shear_bands])), (col, res[col])
@@ -816,8 +814,10 @@ def test_fit_mbobs_gauss_coadd():
                 assert np.any(
                     res[col][0, shear_bands] == procflags.NO_ATTEMPT
                 ), (col, res[col])
-                assert np.any(
-                    res_coadd[col][0, shear_bands] == procflags.NO_ATTEMPT
+
+                tocheck = [i for i in range(len(mbobs)) if i not in shear_bands]
+                assert np.all(
+                    res_coadd[col][0, tocheck] == procflags.NO_ATTEMPT
                 ), (col, res_coadd[col])
         elif col.endswith("band_flux"):
             assert np.all(np.isfinite(res[col][0, shear_bands])), (col, res[col])
