@@ -303,7 +303,7 @@ def test_lsst_metadetect_gauss():
     assert gname in res['noshear'].dtype.names
 
     for shear in ('noshear', '1p', '1m'):
-        # 5x5 grid
+        # 5x5 grid of sources
         assert res[shear].size == 25
 
         assert np.all(res[shear][f"{meas_type}_flags"] == 0)
