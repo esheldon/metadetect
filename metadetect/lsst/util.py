@@ -920,4 +920,7 @@ def override_config(config, config_override: dict):
             # Use recursion to allow for arbitrarily nested config objects.
             override_config(subconfig, value)
         else:
-            setattr(config, key, value)
+            if key == 'stamp_size':
+                config.toDict()[key] = value
+            else:
+                setattr(config, key, value)

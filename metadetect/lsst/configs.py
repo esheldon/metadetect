@@ -53,13 +53,17 @@ def _fill_config(config):
     if 'stamp_size' not in config or config['stamp_size'] is None:
         config['stamp_size'] = get_default_stamp_size(meas_type)
 
-    if meas_type != 'am':
+    if meas_type not in ['am', 'gauss']:
         wc = get_default_weight_config(meas_type)
         if 'weight' in config and config['weight'] is not None:
             wc.update(config['weight'])
         config['weight'] = wc
 
-        _verify_weight_config(config['weight'])
+    else:
+        # we will ignore this for am/gauss, so use wmom defaults
+        config['weight'] = get_default_weight_config('wmom')
+
+    _verify_weight_config(config['weight'])
 
     # note we allow ngmix.metacal.get_all_metacal to do its
     # own verification
