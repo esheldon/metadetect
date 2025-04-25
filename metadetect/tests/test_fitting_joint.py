@@ -765,9 +765,15 @@ def test_fit_mbobs_gauss_smoke(shear_bands):
 
     for col in res.dtype.names:
         if col.endswith("band_flux_flags"):
-            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
+            assert np.all(res[col][0, shear_bands] == 0), (col, res[col])
+            if len(shear_bands) != len(mbobs):
+                tocheck = [i for i in range(len(mbobs)) if i not in shear_bands]
+                assert np.all(
+                    res[col][:, tocheck] == procflags.NO_ATTEMPT
+                ), (col, res[col])
+
         elif "band_flux" in col:
-            assert np.all(np.isnan(res[col])), (col, res[col])
+            assert np.all(np.isfinite(res[col][0, shear_bands])), (col, res[col])
         elif col == "shear_bands":
             assert np.all(
                 res[col]
@@ -802,11 +808,22 @@ def test_fit_mbobs_gauss_coadd():
 
     for col in res.dtype.names:
         if col.endswith("band_flux_flags"):
-            assert np.all(res[col] == procflags.NO_ATTEMPT), (col, res[col])
-            assert np.all(res_coadd[col] == procflags.NO_ATTEMPT), (col, res_coadd[col])
-        elif "band_flux" in col:
-            assert np.all(np.isnan(res[col])), (col, res[col])
-            assert np.all(np.isnan(res_coadd[col])), (col, res_coadd[col])
+            assert np.all(res[col][0, shear_bands] == 0), (col, res[col])
+            assert np.all(res_coadd[col][0, shear_bands] == 0), (col, res_coadd[col])
+            if len(shear_bands) != len(mbobs):
+                assert np.any(
+                    res[col][0, shear_bands] == procflags.NO_ATTEMPT
+                ), (col, res[col])
+
+                tocheck = [i for i in range(len(mbobs)) if i not in shear_bands]
+                assert np.all(
+                    res_coadd[col][0, tocheck] == procflags.NO_ATTEMPT
+                ), (col, res_coadd[col])
+        elif col.endswith("band_flux"):
+            assert np.all(np.isfinite(res[col][0, shear_bands])), (col, res[col])
+            assert np.all(
+                np.isfinite(res_coadd[col][0, shear_bands])
+            ), (col, res_coadd[col])
         elif col == "shear_bands":
             assert np.all(
                 res[col]

@@ -131,6 +131,16 @@ def fit_mbobs_gauss(
     if flags == 0:
         res["gauss_obj_flags"] = ores["flags"]
         res["gauss_T_flags"] = ores["flags"]
+
+        if len(res["gauss_band_flux_flags"].shape) == 2:
+            res["gauss_band_flux_flags"][0, shear_bands] = ores["flags"]
+            res["gauss_band_flux"][0, shear_bands] = ores["flux"]
+            res["gauss_band_flux_err"][0, shear_bands] = ores["flux_err"]
+        else:
+            res["gauss_band_flux_flags"] = ores["flags"]
+            res["gauss_band_flux"] = ores["flux"]
+            res["gauss_band_flux_err"] = ores["flux_err"]
+
         if ores["flags"] == 0:
             res["gauss_s2n"] = ores["s2n"]
             res["gauss_g"] = ores["g"]
@@ -143,7 +153,7 @@ def fit_mbobs_gauss(
             res["gauss_psf_flags"] = pres["flags"]
             if res["gauss_psf_flags"] == 0:
                 res["gauss_psf_T"] = pres["T"]
-                res["gauss_psf_g"] = pres["g"]
+                res["gauss_psf_g"] = _extract_g(pres)
                 if ores["flags"] == 0:
                     res["gauss_T_ratio"] = res["gauss_T"] / res["gauss_psf_T"]
         else:
@@ -161,8 +171,9 @@ def fit_mbobs_gauss(
                         else:
                             _wgt = np.median(obs.weight[msk])
                             psf_T_sum += obs.psf.meta["result"]["T"] * _wgt
+                            g = _extract_g(obs.psf.meta["result"])
                             psf_g_sum += (
-                                obs.psf.meta["result"]["g"]
+                                g
                                 * _wgt
                                 * obs.psf.meta["result"]["T"]
                             )
@@ -180,6 +191,20 @@ def fit_mbobs_gauss(
         res["gauss_flags"] |= flags
 
     return res
+
+
+def _extract_g(res):
+    """
+    We may have fit the PSF with adaptive moments, so check for
+    'e' as well
+    """
+    if 'g' in res:
+        g = res['g']
+    elif 'e' in res:
+        e1, e2 = res['e']
+        g1, g2 = ngmix.shape.e1e2_to_g1g2(e1, e2)
+        g = np.array([g1, g2])
+    return g
 
 
 def get_gauss_psf_runner(rng):

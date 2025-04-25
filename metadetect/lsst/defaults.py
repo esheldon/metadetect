@@ -14,6 +14,7 @@ DEFAULT_STAMP_SIZES = {
     'ksigma': 64,
     'pgauss': 49,
     'am': 49,
+    'gauss': 49,
 }
 
 # threshold for detection

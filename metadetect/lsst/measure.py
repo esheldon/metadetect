@@ -24,7 +24,11 @@ from lsst.pex.exceptions import (
 from ..procflags import (
     EDGE_HIT, ZERO_WEIGHTS, CENTROID_FAILURE, NO_ATTEMPT,
 )
-from ..fitting import fit_mbobs_wavg, get_wavg_output_struct
+from ..fitting import (
+    fit_mbobs_gauss,
+    fit_mbobs_wavg,
+    get_wavg_output_struct,
+)
 
 from . import util
 from .util import ContextNoiseReplacer, get_jacobian
@@ -246,6 +250,7 @@ def measure(
     fitter,
     stamp_size,
     fwhm_reg=0,
+    rng=None,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -260,12 +265,14 @@ def measure(
     sources: list of sources
         From a detection task
     fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.PGaussMom
-        For calculating moments
+        For calculating moments. Can also be string 'gauss'
     stamp_size: int
         Size for postage stamps
     fwhm_reg: float, optional
         Optional regularization for calculating shapes.  The fwhm is converted
         to T and T+Treg is used in the denominator
+    rng: np.random.RandomState
+        Random number generator, only used when fitter == 'gauss'
 
     Returns
     -------
@@ -297,12 +304,28 @@ def measure(
             )
 
             # TODO do something with bmask_flags?
-            this_res = fit_mbobs_wavg(
-                mbobs=mbobs,
-                fitter=fitter,
-                bmask_flags=0,
-                fwhm_reg=fwhm_reg,
-            )
+            if fitter == 'gauss':
+                psf_fitter = ngmix.admom.AdmomFitter(rng=rng)
+                psf_guesser = ngmix.guessers.GMixPSFGuesser(
+                    rng=rng, ngauss=1, guess_from_moms=True,
+                )
+                psf_runner = ngmix.runners.PSFRunner(
+                    fitter=psf_fitter, guesser=psf_guesser, ntry=4,
+                )
+
+                this_res = fit_mbobs_gauss(
+                    mbobs=mbobs,
+                    bmask_flags=0,
+                    psf_runner=psf_runner,
+                    rng=rng,
+                )
+            else:
+                this_res = fit_mbobs_wavg(
+                    mbobs=mbobs,
+                    fitter=fitter,
+                    bmask_flags=0,
+                    fwhm_reg=fwhm_reg,
+                )
         except LengthError as err:
             # This is raised when a bbox hits an edge
             LOG.debug('%s', err)

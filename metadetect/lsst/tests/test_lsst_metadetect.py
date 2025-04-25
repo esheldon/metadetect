@@ -286,11 +286,38 @@ def test_lsst_metadetect_am():
             len(res[shear][flux_name][0])
 
 
+def test_lsst_metadetect_gauss():
+    rng = np.random.RandomState(seed=918)
+
+    bands = ['r', 'i', 'z']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    meas_type = 'gauss'
+    config = {'meas_type': meas_type}
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    gname = f'{meas_type}_g'
+    flux_name = f'{meas_type}_band_flux'
+    assert gname in res['noshear'].dtype.names
+
+    for shear in ('noshear', '1p', '1m'):
+        # 5x5 grid of sources
+        assert res[shear].size == 25
+
+        assert np.all(res[shear][f"{meas_type}_flags"] == 0)
+        assert np.all(res[shear]["mfrac"] == 0)
+
+        assert res[shear][flux_name].shape[1] == len(bands)
+        assert np.all(np.isfinite(res[shear][flux_name]))
+
+
 def test_lsst_metadetect_fullcoadd_smoke():
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
-    sim_data = make_lsst_sim(116, bands=bands)
+    sim_data = make_lsst_sim(882, bands=bands)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=False)
 
     config = {'meas_type': 'pgauss'}
@@ -463,6 +490,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 if __name__ == '__main__':
     # test_lsst_metadetect_am()
-    test_lsst_masked_as_bright(show=True)
+    test_lsst_metadetect_gauss()
+    # test_lsst_masked_as_bright(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
     # test_lsst_metadetect_mfrac_ormask(show=True)
