@@ -59,16 +59,16 @@ def _fill_config(config):
             wc.update(config['weight'])
         config['weight'] = wc
 
-        _verify_weight_config(config['weight'])
+    else:
+        # we will ignore this for am/gauss, so use wmom defaults
+        config['weight'] = get_default_weight_config('wmom')
+
+    _verify_weight_config(config['weight'])
 
     # note we allow ngmix.metacal.get_all_metacal to do its
     # own verification
     _verify_psf_config(config['psf'])
     _verify_detect_config(config['detect'])
-
-    # the new task can't handle None for weight
-    if config['weight'] is None:
-        del config['weight']
 
 
 def get_default_weight_config(meas_type):
