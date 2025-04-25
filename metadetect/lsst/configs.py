@@ -53,7 +53,7 @@ def _fill_config(config):
     if 'stamp_size' not in config or config['stamp_size'] is None:
         config['stamp_size'] = get_default_stamp_size(meas_type)
 
-    if meas_type != 'am':
+    if meas_type not in ['am', 'gauss']:
         wc = get_default_weight_config(meas_type)
         if 'weight' in config and config['weight'] is not None:
             wc.update(config['weight'])
@@ -65,6 +65,10 @@ def _fill_config(config):
     # own verification
     _verify_psf_config(config['psf'])
     _verify_detect_config(config['detect'])
+
+    # the new task can't handle None for weight
+    if config['weight'] is None:
+        del config['weight']
 
 
 def get_default_weight_config(meas_type):
