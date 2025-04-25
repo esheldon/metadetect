@@ -134,12 +134,8 @@ def fit_mbobs_gauss(
 
         if len(res["gauss_band_flux_flags"].shape) == 2:
             res["gauss_band_flux_flags"][0, shear_bands] = ores["flags"]
-            res["gauss_band_flux"][0, shear_bands] = ores["flux"]
-            res["gauss_band_flux_err"][0, shear_bands] = ores["flux_err"]
         else:
             res["gauss_band_flux_flags"] = ores["flags"]
-            res["gauss_band_flux"] = ores["flux"]
-            res["gauss_band_flux_err"] = ores["flux_err"]
 
         if ores["flags"] == 0:
             res["gauss_s2n"] = ores["s2n"]
@@ -147,6 +143,13 @@ def fit_mbobs_gauss(
             res["gauss_g_cov"] = ores["g_cov"]
             res["gauss_T"] = ores["T"]
             res["gauss_T_err"] = ores["T_err"]
+
+            if len(res["gauss_band_flux_flags"].shape) == 2:
+                res["gauss_band_flux"][0, shear_bands] = ores["flux"]
+                res["gauss_band_flux_err"][0, shear_bands] = ores["flux_err"]
+            else:
+                res["gauss_band_flux"] = ores["flux"]
+                res["gauss_band_flux_err"] = ores["flux_err"]
 
         if coadd:
             pres = shear_mbobs[0][0].psf.meta["result"]
