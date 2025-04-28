@@ -282,6 +282,11 @@ def measure(
     if len(sources) == 0:
         return None
 
+    if fitter == 'gauss':
+        fitter_kind = fitter
+    else:
+        fitter_kind = fitter.kind
+
     nband = len(mbexp.bands)
     exp_bbox = mbexp.getBBox()
     wcs = mbexp.singles[0].getWcs()
@@ -340,8 +345,8 @@ def measure(
             flags = CENTROID_FAILURE
 
         if flags != 0:
-            this_res = get_wavg_output_struct(nband=nband, model=fitter.kind)
-            this_res[fitter.kind + '_flags'] = flags
+            this_res = get_wavg_output_struct(nband=nband, model=fitter_kind)
+            this_res[fitter_kind + '_flags'] = flags
 
         res = get_output(
             wcs=wcs, source=source, res=this_res,
