@@ -1,5 +1,4 @@
 import numpy as np
-import descwl_shear_sims
 from metadetect.lsst import util
 import lsst.afw.image as afw_image
 import lsst.geom as geom
@@ -7,6 +6,7 @@ import pytest
 
 
 def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['i']):
+    import descwl_shear_sims
 
     coadd_dim = dim
     se_dim = dim

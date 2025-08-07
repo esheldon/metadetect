@@ -6,7 +6,6 @@ import tqdm
 import logging
 import metadetect.lsst.skysub as lsst_skysub
 import metadetect.lsst.measure as lsst_measure
-import descwl_shear_sims
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -15,6 +14,8 @@ logging.basicConfig(
 
 
 def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
+    import descwl_shear_sims
+
     coadd_dim = 251
 
     # the EDGE region is 5 pixels wide but, give a bit more space because the

@@ -1,18 +1,16 @@
 import numpy as np
-import descwl_shear_sims
 from metadetect.masking import get_ap_range
 from metadetect.lsst import masking
 from metadetect.lsst import vis
 from metadetect.lsst import util
 from metadetect.lsst.metadetect import run_metadetect
-from descwl_coadd.coadd import make_coadd
-from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 import lsst.geom as geom
 
 
 def make_lsst_sim(
     rng, dim, mag=22, hlr=0.5, bands=['r', 'i', 'z'], layout='grid',
 ):
+    import descwl_shear_sims
 
     coadd_dim = dim
     se_dim = dim
@@ -42,6 +40,8 @@ def make_lsst_sim(
 
 
 def do_coadding(rng, sim_data, nowarp):
+    from descwl_coadd.coadd import make_coadd
+    from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
     bands = list(sim_data['band_data'].keys())
 

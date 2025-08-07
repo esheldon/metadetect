@@ -1,8 +1,5 @@
 import numpy as np
 from metadetect.lsst.util import exp2obs
-from descwl_shear_sims.galaxies import make_galaxy_catalog
-from descwl_shear_sims.sim import make_sim
-from descwl_shear_sims.psfs import make_fixed_psf
 from metadetect.lsst.util import get_integer_center, get_jacobian, get_mbexp
 from metadetect.lsst.metacal_exposures import (
     get_metacal_exps_fixnoise, get_metacal_mbexps_fixnoise,
@@ -13,6 +10,10 @@ from ngmix.metacal import get_all_metacal
 
 
 def test_metacal_exps(ntrial=10, show=False):
+    from descwl_shear_sims.galaxies import make_galaxy_catalog
+    from descwl_shear_sims.sim import make_sim
+    from descwl_shear_sims.psfs import make_fixed_psf
+
     seed = None
     dim = 250
     buff = 50
@@ -101,6 +102,10 @@ def test_metacal_exps(ntrial=10, show=False):
 
 
 def test_metacal_mbexp(ntrial=10, show=False):
+    from descwl_shear_sims.galaxies import make_galaxy_catalog
+    from descwl_shear_sims.sim import make_sim
+    from descwl_shear_sims.psfs import make_fixed_psf
+
     seed = None
     dim = 250
     buff = 50

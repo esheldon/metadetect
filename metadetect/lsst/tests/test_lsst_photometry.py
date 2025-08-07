@@ -8,9 +8,6 @@ import pytest
 import logging
 from metadetect.lsst import photometry as lsst_phot
 from metadetect.lsst import util
-import descwl_shear_sims
-from descwl_coadd.coadd import make_coadd
-from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -19,6 +16,7 @@ logging.basicConfig(
 
 
 def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None):
+    import descwl_shear_sims
 
     rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
@@ -50,6 +48,8 @@ def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None):
 
 
 def do_coadding(rng, sim_data, nowarp):
+    from descwl_coadd.coadd import make_coadd
+    from descwl_coadd.coadd_nowarp import make_coadd_nowarp
 
     bands = list(sim_data['band_data'].keys())
 
