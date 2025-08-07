@@ -6,7 +6,7 @@ to test all the moving parts
 import numpy as np
 import ngmix
 import galsim
-from .. import shearpos
+from metadetect import shearpos
 
 
 def test_shear_pos(show=False):

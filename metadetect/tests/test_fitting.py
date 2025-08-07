@@ -8,7 +8,7 @@ from ngmix.gaussmom import GaussMom
 from ngmix.moments import fwhm_to_T
 
 from .sim import make_mbobs_sim
-from ..fitting import (
+from metadetect.fitting import (
     fit_mbobs_wavg,
     _combine_fit_results_wavg,
     symmetrize_obs_weights,
@@ -18,7 +18,7 @@ from ..fitting import (
     _make_mom_res,
     combine_fit_res,
 )
-from .. import procflags
+from metadetect import procflags
 
 
 def _print_res(res):

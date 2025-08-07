@@ -3,12 +3,12 @@ import numpy as np
 import logging
 
 from metadetect.lsst import util
-import descwl_shear_sims
 
 logging.basicConfig(stream=sys.stdout, level=logging.WARN)
 
 
 def make_lsst_sim(rng):
+    import descwl_shear_sims
     coadd_dim = 200
     buff = 20
     # coadd_dim = 351

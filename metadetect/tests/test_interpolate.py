@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..interpolate import (
+from metadetect.interpolate import (
     interpolate_image_at_mask,
 )
 

@@ -4,7 +4,7 @@ import ngmix
 import pytest
 
 from .sim import make_mbobs_sim
-from ..fitting import (
+from metadetect.fitting import (
     fit_mbobs_admom,
     fit_mbobs_list_joint,
     make_coadd_obs,
@@ -12,7 +12,7 @@ from ..fitting import (
     symmetrize_obs_weights,
     fit_mbobs_gauss,
 )
-from .. import procflags
+from metadetect import procflags
 
 
 @pytest.mark.parametrize("case", [

@@ -13,10 +13,10 @@ from packaging import version
 import ngmix
 import numpy as np
 
-from .. import detect
-from .. import metadetect
-from .. import fitting
-from .. import procflags
+from metadetect import detect
+from metadetect import metadetect
+from metadetect import fitting
+from metadetect import procflags
 from .sim import Sim
 
 

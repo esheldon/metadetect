@@ -3,7 +3,7 @@ import ngmix
 
 import pytest
 
-from ..masking import (
+from metadetect.masking import (
     _intersects,
     _ap_kern_kern,
     _do_apodization_mask,
