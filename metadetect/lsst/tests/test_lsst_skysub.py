@@ -6,6 +6,13 @@ import tqdm
 import logging
 import metadetect.lsst.skysub as lsst_skysub
 import metadetect.lsst.measure as lsst_measure
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -163,6 +170,10 @@ def test_skysub_pure_noise():
     check_skysub(meanvals, errvals, noise, true_sky=0)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 def test_skysub_sim_smoke():
     seed = 812
     rng = np.random.RandomState(seed)
@@ -176,6 +187,10 @@ def test_skysub_sim_smoke():
     assert 'BGVAR' in meta
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 @pytest.mark.parametrize('sky_n_sigma', [-0.5, -2.0, -100.0])
 def test_skysub_sim_fixed_gal(sky_n_sigma):
     """
@@ -216,6 +231,10 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
     check_skysub(meanvals, errvals, image_noise, true_sky=true_sky)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 @pytest.mark.skipif(
     "CATSIM_DIR" not in os.environ,
     reason='simulation input data is not present',

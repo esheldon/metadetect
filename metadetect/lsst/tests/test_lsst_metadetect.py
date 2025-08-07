@@ -13,6 +13,15 @@ from metadetect.lsst.metadetect import run_metadetect, get_fitter
 from metadetect.lsst.configs import get_config
 from metadetect.lsst import util
 import lsst.afw.image as afw_image
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    getPackageDir('descwl_coadd')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
+
 
 ngmix_v = float(ngmix.__version__[:3])
 
@@ -86,6 +95,10 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize("metacal_types_option", [None, "1p1m", "full"])
@@ -146,6 +159,10 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.skipif(ngmix_v < 2.1, reason="requires ngmix 2.1 or higher")
 @pytest.mark.parametrize('meas_type', ['wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('fwhm_smooth', [None, 1.2])
@@ -188,6 +205,10 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.parametrize('fwhm_reg', [0, 0.8])
 def test_lsst_metadetect_fwhm_reg(fwhm_reg):
     rng = np.random.RandomState(seed=882)
@@ -226,6 +247,10 @@ def test_lsst_metadetect_fwhm_reg(fwhm_reg):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_metadetect_fwhm_reg_shapenoise():
 
     sdevs = {}
@@ -257,6 +282,10 @@ def test_lsst_metadetect_fwhm_reg_shapenoise():
     assert sdevs[0.8] < 0.6 * sdevs[0]
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_metadetect_am():
     rng = np.random.RandomState(seed=882)
 
@@ -286,6 +315,10 @@ def test_lsst_metadetect_am():
             len(res[shear][flux_name][0])
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_metadetect_gauss():
     rng = np.random.RandomState(seed=918)
 
@@ -313,6 +346,10 @@ def test_lsst_metadetect_gauss():
         assert np.all(np.isfinite(res[shear][flux_name]))
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_metadetect_fullcoadd_smoke():
     rng = np.random.RandomState(seed=116)
 
@@ -339,6 +376,10 @@ def test_lsst_metadetect_fullcoadd_smoke():
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_zero_weights(show=False):
     """
     At time of writing, DM stack will still detect in regions with inf
@@ -381,6 +422,10 @@ def test_lsst_zero_weights(show=False):
     assert nobj[0] == nobj[1]
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_masked_as_bright(show=False):
     """
     Make sure we don't detect in areas marked BRIGHT
@@ -424,6 +469,10 @@ def test_lsst_masked_as_bright(show=False):
                 assert tres.size == 25
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
 def test_lsst_metadetect_prepsf_stars(meas_type):
     seed = 55
@@ -454,6 +503,10 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
             assert np.all(np.isfinite(data[field][wgood])), field
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 def test_lsst_metadetect_mfrac_ormask(show=False):
     rng = np.random.RandomState(seed=116)
 

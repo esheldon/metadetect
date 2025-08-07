@@ -8,11 +8,19 @@ import logging
 from metadetect.lsst.metadetect import get_fitter
 import metadetect.lsst.measure
 from metadetect.lsst import util
+from lsst.utils import getPackageDir
 
 logging.basicConfig(
     stream=sys.stdout,
     level=logging.INFO,
 )
+
+try:
+    getPackageDir('descwl_shear_sims')
+    getPackageDir('descwl_coadd')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 
 def make_lsst_sim(rng, g1, g2, mag=20, hlr=1.0):
@@ -77,6 +85,10 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.parametrize('ginput', [
     (0.1, 0.0),
     (0.1, 0.1),
