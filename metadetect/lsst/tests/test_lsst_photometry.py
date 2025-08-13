@@ -8,6 +8,14 @@ import pytest
 import logging
 from metadetect.lsst import photometry as lsst_phot
 from metadetect.lsst import util
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    getPackageDir('descwl_coadd')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -79,6 +87,10 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims and/or descwl_coadd not available'
+)
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('nowarp', [False, True])

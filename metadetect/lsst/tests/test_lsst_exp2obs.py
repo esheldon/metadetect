@@ -3,6 +3,13 @@ from metadetect.lsst import util
 import lsst.afw.image as afw_image
 import lsst.geom as geom
 import pytest
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 
 def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['i']):
@@ -35,6 +42,10 @@ def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['i']):
     return sim_data
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 @pytest.mark.parametrize('copy_mask_to', ['ormask', 'bmask'])
 def test_conversion(copy_mask_to):
     seed = 9911

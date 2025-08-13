@@ -7,8 +7,20 @@ from metadetect.lsst.metacal_exposures import (
 from copy import deepcopy
 import ngmix
 from ngmix.metacal import get_all_metacal
+import pytest
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 def test_metacal_exps(ntrial=10, show=False):
     from descwl_shear_sims.galaxies import make_galaxy_catalog
     from descwl_shear_sims.sim import make_sim
@@ -101,6 +113,10 @@ def test_metacal_exps(ntrial=10, show=False):
             assert np.all(tweight == eweight)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 def test_metacal_mbexp(ntrial=10, show=False):
     from descwl_shear_sims.galaxies import make_galaxy_catalog
     from descwl_shear_sims.sim import make_sim

@@ -1,8 +1,16 @@
 import sys
 import numpy as np
 import logging
+import pytest
 
 from metadetect.lsst import util
+from lsst.utils import getPackageDir
+
+try:
+    getPackageDir('descwl_shear_sims')
+    run_tests_on_simulations = True
+except LookupError:
+    run_tests_on_simulations = False
 
 logging.basicConfig(stream=sys.stdout, level=logging.WARN)
 
@@ -106,6 +114,10 @@ def detect_and_deblend(mbexp):
     return sources
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 def test_noise_replacer():
     import lsst.afw.image as afw_image
     seed = 981
@@ -133,6 +145,10 @@ def test_noise_replacer():
     assert np.all(exp_copy.image.array == exposure.image.array)
 
 
+@pytest.mark.skipUnless(
+    run_tests_on_simulations,
+    reason='descwl_shear_sims not available'
+)
 def test_multiband_noise_replacer(show=False):
     import lsst.afw.image as afw_image
     from metadetect.lsst import vis
