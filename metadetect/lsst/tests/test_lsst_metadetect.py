@@ -18,9 +18,9 @@ from lsst.utils import getPackageDir
 try:
     getPackageDir('descwl_shear_sims')
     getPackageDir('descwl_coadd')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 
 ngmix_v = float(ngmix.__version__[:3])
@@ -95,8 +95,8 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 @pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
@@ -159,8 +159,8 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 @pytest.mark.skipif(ngmix_v < 2.1, reason="requires ngmix 2.1 or higher")
@@ -205,8 +205,8 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 @pytest.mark.parametrize('fwhm_reg', [0, 0.8])
@@ -247,8 +247,8 @@ def test_lsst_metadetect_fwhm_reg(fwhm_reg):
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_metadetect_fwhm_reg_shapenoise():
@@ -282,8 +282,8 @@ def test_lsst_metadetect_fwhm_reg_shapenoise():
     assert sdevs[0.8] < 0.6 * sdevs[0]
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_metadetect_am():
@@ -315,8 +315,8 @@ def test_lsst_metadetect_am():
             len(res[shear][flux_name][0])
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_metadetect_gauss():
@@ -346,8 +346,8 @@ def test_lsst_metadetect_gauss():
         assert np.all(np.isfinite(res[shear][flux_name]))
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_metadetect_fullcoadd_smoke():
@@ -376,8 +376,8 @@ def test_lsst_metadetect_fullcoadd_smoke():
         assert len(res[shear][flux_name][0]) == len(bands)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_zero_weights(show=False):
@@ -422,8 +422,8 @@ def test_lsst_zero_weights(show=False):
     assert nobj[0] == nobj[1]
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_masked_as_bright(show=False):
@@ -469,8 +469,8 @@ def test_lsst_masked_as_bright(show=False):
                 assert tres.size == 25
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 @pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
@@ -503,8 +503,8 @@ def test_lsst_metadetect_prepsf_stars(meas_type):
             assert np.all(np.isfinite(data[field][wgood])), field
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_lsst_metadetect_mfrac_ormask(show=False):

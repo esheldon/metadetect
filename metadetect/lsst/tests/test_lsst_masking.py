@@ -11,9 +11,9 @@ from lsst.utils import getPackageDir
 try:
     getPackageDir('descwl_shear_sims')
     getPackageDir('descwl_coadd')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 
 def make_lsst_sim(
@@ -80,8 +80,8 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_apply_apodized_bright_masks(show=False):
@@ -225,8 +225,8 @@ def extract_cell_mbexp(mbexp, cell_size, start_x, start_y):
     return copy_mbexp(get_mbexp(subexps))
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_apply_apodized_bright_masks_subexp(show=False):
@@ -356,8 +356,8 @@ def test_apply_apodized_bright_masks_subexp(show=False):
         assert np.all(nexp.variance.array[w] != np.inf)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_apply_apodized_edge_masks(show=False):
@@ -417,8 +417,8 @@ def test_apply_apodized_edge_masks(show=False):
         assert np.all(nexp.image.array[w] != noise_image[w])
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 def test_apply_apodized_bright_masks_metadetect(show=False):

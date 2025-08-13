@@ -12,13 +12,13 @@ from lsst.utils import getPackageDir
 
 try:
     getPackageDir('descwl_shear_sims')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 def test_metacal_exps(ntrial=10, show=False):
@@ -113,8 +113,8 @@ def test_metacal_exps(ntrial=10, show=False):
             assert np.all(tweight == eweight)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 def test_metacal_mbexp(ntrial=10, show=False):

@@ -7,9 +7,9 @@ from lsst.utils import getPackageDir
 
 try:
     getPackageDir('descwl_shear_sims')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 
 def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['i']):
@@ -42,8 +42,8 @@ def make_lsst_sim(rng, dim, mag=22, hlr=0.5, bands=['i']):
     return sim_data
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 @pytest.mark.parametrize('copy_mask_to', ['ormask', 'bmask'])

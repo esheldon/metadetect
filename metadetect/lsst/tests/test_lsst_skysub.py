@@ -10,9 +10,9 @@ from lsst.utils import getPackageDir
 
 try:
     getPackageDir('descwl_shear_sims')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -170,8 +170,8 @@ def test_skysub_pure_noise():
     check_skysub(meanvals, errvals, noise, true_sky=0)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 def test_skysub_sim_smoke():
@@ -187,8 +187,8 @@ def test_skysub_sim_smoke():
     assert 'BGVAR' in meta
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 @pytest.mark.parametrize('sky_n_sigma', [-0.5, -2.0, -100.0])
@@ -231,8 +231,8 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
     check_skysub(meanvals, errvals, image_noise, true_sky=true_sky)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 @pytest.mark.skipif(

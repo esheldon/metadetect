@@ -18,9 +18,9 @@ logging.basicConfig(
 try:
     getPackageDir('descwl_shear_sims')
     getPackageDir('descwl_coadd')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 
 def make_lsst_sim(rng, g1, g2, mag=20, hlr=1.0):
@@ -85,8 +85,8 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims and/or descwl_coadd not available'
 )
 @pytest.mark.parametrize('ginput', [

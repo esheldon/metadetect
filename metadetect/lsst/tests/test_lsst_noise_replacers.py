@@ -8,9 +8,9 @@ from lsst.utils import getPackageDir
 
 try:
     getPackageDir('descwl_shear_sims')
-    run_tests_on_simulations = True
+    skip_tests_on_simulations = False
 except LookupError:
-    run_tests_on_simulations = False
+    skip_tests_on_simulations = True
 
 logging.basicConfig(stream=sys.stdout, level=logging.WARN)
 
@@ -114,8 +114,8 @@ def detect_and_deblend(mbexp):
     return sources
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 def test_noise_replacer():
@@ -145,8 +145,8 @@ def test_noise_replacer():
     assert np.all(exp_copy.image.array == exposure.image.array)
 
 
-@pytest.mark.skipUnless(
-    run_tests_on_simulations,
+@pytest.mark.skipif(
+    skip_tests_on_simulations,
     reason='descwl_shear_sims not available'
 )
 def test_multiband_noise_replacer(show=False):
