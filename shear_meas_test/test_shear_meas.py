@@ -1,9 +1,14 @@
 import time
 import copy
+import os
+import subprocess
+import tempfile
+
 import numpy as np
 import ngmix
 import galsim
 import metadetect
+import fitsio
 from esutil.pbar import PBar
 import joblib
 
@@ -585,3 +590,266 @@ def test_shear_meas_timing(model, snr, ngrid):
     run_sim(
         seeds[0], mdet_seeds[0], model, snr=snr, ngrid=ngrid,
     )
+
+
+def _compression_cycle_image(img, fzqvalue):
+    header = {
+        "FZTILE": "(%d,%d)" % img.shape,
+        "FZQVALUE": fzqvalue,
+        "FZALGOR": "RICE_1",
+        # preserve zeros, don't dither them
+        "FZQMETHD": "SUBTRACTIVE_DITHER_2",
+        # do dithering via a checksum
+        "FZDTHRSD": "CHECKSUM",
+
+    }
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fname = os.path.join(tmpdir, "file.fits")
+        fitsio.write(fname, img, header=header, clobber=True)
+
+        subprocess.run(
+            ["fpack", "-O", os.path.basename(fname) + ".fz", os.path.basename(fname)],
+            check=True,
+            capture_output=False,
+            cwd=tmpdir,
+        )
+        os.remove(fname)
+
+        cimg = fitsio.read(fname + ".fz")
+        assert not np.array_equal(cimg, img)
+        return cimg
+
+
+def make_sim_with_compression(
+    *,
+    seed,
+    g1,
+    g2,
+    dim=251,
+    buff=34,
+    scale=0.25,
+    dens=100,
+    ngrid=7,
+    snr=1e6,
+    items_to_compress=("img", "nse", "wgt"),
+    fzqvalue=16,
+):
+    rng = np.random.RandomState(seed=seed)
+
+    half_loc = (dim-buff*2)*scale/2
+
+    if ngrid is None:
+        area_arcmin2 = ((dim - buff*2)*scale/60)**2
+        nobj = int(dens * area_arcmin2)
+        x = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+        y = rng.uniform(low=-half_loc, high=half_loc, size=nobj)
+    else:
+        half_ngrid = (ngrid-1)/2
+        x, y = np.meshgrid(np.arange(ngrid), np.arange(ngrid))
+        x = (x.ravel() - half_ngrid)/half_ngrid * half_loc
+        y = (y.ravel() - half_ngrid)/half_ngrid * half_loc
+        nobj = x.shape[0]
+
+    cen = (dim-1)/2
+    psf_dim = 53
+    psf_cen = (psf_dim-1)/2
+
+    psf = galsim.Gaussian(fwhm=0.9)
+    gals = []
+    for ind in range(nobj):
+        u, v = rng.uniform(low=-scale, high=scale, size=2)
+        u += x[ind]
+        v += y[ind]
+        gals.append(galsim.Exponential(half_light_radius=0.5).shift(u, v))
+    gals = galsim.Add(gals)
+    gals = gals.shear(g1=g1, g2=g2)
+    gals = galsim.Convolve([gals, psf])
+
+    im = gals.drawImage(nx=dim, ny=dim, scale=scale).array
+    psf_im = psf.drawImage(nx=psf_dim, ny=psf_dim, scale=scale).array
+
+    nse = (
+        np.sqrt(np.sum(
+            galsim.Convolve([
+                psf,
+                galsim.Exponential(half_light_radius=0.5),
+            ]).drawImage(scale=0.25).array**2)
+        )
+        / snr
+    )
+
+    im += rng.normal(size=im.shape, scale=nse)
+    wgt = np.ones_like(im) / nse**2
+    jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
+    psf_jac = ngmix.DiagonalJacobian(scale=scale, row=psf_cen, col=psf_cen)
+    nse_for_mdet = rng.normal(size=im.shape, scale=nse)
+
+    for item in items_to_compress:
+        if item == "img":
+            im = _compression_cycle_image(im, fzqvalue)
+        elif item == "wgt":
+            wgt = _compression_cycle_image(wgt, fzqvalue)
+        elif item == "nse":
+            nse_for_mdet = _compression_cycle_image(nse_for_mdet, fzqvalue)
+
+    obs = ngmix.Observation(
+        image=im,
+        weight=wgt,
+        jacobian=jac,
+        ormask=np.zeros_like(im, dtype=np.int32),
+        bmask=np.zeros_like(im, dtype=np.int32),
+        psf=ngmix.Observation(
+            image=psf_im,
+            jacobian=psf_jac,
+        ),
+        noise=nse_for_mdet,
+    )
+    mbobs = ngmix.MultiBandObsList()
+    obslist = ngmix.ObsList()
+    obslist.append(obs)
+    mbobs.append(obslist)
+    return mbobs
+
+
+def run_sim_with_compression(seed, mdet_seed, model, **kwargs):
+    mbobs_p = make_sim_with_compression(seed=seed, g1=0.02, g2=0.0, **kwargs)
+    cfg = copy.deepcopy(TEST_METADETECT_CONFIG)
+    cfg["model"] = model
+    cfg["metacal"]["use_noise_image"] = True
+    _pres = metadetect.do_metadetect(
+        copy.deepcopy(cfg),
+        mbobs_p,
+        np.random.RandomState(seed=mdet_seed)
+    )
+    if _pres is None:
+        return None
+
+    mbobs_m = make_sim_with_compression(seed=seed, g1=-0.02, g2=0.0, **kwargs)
+    _mres = metadetect.do_metadetect(
+        copy.deepcopy(cfg),
+        mbobs_m,
+        np.random.RandomState(seed=mdet_seed)
+    )
+    if _mres is None:
+        return None
+
+    return _meas_shear_data(_pres, model), _meas_shear_data(_mres, model)
+
+
+@pytest.mark.parametrize(
+    "items_to_compress", [
+        ("img",),
+        ("nse",),
+        # ("img", "nse"),
+        # tuple(),
+    ],
+    ids=lambda x: "+".join(x or ["none"]),
+)
+@pytest.mark.parametrize(
+    'model,snr,ngrid,ntrial', [
+        ("wmom", 1e6, 7, 128),
+        ("wmom", 1e2, 7, 1280),
+        ("wmom", 1.5e1, 7, 12800),
+        # ("wmom", 1e6, 7, 64),
+        # ("wmom", 1e6, None, 9500),
+        # ("wmom", 12, 7, 64),
+    ],
+)
+@pytest.mark.parametrize(
+    "fzqvalue", [
+        16,
+    ],
+)
+def test_shear_meas_simple_with_compression(model, snr, ngrid, ntrial, items_to_compress, fzqvalue):
+    nsub = 128
+    nitr = ntrial // nsub
+    rng = np.random.RandomState(seed=116)
+    seeds = rng.randint(low=1, high=2**29, size=ntrial)
+    mdet_seeds = rng.randint(low=1, high=2**29, size=ntrial)
+
+    tm0 = time.time()
+
+    print("")
+
+    pres = []
+    mres = []
+    loc = 0
+    if snr < 1e6 or ntrial > 64:
+        verbose = 0
+    else:
+        verbose = 100
+    with joblib.Parallel(n_jobs=-1, verbose=verbose, backend='loky') as par:
+        for itr in PBar(range(nitr)):
+            jobs = [
+                joblib.delayed(run_sim_with_compression)(
+                    seeds[loc+i],
+                    mdet_seeds[loc+i],
+                    model,
+                    snr=snr,
+                    ngrid=ngrid,
+                    items_to_compress=items_to_compress,
+                    fzqvalue=fzqvalue,
+                )
+                for i in range(nsub)
+            ]
+            if verbose:
+                print("\n", end="", flush=True)
+            outputs = par(jobs)
+
+            for out in outputs:
+                if out is None:
+                    continue
+                pres.append(out[0])
+                mres.append(out[1])
+            loc += nsub
+
+            m, merr, c, cerr = boostrap_m_c(
+                np.concatenate(pres),
+                np.concatenate(mres),
+            )
+            print(
+                (
+                    "\n"
+                    "nsims: %d\n"
+                    "m [1e-3, 3sigma]: %s +/- %s\n"
+                    "c [1e-5, 3sigma]: %s +/- %s\n"
+                ) % (
+                    len(pres),
+                    m/1e-3,
+                    3*merr/1e-3,
+                    c/1e-5,
+                    3*cerr/1e-5,
+                ),
+                flush=True,
+            )
+
+            if len(pres) > 1000:
+                assert np.abs(m) < max(1e-3, 3*merr)
+                assert np.abs(c) < 3*cerr
+
+            if 3 * merr <= 1e-3:
+                break
+
+    total_time = time.time()-tm0
+    print("time per:", total_time/ntrial, flush=True)
+
+    pres = np.concatenate(pres)
+    mres = np.concatenate(mres)
+    m, merr, c, cerr = boostrap_m_c(pres, mres)
+
+    print(
+        (
+            "m [1e-3, 3sigma]: %s +/- %s"
+            "\nc [1e-5, 3sigma]: %s +/- %s"
+        ) % (
+            m/1e-3,
+            3*merr/1e-3,
+            c/1e-5,
+            3*cerr/1e-5,
+        ),
+        flush=True,
+    )
+
+    assert np.abs(m) < max(1e-3, 3*merr)
+    assert np.abs(c) < 3*cerr
+
