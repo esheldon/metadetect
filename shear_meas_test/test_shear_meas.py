@@ -740,7 +740,7 @@ def run_sim_with_compression(seed, mdet_seed, model, **kwargs):
     "items_to_compress", [
         ("img",),
         ("nse",),
-        # ("img", "nse"),
+        ("img", "nse"),
         # tuple(),
     ],
     ids=lambda x: "+".join(x or ["none"]),
