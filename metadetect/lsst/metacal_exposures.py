@@ -14,7 +14,7 @@ INTERP = 'lanczos15'
 STEP = 0.01
 
 
-def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None):
+def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None, step=STEP):
     """
     Get metacal MultibandExposures with fixed noise
 
@@ -26,6 +26,8 @@ def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None):
         The exposure data with pure noise
     types: list, optional
         The metacal types, e.g. ('noshear', '1p', '1m')
+    step: float, optional
+        Shear step size
 
     Returns
     -------
@@ -33,8 +35,9 @@ def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None):
         dicts keyed by type, holding exposures
     """
 
-    mdict = get_metacal_mbexps(mbexp=mbexp, types=types)
-    noise_mdict = get_metacal_mbexps(mbexp=noise_mbexp, types=types, rot=True)
+    mdict = get_metacal_mbexps(mbexp=mbexp, types=types, step=step)
+    noise_mdict = get_metacal_mbexps(mbexp=noise_mbexp, types=types, rot=True,
+                                     step=step)
     for shear_type in mdict:
         for exp, nexp in zip(mdict[shear_type], noise_mdict[shear_type]):
             exp.image.array[:, :] += nexp.image.array[:, :]
@@ -43,7 +46,7 @@ def get_metacal_mbexps_fixnoise(mbexp, noise_mbexp, types=None):
     return mdict, noise_mdict
 
 
-def get_metacal_mbexps(mbexp, types=None, rot=False):
+def get_metacal_mbexps(mbexp, types=None, rot=False, step=STEP):
     """
     Get metacal MultibandExposures
 
@@ -55,6 +58,8 @@ def get_metacal_mbexps(mbexp, types=None, rot=False):
         The metacal types, e.g. ('noshear', '1p', '1m')
     rot: bool, optional
         If set to True, rotate before shearing, then rotate back.
+    step: float, optional
+        Shear step size
 
     Returns
     -------
@@ -72,7 +77,7 @@ def get_metacal_mbexps(mbexp, types=None, rot=False):
     for iband, band in enumerate(mbexp.bands):
         exp = mbexp[band]
 
-        this_mdict = get_metacal_exps(exp, types=types, rot=rot)
+        this_mdict = get_metacal_exps(exp, types=types, rot=rot, step=step)
 
         for shear_type in this_mdict:
             exp = this_mdict[shear_type]
@@ -87,7 +92,7 @@ def get_metacal_mbexps(mbexp, types=None, rot=False):
     return mdict
 
 
-def get_metacal_exps_fixnoise(exp, noise_exp, types=None):
+def get_metacal_exps_fixnoise(exp, noise_exp, types=None, step=STEP):
     """
     Get metacal exposures with fixed noise
 
@@ -99,6 +104,8 @@ def get_metacal_exps_fixnoise(exp, noise_exp, types=None):
         The exposure data with pure noise
     types: list, optional
         The metacal types, e.g. ('noshear', '1p', '1m')
+    step: float, optional
+        Shear step size
 
     Returns
     -------
@@ -107,8 +114,8 @@ def get_metacal_exps_fixnoise(exp, noise_exp, types=None):
     if types is None:
         types = DEFAULT_TYPES
 
-    mdict = get_metacal_exps(exp, types=types)
-    noise_mdict = get_metacal_exps(noise_exp, types=types, rot=True)
+    mdict = get_metacal_exps(exp, types=types, step=step)
+    noise_mdict = get_metacal_exps(noise_exp, types=types, rot=True, step=step)
 
     for shear_type in types:
         exp = mdict[shear_type]
@@ -120,7 +127,7 @@ def get_metacal_exps_fixnoise(exp, noise_exp, types=None):
     return mdict, noise_mdict
 
 
-def get_metacal_exps(exp, types=None, rot=False):
+def get_metacal_exps(exp, types=None, rot=False, step=STEP):
     """
     Get metacal exposures
 
@@ -132,6 +139,8 @@ def get_metacal_exps(exp, types=None, rot=False):
         The metacal types, e.g. ('noshear', '1p', '1m')
     rot: bool, optional
         If set to True, rotate before shearing, then rotate back.
+    step: float, optional
+        Shear step size, default is 0.01
 
     Returns
     -------
@@ -169,7 +178,7 @@ def get_metacal_exps(exp, types=None, rot=False):
 
     gauss_psf = _get_gauss_target_psf(psf_int, flux=psf_flux)
 
-    dilation = 1.0 + 2.0*STEP
+    dilation = 1.0 + 2.0*step
     psf_dilated = gauss_psf.dilate(dilation)
 
     psf_dilated_image = psf_image.copy()
@@ -180,7 +189,7 @@ def get_metacal_exps(exp, types=None, rot=False):
         mdict[shear_type] = _get_metacal_exp(
             exp=exp, image=image, image_int_nopsf=image_int_nopsf,
             psf_dilated=psf_dilated, psf_dilated_image=psf_dilated_image,
-            shear_type=shear_type, rot=rot,
+            shear_type=shear_type, rot=rot, step=step,
         )
 
     return mdict
@@ -188,14 +197,14 @@ def get_metacal_exps(exp, types=None, rot=False):
 
 def _get_metacal_exp(
     exp, image, image_int_nopsf, psf_dilated, psf_dilated_image, shear_type,
-    rot,
+    rot, step,
 ):
     sexp = afw_image.ExposureD(exp, deep=True)
 
     if shear_type == 'noshear':
         obj = image_int_nopsf
     else:
-        shear = get_shear_from_type(shear_type)
+        shear = get_shear_from_type(shear_type, step)
         obj = image_int_nopsf.shear(shear)
 
     shimage = image.copy()
@@ -214,7 +223,7 @@ def _get_metacal_exp(
     return sexp
 
 
-def get_shear_from_type(shear_type):
+def get_shear_from_type(shear_type, step=STEP):
     """
     Convert a shear type string to a galsim Shear
 
@@ -222,19 +231,21 @@ def get_shear_from_type(shear_type):
     ----------
     shear_type: str
         One of ('1p', '1m', '2p', '1m')
+    step: float, optional
+        Shear step size, default is 0.01
 
     Returns
     -------
     galsim.Shear
     """
     if shear_type == '1p':
-        shear = galsim.Shear(g1=STEP)
+        shear = galsim.Shear(g1=step)
     elif shear_type == '1m':
-        shear = galsim.Shear(g1=-STEP)
+        shear = galsim.Shear(g1=-step)
     elif shear_type == '2p':
-        shear = galsim.Shear(g2=STEP)
+        shear = galsim.Shear(g2=step)
     elif shear_type == '2m':
-        shear = galsim.Shear(g2=-STEP)
+        shear = galsim.Shear(g2=-step)
     else:
         raise ValueError('shear type should be noshear, 1p, 1m, 2p, 2m')
 

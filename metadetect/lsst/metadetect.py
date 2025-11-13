@@ -198,6 +198,10 @@ class MetadetectConfig(Config):
     metacal = ConfigField[MetacalConfig](
         doc="Config for metacal",
     )
+    step_size = Field[float](
+        doc="Shear step size",
+        default=0.01,
+    )
 
     @property
     def stamp_size(self):
@@ -263,6 +267,7 @@ class MetadetectTask(Task):
 
         mdict, noise_mdict = get_metacal_mbexps_fixnoise(
             mbexp=mbexp, noise_mbexp=noise_mbexp, types=metacal_types,
+            step=self.config.step_size,
         )
 
         result = {}
