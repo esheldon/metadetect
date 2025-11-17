@@ -14,7 +14,7 @@ def test_metacal_exps(ntrial=10, show=False):
     from descwl_shear_sims.sim import make_sim
     from descwl_shear_sims.psfs import make_fixed_psf
 
-    seed = None
+    seed = 20251117
     dim = 250
     buff = 50
 
@@ -106,7 +106,7 @@ def test_metacal_mbexp(ntrial=10, show=False):
     from descwl_shear_sims.sim import make_sim
     from descwl_shear_sims.psfs import make_fixed_psf
 
-    seed = None
+    seed = 20251117
     dim = 250
     buff = 50
     bands = ['r', 'i']
