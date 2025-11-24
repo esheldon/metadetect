@@ -21,6 +21,13 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
+      - name: free disk space
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          rm_cmd: "rmz"        # NEW: Faster deletion
+          rmz_version: "3.1.1" # NEW: Specify rmz version
+
       - uses: actions/checkout@v2
 
       - uses: conda-incubator/setup-miniconda@v2
