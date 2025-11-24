@@ -1,7 +1,7 @@
 import numpy as np
 import ngmix
 
-from ..mfrac import measure_mfrac
+from metadetect.mfrac import measure_mfrac
 
 
 def test_measure_mfrac_neg_bbox():
