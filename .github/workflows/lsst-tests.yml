@@ -55,4 +55,5 @@ jobs:
         shell: bash -l {0}
         run: |
           # we run metadetect/tests and metadetect/lsst/tests
+          unsetup -j metadetect
           pytest -v -n 4 --cov=metadetect --cov-report term-missing metadetect
