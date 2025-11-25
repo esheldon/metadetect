@@ -107,7 +107,7 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option,
         config['meas_type'] = meas_type
 
     if step_size is not None:
-        config['step_size'] = step_size
+        config['metacal']['step_size'] = step_size
 
     if metacal_types_option is not None:
         if metacal_types_option == "1p1m":
