@@ -160,7 +160,7 @@ def test_lsst_metadetect_shear_bands():
             metacal_type in res.keys()
         ), f"metacal_type={metacal_type} not in res.keys()"
 
-    print(res.dtype.names, flush=True)
+    assert np.all(res["shear_bands"] == np.array([["123"]]))
 
     # first band should be all NaNs for gauss
     assert np.all(np.isnan(res["gauss_band_flux"][:, 0]))

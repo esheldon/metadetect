@@ -385,7 +385,7 @@ def get_pgauss_fitter(config):
 
 def _get_combined_struct(gauss_res, pgauss_res):
 
-    skip = ['pgauss_g', 'pgauss_g_cov', 'shear_bands']
+    skip = ['pgauss_g', 'pgauss_g_cov']
     keep_dt = [('stamp_flags', 'i4')]
 
     for pdt in pgauss_res.dtype.descr:
