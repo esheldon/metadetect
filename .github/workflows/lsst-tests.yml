@@ -10,6 +10,9 @@ jobs:
   lsst-tests:
     name: lsst-tests
     runs-on: "ubuntu-latest"
+    strategy:
+      matrix:
+        ngmix_upstream: ["true", "false"]
 
     steps:
       - name: Cancel Previous Runs
@@ -47,6 +50,12 @@ jobs:
         run: |
           micromamba install --quiet --yes --file requirements.txt
           micromamba install --quiet --yes --file dev-requirements.txt
+
+          if [[ "${{ matrix.ngmix_upstream }}" == "true" ]]; then
+            micromamba uninstall ngmix --force
+            pip install --no-deps --no-build-isolation git+https://github.com/esheldon/ngmix.git
+          fi
+
           pip install --no-deps --no-build-isolation git+https://github.com/LSSTDESC/descwl_coadd.git
           pip install --no-deps --no-build-isolation  -e .
 
