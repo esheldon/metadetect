@@ -282,6 +282,10 @@ def measure(
     pgauss_fitter = get_pgauss_fitter(config)
 
     nband = len(mbexp.bands)
+    shear_band_names = config["shear_bands"] or mbexp.bands
+    shear_bands = [
+        i for i, band in enumerate(mbexp.bands) if band in shear_band_names
+    ]
     exp_bbox = mbexp.getBBox()
     wcs = mbexp.singles[0].getWcs()
     results = []
@@ -317,6 +321,7 @@ def measure(
             this_gauss_res = get_wavg_output_struct(
                 nband=nband,
                 model='gauss',
+                shear_bands=shear_bands,
             )
             this_pgauss_res = get_wavg_output_struct(
                 nband=nband,
@@ -343,6 +348,7 @@ def measure(
                 bmask_flags=0,
                 psf_runner=psf_runner,
                 rng=rng,
+                shear_bands=shear_bands,
             )
 
             this_pgauss_res = fit_mbobs_wavg(
