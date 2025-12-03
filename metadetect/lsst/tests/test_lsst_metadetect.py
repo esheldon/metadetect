@@ -184,7 +184,7 @@ def test_lsst_metadetect_shear_bands():
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 0]))
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 2]))
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 3]))
-        assert np.all(np.isfinite(res[shear]["gauss_band_flux"]))
+        assert np.all(np.isfinite(res[shear]["pgauss_band_flux"]))
 
 
 def test_lsst_metadetect_pgauss():
