@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ngmix_upstream: ["true", "false"]
+        ngmix: ["ngmix-upstream", "ngmix-released"]
 
     steps:
       - name: Cancel Previous Runs
@@ -55,7 +55,7 @@ jobs:
           micromamba install --quiet --yes --file requirements.txt
           micromamba install --quiet --yes --file dev-requirements.txt
 
-          if [[ "${{ matrix.ngmix_upstream }}" == "true" ]]; then
+          if [[ "${{ matrix.ngmix }}" == "ngmix-upstream" ]]; then
             micromamba uninstall ngmix --force
             pip install --no-deps --no-build-isolation git+https://github.com/esheldon/ngmix.git
           fi
