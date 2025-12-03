@@ -283,6 +283,12 @@ def measure(
 
     nband = len(mbexp.bands)
     shear_band_names = config["shear_bands"] or mbexp.bands
+    if not all([sb in mbexp.bands for sb in shear_band_names]):
+        raise RuntimeError(
+            "Not all requested bands for shear are available. "
+            f"Bands `{shear_band_names}` were requested but the only "
+            f"bands available are `{mbexp.bands}`."
+        )
     shear_bands = [
         i for i, band in enumerate(mbexp.bands) if band in shear_band_names
     ]

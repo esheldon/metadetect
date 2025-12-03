@@ -183,9 +183,6 @@ class MetadetectTask(Task):
     ):
         # This is to support methods that are not yet refactored.
         config = self.config.toDict()
-        # Because this is a property and not a Field, we set this explicitly.
-        config["shear_bands"] = self.config.shear_bands
-        config['stamp_size'] = self.config.stamp_size
         config['detect']['thresh'] = self.detect.config.thresholdValue
 
         ormask = combine_ormasks(mbexp, ormasks)
