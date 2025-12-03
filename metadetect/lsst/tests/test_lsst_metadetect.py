@@ -149,7 +149,7 @@ def test_lsst_metadetect_shear_bands_missing():
     with pytest.raises(RuntimeError) as e:
         run_metadetect(rng=rng, config=config, **data)
 
-    assert '"r", "Y"' in str(e.value)
+    assert "'r', 'Y'" in str(e.value)
 
 
 def test_lsst_metadetect_shear_bands():
@@ -193,7 +193,7 @@ def test_lsst_metadetect_shear_bands():
         assert np.all(res[shear]["shear_bands"] == np.array([["13"]]))
         # g and i band should be all NaNs for gauss
         assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 0]))
-        assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 2]))
+        assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 2]))
         # rest should be finite
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 1]))
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 3]))
