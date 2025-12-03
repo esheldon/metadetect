@@ -160,6 +160,8 @@ def test_lsst_metadetect_shear_bands():
             metacal_type in res.keys()
         ), f"metacal_type={metacal_type} not in res.keys()"
 
+    print(res.dtype.names, flush=True)
+
     for front in ['gauss', 'pgauss']:
         if front == 'gauss':
             gname = f'{front}_g'
@@ -176,10 +178,10 @@ def test_lsst_metadetect_shear_bands():
 
             if front == 'gauss':
                 assert len(res[shear][flux_name].shape) == 2
-                assert len(res[shear][flux_name][0]) == len(bands) - 1
+                assert len(np.isfinite(res[shear][flux_name][0])[0]) == len(bands) - 1
             else:
                 assert len(res[shear][flux_name].shape) == 2
-                assert len(res[shear][flux_name][0]) == len(bands)
+                assert len(np.isfinite(res[shear][flux_name][0])[0]) == len(bands)
 
 
 def test_lsst_metadetect_pgauss():
