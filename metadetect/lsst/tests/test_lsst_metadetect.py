@@ -162,6 +162,9 @@ def test_lsst_metadetect_shear_bands():
 
     print(res.dtype.names, flush=True)
 
+    # first band should be all NaNs for gauss
+    assert np.all(np.isnan(res["gauss_band_flux"][:, 0]))
+
     for front in ['gauss', 'pgauss']:
         if front == 'gauss':
             gname = f'{front}_g'
