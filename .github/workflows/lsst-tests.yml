@@ -9,6 +9,10 @@ on:
 env:
   PY_COLORS: "1"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lsst-tests:
     name: lsst-tests
@@ -19,11 +23,6 @@ jobs:
         ngmix: ["ngmix-upstream", "ngmix-released"]
 
     steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.0
-        with:
-          access_token: ${{ github.token }}
-
       - name: free disk space for stackvana
         uses: endersonmenezes/free-disk-space@v3
         with:
