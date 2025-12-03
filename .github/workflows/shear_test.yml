@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch: null
 
+env:
+  PY_COLORS: "1"
+
 jobs:
   tests:
     name: shear-tests

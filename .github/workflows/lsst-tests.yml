@@ -6,11 +6,15 @@ on:
       - master
   pull_request: null
 
+env:
+  PY_COLORS: "1"
+
 jobs:
   lsst-tests:
     name: lsst-tests
     runs-on: "ubuntu-latest"
     strategy:
+      fail-fast: false
       matrix:
         ngmix_upstream: ["true", "false"]
 
