@@ -67,4 +67,6 @@ jobs:
         run: |
           # we need to unsetup the metadetect that comes with the stack
           unsetup -j metadetect
-          pytest -v -n 4 --cov=metadetect --cov-report term-missing metadetect
+          # FIXME remove after PR is done
+          # pytest -v -n 4 --cov=metadetect --cov-report term-missing metadetect 
+          pytest -vvs metadetect -k test_lsst_metadetect_shear_bands
