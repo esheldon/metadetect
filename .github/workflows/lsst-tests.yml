@@ -31,9 +31,9 @@ jobs:
           remove_haskell: true
           rm_cmd: "rmz"  # Faster cleanup
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
 
-      - uses: mamba-org/setup-micromamba@v2.0.6
+      - uses: mamba-org/setup-micromamba@v2.0.7
         with:
           environment-name: test
           condarc: |
