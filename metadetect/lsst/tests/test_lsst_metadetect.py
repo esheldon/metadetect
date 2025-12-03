@@ -175,10 +175,10 @@ def test_lsst_metadetect_shear_bands():
             assert np.all(res[shear]["mfrac"] == 0)
 
             if front == 'gauss':
-                assert len(res[shear][flux_name].shape) == len(bands) - 1
+                assert len(res[shear][flux_name].shape) == 2
                 assert len(res[shear][flux_name][0]) == len(bands) - 1
             else:
-                assert len(res[shear][flux_name].shape) == len(bands)
+                assert len(res[shear][flux_name].shape) == 2
                 assert len(res[shear][flux_name][0]) == len(bands)
 
 
