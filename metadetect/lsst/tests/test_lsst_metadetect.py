@@ -142,7 +142,7 @@ def test_lsst_metadetect_smoke(subtract_sky, metacal_types_option):
 def test_lsst_metadetect_shear_bands():
     rng = np.random.RandomState(seed=116)
 
-    bands = ['g', 'r', 'i', 'z']
+    bands = ['r', 'g', 'i', 'z']
     sim_data = make_lsst_sim(116, bands=bands)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
@@ -160,12 +160,10 @@ def test_lsst_metadetect_shear_bands():
             metacal_type in res.keys()
         ), f"metacal_type={metacal_type} not in res.keys()"
 
-    print(res.dtype.names, flush=True)
-
-    assert np.all(res["shear_bands"] == np.array([["123"]]))
-
-    # first band should be all NaNs for gauss
-    assert np.all(np.isnan(res["gauss_band_flux"][:, 0]))
+    for shear in metacal_types:
+        assert np.all(res[shear]["shear_bands"] == np.array([["023"]]))
+        # g band should be all NaNs for gauss
+        assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 1]))
 
     for front in ['gauss', 'pgauss']:
         if front == 'gauss':
