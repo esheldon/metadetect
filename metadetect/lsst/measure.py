@@ -385,7 +385,7 @@ def get_pgauss_fitter(config):
 
 def _get_combined_struct(gauss_res, pgauss_res):
 
-    skip = ['pgauss_g', 'pgauss_g_cov']
+    skip = ['pgauss_g', 'pgauss_g_cov', 'shear_bands']
     keep_dt = [('stamp_flags', 'i4')]
 
     for pdt in pgauss_res.dtype.descr:
@@ -400,7 +400,7 @@ def _get_combined_struct(gauss_res, pgauss_res):
     out = eu.numpy_util.add_fields(gauss_res, keep_dt)
 
     for n in pgauss_res.dtype.names:
-        if n in out.dtype.names:
+        if n in out.dtype.names and n != "shear_bands":
             out[n] = pgauss_res[n]
 
     return out
