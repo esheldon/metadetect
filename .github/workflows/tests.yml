@@ -51,8 +51,8 @@ jobs:
       - name: configure conda and install code
         shell: bash -l {0}
         run: |
-          micromamba install --quiet --file requirements.txt
-          micromamba install --quiet --file dev-requirements.txt
+          micromamba install --file requirements.txt
+          micromamba install --file dev-requirements.txt
 
           pip install --no-deps --no-build-isolation -e .
           
