@@ -139,6 +139,49 @@ def test_lsst_metadetect_smoke(subtract_sky, metacal_types_option):
             assert len(res[shear][flux_name][0]) == len(bands)
 
 
+def test_lsst_metadetect_shear_bands():
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['g', 'r', 'i', 'z']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {"shear_bands": ["r", "i", "z"]}
+    metacal_types = ['noshear', '1p', '1m']
+
+    detected = afw_image.Mask.getPlaneBitMask('DETECTED')
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    # we remove the DETECTED bit
+    assert np.all(res['noshear']['bmask'] & detected == 0)
+
+    for metacal_type in metacal_types:
+        assert (
+            metacal_type in res.keys()
+        ), f"metacal_type={metacal_type} not in res.keys()"
+
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
+
+        flux_name = f'{front}_band_flux'
+
+        for shear in metacal_types:
+            # 5x5 grid
+            assert res[shear].size == 25
+
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
+
+            if front == 'gauss':
+                assert len(res[shear][flux_name].shape) == len(bands) - 1
+                assert len(res[shear][flux_name][0]) == len(bands) - 1
+            else:
+                assert len(res[shear][flux_name].shape) == len(bands)
+                assert len(res[shear][flux_name][0]) == len(bands)
+
+
 def test_lsst_metadetect_pgauss():
     rng = np.random.RandomState(seed=882)
 
