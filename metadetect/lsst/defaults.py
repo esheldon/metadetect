@@ -32,4 +32,5 @@ DEFAULT_MDET_CONFIG = {
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'pgauss': deepcopy(DEFAULT_PGAUSS_CONFIG),
     'stamp_size': DEFAULT_STAMP_SIZE,
+    'shear_bands': None,
 }

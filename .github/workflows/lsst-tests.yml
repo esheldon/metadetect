@@ -9,10 +9,6 @@ on:
 jobs:
   lsst-tests:
     name: lsst-tests
-    strategy:
-      matrix:
-        pyver: ["3.13"]
-
     runs-on: "ubuntu-latest"
 
     steps:
@@ -20,16 +16,6 @@ jobs:
         uses: styfle/cancel-workflow-action@0.9.0
         with:
           access_token: ${{ github.token }}
-
-      - uses: actions/checkout@v2
-
-      - uses: conda-incubator/setup-miniconda@v2
-        with:
-          python-version: ${{ matrix.pyver }}
-          channels: conda-forge,defaults
-          channel-priority: strict
-          show-channel-urls: true
-          miniforge-version: latest
 
       - name: free disk space for stackvana
         uses: endersonmenezes/free-disk-space@v3
@@ -39,18 +25,30 @@ jobs:
           remove_haskell: true
           rm_cmd: "rmz"  # Faster cleanup
 
+      - uses: actions/checkout@v2
+
+      - uses: mamba-org/setup-micromamba@v2.0.6
+        with:
+          environment-name: test
+          condarc: |
+            channels:
+              - conda-forge
+            channel_priority: strict
+            show_channel_urls: true
+            always_yes: true
+          create-args: >-
+            stackvana=0
+            lsstdesc-weaklensingdeblending
+            lsstdesc-wl-shear-sims
+            pip
+
       - name: configure conda and install code
         shell: bash -l {0}
         run: |
-          conda config --set always_yes yes
-          conda install --quiet --yes --file requirements.txt
-          conda install --quiet --yes --file dev-requirements.txt
-          conda install -q -y stackvana=0 lsstdesc-weaklensingdeblending
-          conda install lsstdesc-wl-shear-sims
-
-          pip install --no-deps git+https://github.com/LSSTDESC/descwl_coadd.git
-
-          python -m pip install -e .
+          micromamba install --quiet --yes --file requirements.txt
+          micromamba install --quiet --yes --file dev-requirements.txt
+          pip install --no-deps --no-build-isolation git+https://github.com/LSSTDESC/descwl_coadd.git
+          pip install --no-deps --no-build-isolation  -e .
 
       - name: metadetect test suite, including lsst
         shell: bash -l {0}
