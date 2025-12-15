@@ -35,7 +35,6 @@ class ModelSubtractor(object):
 
     TODO
     ----
-        - move this to its own repo
         - This code would use half the memory if heavy footprints supported
         operations like .addTo(image) or .subtractFrom(image) which should be
         essentially the same as the code in .insert
@@ -228,6 +227,89 @@ class ModelSubtractor(object):
         exposures = [mbexp[band][bbox] for band in self.filters]
         # return MultibandExposure.fromExposures(self.filters, exposures)
         return util.get_mbexp(exposures)
+
+    def get_mbobs(
+        self,
+        source_id,
+        stamp_size=None,
+        clip=False,
+        type='deblended',
+    ):
+        """
+        Get a ngmix.MultiBandObsList centered at the location of the
+        specified source.  The pixel data are copied.
+
+        If you want the object to be in the image, use this method within
+        an add_source context
+
+        with subtractor.add_source(source_id):
+            stamp = subtractor.get_mbobs(source_id)
+
+        Parameters
+        ----------
+        source_id: int
+            The id of the source, e.g. from source.getId()
+        stamp_size: int
+            If sent, a bounding box is created with about this size rather than
+            using the footprint bounding box. Typically the returned size is
+            stamp_size + 1
+        clip: bool, optional
+            If set to True, clip the bbox to fit into the exposure.
+
+            If clip is False and the bbox does not fit, a
+            lsst.pex.exceptions.LengthError is raised
+
+            Only relevant if stamp_size is sent.  Default False
+        type: str, optional
+            'deblended', 'original', 'model'.  Default is 'deblended'.
+
+            'deblended' means whatever is in the current subtracted images.
+                If the user is in the add_source() context it will contain
+                the source data because the model will have been added back in
+
+            'original' means a stamp from the original data
+
+            'model' means the model for object
+                You can also use get_model() to get the model
+
+        Returns
+        -------
+        ngmix.MultiBandObsList
+        """
+
+        assert type in ['deblended', 'original', 'model'], (
+            'type must be one of deblended, original or model'
+        )
+        import ngmix
+
+        if type == 'model':
+            return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
+
+        if source_id not in self.source_ids:
+            raise ValueError(f'source {source_id} is not in the source list')
+
+        bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
+
+        if type == 'original':
+            mbexp = self.orig
+        else:
+            mbexp = self.mbexp
+
+        source = self.sources[source_id]
+        mbobs = ngmix.MultiBandObsList()
+
+        for band in mbexp.bands:
+            subexp = mbexp[band][bbox]
+            obs = util.extract_obs(
+                exp=subexp,
+                source=source,
+            )
+
+            obslist = ngmix.ObsList(meta={'band': band})
+            obslist.append(obs)
+            mbobs.append(obslist)
+
+        return mbobs
 
     def get_model(self, source_id, stamp_size=None, clip=False):
         """
