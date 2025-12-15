@@ -20,26 +20,14 @@ class MBObsExtractor(object):
     Examples
     ---------
 
-    subtractor = ModelSubtractor(exposure, sources)
-
-    # add back one model; since the image had data-model this restores the
-    # pixels for the object of interest, but with models of other objects
-    # subtracted
-
     mbextractor = MBObsExtractor(mbexp, sources)
 
     mbobs = mbextractor.get_mbobs(source_id, stamp_size=stamp_size)
 
-    with subtractor.add_source(source_id):
-        # full MultibandExposure is in subtractor.mbexp
-
-        stamp = subtractor.get_stamp(source_id, stamp_size=48)
-
-    # model of the entire data set as a MultibandExposure
-    full_model = subtractor.get_full_model()
-
-    # model of one source
-    model = subtractor.get_model(source_id, stamp_size=48)
+    # this class can stand in as a no-op for the ModelSubtractor
+    with mbextractor.add_source(source_id):
+        # nothing happened, but we can stil use get_mbobs
+        stamp = mbextractor.get_mbobs(source_id, stamp_size=stamp_size)
     """
 
     def __init__(self, mbexp, sources):
