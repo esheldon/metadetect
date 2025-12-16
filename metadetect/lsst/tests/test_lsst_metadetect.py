@@ -415,6 +415,45 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
             assert np.any(res[shear]["ormask"] & flag != 0)
 
 
+@pytest.mark.parametrize('deblender', ['sdss', 'scarlet'])
+def test_lsst_metadetect_deblender(deblender):
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {
+        'deblender': deblender,
+    }
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    metacal_types = ['noshear', '1p', '1m']
+
+    for metacal_type in metacal_types:
+        assert (
+            metacal_type in res.keys()
+        ), f"metacal_type={metacal_type} not in res.keys()"
+
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
+
+        flux_name = f'{front}_band_flux'
+
+        for shear in metacal_types:
+            # 5x5 grid
+            assert res[shear].size == 25
+
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
+
+            assert len(res[shear][flux_name].shape) == len(bands)
+            assert len(res[shear][flux_name][0]) == len(bands)
+
+
 if __name__ == '__main__':
     test_lsst_metadetect_pgauss()
     # test_lsst_masked_as_bright(show=True)

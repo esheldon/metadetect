@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from lsst.afw.image import MultibandExposure
+from lsst.afw.table import SourceCatalog
 from . import util
 
 
@@ -32,13 +33,18 @@ class MBObsExtractor(object):
 
     def __init__(self, mbexp, sources):
         assert isinstance(mbexp, MultibandExposure)
-        assert isinstance(sources, dict)
-        self.mbexp = mbexp
-        self.sources = sources
 
-        self.source_ids = set()
-        for source in sources[list(sources.keys())[0]]:
-            self.source_ids.add(source.getId())
+        assert isinstance(sources, SourceCatalog), (
+            f'sources should be SourceCatalog, got {type(sources)}'
+        )
+        self.mbexp = mbexp
+
+        self._source_list = sources
+        self.sources = {}
+
+        for source in sources:
+            sid = source.getId()
+            self.sources[sid] = source
 
     @contextmanager
     def add_source(self, source_id):
@@ -89,7 +95,7 @@ class MBObsExtractor(object):
         ExposureF
         """
 
-        if source_id not in self.source_ids:
+        if source_id not in self.sources:
             raise ValueError(f'source {source_id} is not in the source list')
 
         bbox = util.get_bbox(
@@ -140,7 +146,7 @@ class MBObsExtractor(object):
 
         import ngmix
 
-        if source_id not in self.source_ids:
+        if source_id not in self.sources:
             raise ValueError(f'source {source_id} is not in the source list')
 
         source = self.sources[source_id]

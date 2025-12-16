@@ -9,7 +9,7 @@ from lsst.meas.algorithms import SourceDetectionTask
 from lsst.meas.algorithms import (
     SourceDetectionConfig as OriginalSourceDetectionConfig,
 )
-from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
+from lsst.meas.deblender import SourceDeblendTask
 from lsst.meas.extensions.scarlet import ScarletDeblendTask
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
@@ -68,8 +68,9 @@ class DetectAndDeblendConfig(Config):
         doc="Detection config", target=SourceDetectionTask
     )
 
-    deblend = ConfigurableField[SourceDeblendConfig](
-        doc="Deblend config", target=SourceDeblendTask
+    deblend = ConfigurableField(
+        doc="Deblend config",
+        target=SourceDeblendTask
     )
 
     seed = Field[int](
@@ -171,6 +172,8 @@ class DetectAndDeblendTask(Task):
 
         if result is not None:
             sources = result.sources
+            # TODO deal with Scarlet's different signature and return data
+            # structure
             self.deblend.run(detexp, sources)
 
             with ContextNoiseReplacer(
@@ -201,6 +204,7 @@ def detect_and_deblend(
     mbexp,
     rng=None,
     thresh=DEFAULT_THRESH,
+    deblender="sdss",
     show=False,
     config=None,
 ):
@@ -235,6 +239,10 @@ def detect_and_deblend(
         config_override['detect']['thresholdValue'] = thresh
 
     config = DetectAndDeblendConfig()
+
+    if deblender == "scarlet":
+        config.deblend = ScarletDeblendTask
+
     config.setDefaults()
 
     util.override_config(config, config_override)
@@ -393,13 +401,13 @@ def measure(
 
 
 def _get_mbobs_extractor(config, mbexp, sources):
-    if isinstance(config['deblend'], SourceDeblendTask):
+    if config['deblender'] == "sdss":
         mbobs_extractor = MBObsExtractor(mbexp, sources)
-    elif isinstance(config['deblend'], ScarletDeblendTask):
+    elif config['deblender'] == "scarlet":
         mbobs_extractor = ModelSubtractor(mbexp, sources)
     else:
         raise RuntimeError(
-            f'unexpected deblend task {type(config["deblend"])}'
+            f'unexpected deblend task {type(config["deblender"])}'
         )
 
     return mbobs_extractor

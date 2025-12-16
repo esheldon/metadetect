@@ -5,6 +5,7 @@ from ngmix.gexceptions import BootPSFFailure
 from lsst.pex.config import (
     Config,
     ConfigField,
+    ChoiceField,
     ConfigurableField,
     Field,
     FieldValidationError,
@@ -142,6 +143,16 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
+    deblender = ChoiceField(
+        dtype=str,
+        doc="Type of deblender to run",
+        default="sdss",
+        allowed={
+            "sdss": "The SDSS style deblender",
+            "scarlet": "The Scarlet deblender",
+        },
+    )
+
     metacal = ConfigField[MetacalConfig](
         doc="Metacal config",
     )
@@ -264,7 +275,7 @@ def detect_deblend_and_measure(
         mbexp=mbexp,
         rng=rng,
         thresh=config['detect']['thresh'],
-        config=config,
+        deblender=config['deblender'],
         show=show,
     )
 
