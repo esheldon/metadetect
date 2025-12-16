@@ -455,7 +455,4 @@ def test_lsst_metadetect_deblender(deblender):
 
 
 if __name__ == '__main__':
-    test_lsst_metadetect_pgauss()
-    # test_lsst_masked_as_bright(show=True)
-    # test_lsst_metadetect_smoke('wmom', 'False')
-    # test_lsst_metadetect_mfrac_ormask(show=True)
+    test_lsst_metadetect_deblender('scarlet')

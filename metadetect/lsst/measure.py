@@ -166,7 +166,47 @@ class DetectAndDeblendTask(Task):
         if not isinstance(detexp, afw_image.ExposureF):
             detexp = afw_image.ExposureF(detexp, deep=True)
 
+        if isinstance(self.deblend, ScarletDeblendTask):
+            sources = self._run_with_scarlet(detexp)
+        else:
+            sources = self._run_with_sdss(detexp)
+
+        if show:
+            vis.show_exp(detexp, use_mpl=True, sources=sources)
+
+        return sources, detexp
+
+    def _run_with_sdss(self, detexp):
         schema = self.deblend.schema  # should be the same for all tasks
+        table = afw_table.SourceTable.make(schema)
+        result = self.detect.run(table, detexp)
+
+        if result is not None:
+            sources = result.sources
+            self.deblend.run(detexp, sources)
+
+            with ContextNoiseReplacer(
+                detexp,
+                sources,
+                self.rng,
+                config=self.meas.config.noiseReplacer,
+            ) as replacer:
+                for source in sources:
+                    if source.get('deblend_nChild') != 0:
+                        continue
+
+                    source_id = source.getId()
+
+                    with replacer.sourceInserted(source_id):
+                        self.meas.callMeasure(source, detexp)
+
+        else:
+            sources = []
+
+        return sources
+
+    def _run_with_scarlet(self, detexp):
+        schema = self.deblend.objectSchema  # should be the same for all tasks
         table = afw_table.SourceTable.make(schema)
         result = self.detect.run(table, detexp)
 
@@ -194,10 +234,7 @@ class DetectAndDeblendTask(Task):
         else:
             sources = []
 
-        if show:
-            vis.show_exp(detexp, use_mpl=True, sources=sources)
-
-        return sources, detexp
+        return sources
 
 
 def detect_and_deblend(
@@ -241,7 +278,7 @@ def detect_and_deblend(
     config = DetectAndDeblendConfig()
 
     if deblender == "scarlet":
-        config.deblend = ScarletDeblendTask
+        config.deblend.retarget(ScarletDeblendTask)
 
     config.setDefaults()
 
