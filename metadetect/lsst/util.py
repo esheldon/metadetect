@@ -657,8 +657,8 @@ def trim_odd_image(im):
 
         # adding +1 for slices
         new_im = im[
-            start_row : end_row + 1,
-            start_col : end_col + 1,
+            start_row: end_row + 1,
+            start_col: end_col + 1,
         ].copy()
 
         logger.debug('new dims: %s' % str(new_im.shape))
