@@ -10,10 +10,14 @@ from lsst.meas.algorithms import (
     SourceDetectionConfig as OriginalSourceDetectionConfig,
 )
 from lsst.meas.deblender import SourceDeblendTask, SourceDeblendConfig
+from lsst.meas.extensions.scarlet import ScarletDeblendTask
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
     SingleFrameMeasurementTask,
 )
+from .model_subtractor import ModelSubtractor
+from .mbobs_extractor import MBObsExtractor
+
 from lsst.pex.config import Config, ConfigurableField, Field
 from lsst.pipe.base import Task
 import lsst.afw.image as afw_image
@@ -296,6 +300,8 @@ def measure(
     # bmasks will be different within the loop below due to the replacer
     bmasks = get_bmasks(sources=sources, exposure=detexp)
 
+    mbobs_extractor = _get_mbobs_extractor(config, mbexp, sources)
+
     for i, source in enumerate(sources):
         if source.get('deblend_nChild') != 0:
             continue
@@ -304,9 +310,13 @@ def measure(
 
         stamp_flags = 0
         try:
-            mbobs = util.get_stamp_mbobs(
-                mbexp=mbexp,
-                source=source,
+            # mbobs = util.get_stamp_mbobs(
+            #     mbexp=mbexp,
+            #     source=source,
+            #     stamp_size=config['stamp_size'],
+            # )
+            mbobs = mbobs_extractor.get_mbobs(
+                source_id=source.getId(),
                 stamp_size=config['stamp_size'],
             )
         except LengthError as err:
@@ -380,6 +390,19 @@ def measure(
         results = None
 
     return results
+
+
+def _get_mbobs_extractor(config, mbexp, sources):
+    if isinstance(config['deblend'], SourceDeblendTask):
+        mbobs_extractor = MBObsExtractor(mbexp, sources)
+    elif isinstance(config['deblend'], ScarletDeblendTask):
+        mbobs_extractor = ModelSubtractor(mbexp, sources)
+    else:
+        raise RuntimeError(
+            f'unexpected deblend task {type(config["deblend"])}'
+        )
+
+    return mbobs_extractor
 
 
 def get_pgauss_fitter(config):

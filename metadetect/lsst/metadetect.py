@@ -24,7 +24,7 @@ from .defaults import (
 )
 from . import measure
 from .metacal_exposures import get_metacal_mbexps_fixnoise
-from .util import get_integer_center, get_jacobian, override_config
+from . import util
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -83,7 +83,7 @@ def run_metadetect(
     config = MetadetectConfig()
     config.setDefaults()
 
-    override_config(config, config_override)
+    util.override_config(config, config_override)
 
     config.freeze()
     config.validate()
@@ -152,7 +152,10 @@ class MetadetectConfig(Config):
     )
 
     shear_bands = ListField[str](
-        doc="List of bands to use for shear measurements. Default is to use all bands.",
+        doc=(
+            "List of bands to use for shear measurements. "
+            "Default is to use all bands."
+        ),
         default=None,
         optional=True,
     )
@@ -261,6 +264,7 @@ def detect_deblend_and_measure(
         mbexp=mbexp,
         rng=rng,
         thresh=config['detect']['thresh'],
+        config=config,
         show=show,
     )
 
@@ -283,12 +287,12 @@ def add_mfrac(config, mfrac, res, exp):
         # we are using the positions with the metacal shear removed for
         # this.
 
-        cen, _ = get_integer_center(
+        cen, _ = util.get_integer_center(
             wcs=exp.getWcs(),
             bbox=exp.getBBox(),
             as_double=True,
         )
-        jac = get_jacobian(exp=exp, cen=cen)
+        jac = util.get_jacobian(exp=exp, cen=cen)
 
         res['mfrac'] = measure_weighted_mfrac(
             mfrac=mfrac,
@@ -503,14 +507,14 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
         Tsum = 0.0
 
         for exp, wgt in zip(mbexp, wgts):
-            cen, _ = get_integer_center(
+            cen, _ = util.get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
                 as_double=True,
             )
-            jac = get_jacobian(exp=exp, cen=cen)
+            jac = util.get_jacobian(exp=exp, cen=cen)
 
-            psf_im = measure.extract_psf_image(exp, cen)
+            psf_im = util.extract_psf_image(exp, cen)
 
             psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
             psf_jacob = jac.copy()
