@@ -455,12 +455,19 @@ def test_lsst_metadetect_deblender_grid(deblender):
 
 
 @pytest.mark.parametrize('deblender', ['sdss', 'scarlet'])
-def test_lsst_metadetect_deblender_random(deblender):
+def test_lsst_metadetect_deblender_random(deblender, show=False):
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
     sim_data = make_lsst_sim(116, bands=bands, layout='random')
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    if show:
+        import matplotlib.pyplot as mplt
+        fig, axs = mplt.subplots(ncols=2)
+        axs[0].imshow(data['mbexp']['i'].image.array)
+        axs[1].imshow(data['mbexp']['i'].mask.array)
+        mplt.show()
 
     config = {
         'deblender': deblender,
@@ -496,4 +503,4 @@ def test_lsst_metadetect_deblender_random(deblender):
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender('sdss')
     # test_lsst_metadetect_deblender_grid('scarlet')
-    test_lsst_metadetect_deblender_random('scarlet')
+    test_lsst_metadetect_deblender_random('scarlet', show=True)
