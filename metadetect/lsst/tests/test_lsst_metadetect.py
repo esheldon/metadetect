@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 
 
-def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None):
+def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None, layout='grid'):
     import descwl_shear_sims
 
     rng = np.random.RandomState(seed=seed)
@@ -34,7 +34,7 @@ def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None):
         rng=rng,
         coadd_dim=coadd_dim,
         buff=20,
-        layout='grid',
+        layout=layout,
         mag=mag,
         hlr=hlr,
     )
@@ -416,7 +416,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 @pytest.mark.parametrize('deblender', ['sdss', 'scarlet'])
-def test_lsst_metadetect_deblender(deblender):
+def test_lsst_metadetect_deblender_grid(deblender):
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
@@ -454,6 +454,46 @@ def test_lsst_metadetect_deblender(deblender):
             assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.parametrize('deblender', ['sdss', 'scarlet'])
+def test_lsst_metadetect_deblender_random(deblender):
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(116, bands=bands, layout='random')
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {
+        'deblender': deblender,
+    }
+
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    metacal_types = ['noshear', '1p', '1m']
+
+    for metacal_type in metacal_types:
+        assert (
+            metacal_type in res.keys()
+        ), f"metacal_type={metacal_type} not in res.keys()"
+
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
+
+        flux_name = f'{front}_band_flux'
+
+        for shear in metacal_types:
+            # 5x5 grid
+            assert res[shear].size == 25
+
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
+
+            assert len(res[shear][flux_name].shape) == len(bands)
+            assert len(res[shear][flux_name][0]) == len(bands)
+
+
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender('sdss')
-    test_lsst_metadetect_deblender('scarlet')
+    # test_lsst_metadetect_deblender_grid('scarlet')
+    test_lsst_metadetect_deblender_random('scarlet')

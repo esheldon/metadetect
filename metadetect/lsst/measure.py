@@ -167,8 +167,10 @@ class DetectAndDeblendTask(Task):
             detexp = afw_image.ExposureF(detexp, deep=True)
 
         if isinstance(self.deblend, ScarletDeblendTask):
+            LOG.info('Using Scarlet deblender')
             sources, model_data = self._run_with_scarlet(mbexp, detexp)
         else:
+            LOG.info('Using SDSS deblender')
             model_data = None
             sources = self._run_with_sdss(detexp)
 
@@ -359,6 +361,7 @@ def measure(
         sources=sources,
         model_data=model_data,
     )
+    LOG.info(f'Using {type(mbobs_extractor)} to get stamps')
 
     for i, source in enumerate(sources):
         if source.get('deblend_nChild') != 0:

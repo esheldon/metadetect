@@ -269,8 +269,6 @@ def detect_deblend_and_measure(
         If set to True, show images during processing
     """
 
-    LOG.info('measuring with blended stamps')
-
     sources, detexp, model_data = measure.detect_and_deblend(
         mbexp=mbexp,
         rng=rng,
