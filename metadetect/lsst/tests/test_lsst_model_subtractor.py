@@ -1,5 +1,7 @@
+import os
 import sys
 import numpy as np
+import pytest
 
 import logging
 from metadetect.lsst.measure import detect_and_deblend
@@ -71,6 +73,10 @@ def do_coadding(rng, sim_data, nowarp=True):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
+@pytest.mark.skipif(
+        "CATSIM_DIR" not in os.environ,
+        reason='simulation input data is not present',
+)
 def test_lsst_model_subtractor_smoke(show=False):
     rng = np.random.RandomState(seed=116)
 
