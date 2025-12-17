@@ -148,6 +148,83 @@ def show_mbexp(
     return ax
 
 
+def show_mbexp_mosaic(
+    mbexp_list,
+    stretch=DEFAULT_STRETCH,
+    q=DEFAULT_Q,
+    mess=None,
+    show=True,
+):
+    """
+    visialize a MultibandExposure
+
+    Parameters
+    ----------
+    mbexp_list: [lsst.afw.image.MultibandExposure]
+        MutibandExposure objects to visualize.  Currently must be at least
+        three bands.
+    stretch: float, optional
+        The stretch parameter for
+        astropy.visualization.lupton_rgb. import AsinhMapping
+    q: float, optional
+        The Q parameter for
+        astropy.visualization.lupton_rgb. import AsinhMapping
+    mess: str, optional
+        A message to use as title to plot
+    show: bool, optional
+        If set to True, show on the screen.
+
+    Returns
+    -------
+    fig, axs
+    """
+
+    nim = len(mbexp_list)
+
+    with mplt.style.context('dark_background'):
+        fig, axs = mplt.subplots(ncols=nim, figsize=(8*nim, 8))
+
+        for i, mbexp in enumerate(mbexp_list):
+            image = mbexp.image.array
+
+            ax = axs[i]
+
+            if image.shape[0] >= 3:
+                import lsst.scarlet.lite as scl
+                from astropy.visualization.lupton_rgb import AsinhMapping
+
+                timage = image[:3, :, :].clip(min=0)
+
+                asinh = AsinhMapping(
+                    minimum=0,
+                    stretch=stretch,
+                    Q=q,
+                )
+
+                img_rgb = scl.display.img_to_rgb(timage, norm=asinh)
+
+                ax.imshow(img_rgb)
+
+            else:
+                noise = np.sqrt(np.median(mbexp.variance.array))
+                if image.shape[0] == 1:
+                    timage = image[0]
+                else:
+                    timage = image.sum(axis=0)
+
+                noise = np.sqrt(np.median(mbexp.variance.array))
+                minval = 0.1 * noise
+                ax.imshow(np.log(timage.clip(min=minval)))
+
+        if mess is not None:
+            fig.suptitle(mess)
+
+        if show:
+            mplt.show()
+
+    return fig, axs
+
+
 def _extract_xy(mbexp, sources):
     if isinstance(sources, np.ndarray):
         y = sources['row'] - sources['row0']
@@ -335,7 +412,7 @@ def show_multi_mbobs(mbobs):
     mplt.show()
 
 
-def show_multi_mbexp(mbexp, sources=None):
+def show_mbexp_each_band(mbexp, sources=None):
     """
     Show images from a ngmix.MultiBandObsList
 

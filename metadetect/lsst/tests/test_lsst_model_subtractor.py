@@ -8,6 +8,7 @@ from metadetect.lsst.measure import detect_and_deblend
 from metadetect.lsst import util
 from metadetect.lsst import vis
 from metadetect.lsst.model_subtractor import ModelSubtractor
+from lsst.pex.exceptions import LengthError
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -102,8 +103,21 @@ def test_lsst_model_subtractor_smoke(show=False):
 
     if show:
         vis.show_mbexp(subtractor.mbexp)
-        import IPython
 
+        for source in sources:
+            if source['deblend_blendNChild'] > 0:
+                continue
+
+            try:
+                print(source)
+                with subtractor.add_source(source.getId()):
+                    stamp = subtractor.get_stamp(source.getId(), stamp_size=49)
+                    model = subtractor.get_model(source.getId(), stamp_size=49)
+                    vis.show_mbexp_mosaic([subtractor.mbexp, stamp, model])
+            except LengthError:
+                pass
+
+        import IPython
         IPython.embed()  # noqa
 
 

@@ -519,6 +519,25 @@ class ModelSubtractor(object):
             LOG.debug('-' * 70)
             LOG.debug(f'band: {band}')
 
+            for source in sources:
+                source_id = source.getId()
+                heavy_fp = heavies[band][source_id]
+                heavy_fp.insert(scratch[band].image)
+
+                bbox = self.get_bbox(source_id=source_id)
+                # mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                scratch[band].image[bbox] = 0
+
+    def _build_subtracted_image_old(self):
+        heavies = self.heavies
+        mbexp = self.mbexp
+        scratch = self.scratch
+
+        for band, sources in self.band_sources.items():
+            LOG.debug('-' * 70)
+            LOG.debug(f'band: {band}')
+
             parents = sources.getChildren(0)
             for parent_record in parents:
                 LOG.debug('parent id: %d', parent_record.getId())

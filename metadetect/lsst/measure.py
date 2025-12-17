@@ -236,7 +236,7 @@ class DetectAndDeblendTask(Task):
                 catalog=sources,
                 band='i',
                 removeScarletData=False,
-                updateFluxColumns=False,
+                updateFluxColumns=True,
             )
 
             # the noise replacer is not working properly with this
