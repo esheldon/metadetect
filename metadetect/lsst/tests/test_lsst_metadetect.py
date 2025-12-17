@@ -13,6 +13,7 @@ from metadetect.lsst.metadetect import run_metadetect
 from metadetect.lsst.measure import get_pgauss_fitter
 from metadetect.lsst.configs import get_config
 from metadetect.lsst import util
+from metadetect.lsst import vis
 import lsst.afw.image as afw_image
 
 logging.basicConfig(
@@ -459,21 +460,20 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
-    sim_data = make_lsst_sim(116, bands=bands, layout='random')
+    sim_data = make_lsst_sim(116, mag=24, bands=bands, layout='random')
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
     if show:
-        import matplotlib.pyplot as mplt
-        fig, axs = mplt.subplots(ncols=2)
-        axs[0].imshow(data['mbexp']['i'].image.array)
-        axs[1].imshow(data['mbexp']['i'].mask.array)
-        mplt.show()
+        vis.show_image(data['mbexp']['i'].image.array)
 
     config = {
         'deblender': deblender,
     }
 
     res = run_metadetect(rng=rng, config=config, **data)
+
+    if show:
+        vis.show_image(data['mbexp']['i'].image.array, cat=res['noshear'])
 
     metacal_types = ['noshear', '1p', '1m']
 
@@ -498,6 +498,5 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 
 
 if __name__ == '__main__':
-    # test_lsst_metadetect_deblender('sdss')
-    # test_lsst_metadetect_deblender_grid('scarlet')
-    test_lsst_metadetect_deblender_random('scarlet')
+    # test_lsst_metadetect_deblender_random('sdss', show=True)
+    test_lsst_metadetect_deblender_random('scarlet', show=True)

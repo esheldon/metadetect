@@ -99,50 +99,51 @@ def show_mbexp(
     The axis used for plotting
     """
 
-    image = mbexp.image.array
+    with mplt.style.context('dark_background'):
+        image = mbexp.image.array
 
-    if ax is None:
-        fig, ax = mplt.subplots()
+        if ax is None:
+            fig, ax = mplt.subplots()
 
-    if image.shape[0] >= 3:
-        import scarlet
-        from astropy.visualization.lupton_rgb import AsinhMapping
+        if image.shape[0] >= 3:
+            import lsst.scarlet.lite as scl
+            from astropy.visualization.lupton_rgb import AsinhMapping
 
-        timage = image[:3, :, :].clip(min=0)
+            timage = image[:3, :, :].clip(min=0)
 
-        asinh = AsinhMapping(
-            minimum=0,
-            stretch=stretch,
-            Q=q,
-        )
+            asinh = AsinhMapping(
+                minimum=0,
+                stretch=stretch,
+                Q=q,
+            )
 
-        img_rgb = scarlet.display.img_to_rgb(timage, norm=asinh)
+            img_rgb = scl.display.img_to_rgb(timage, norm=asinh)
 
-        ax.imshow(img_rgb)
+            ax.imshow(img_rgb)
 
-    else:
-        noise = np.sqrt(np.median(mbexp.variance.array))
-        if image.shape[0] == 1:
-            timage = image[0]
         else:
-            timage = image.sum(axis=0)
+            noise = np.sqrt(np.median(mbexp.variance.array))
+            if image.shape[0] == 1:
+                timage = image[0]
+            else:
+                timage = image.sum(axis=0)
 
-        noise = np.sqrt(np.median(mbexp.variance.array))
-        minval = 0.1 * noise
-        ax.imshow(np.log(timage.clip(min=minval)))
+            noise = np.sqrt(np.median(mbexp.variance.array))
+            minval = 0.1 * noise
+            ax.imshow(np.log(timage.clip(min=minval)))
 
-    if sources is not None:
-        x, y = _extract_xy(mbexp, sources)
-        ax.scatter(
-            x, y,
-            s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
-        )
+        if sources is not None:
+            x, y = _extract_xy(mbexp, sources)
+            ax.scatter(
+                x, y,
+                s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
+            )
 
-    if mess is not None:
-        ax.set_title(mess)
+        if mess is not None:
+            ax.set_title(mess)
 
-    if show:
-        mplt.show()
+        if show:
+            mplt.show()
 
     return ax
 
@@ -277,7 +278,7 @@ def show_mbexp_demo(mbexp):
         three bands.
     """
     from astropy.visualization.lupton_rgb import AsinhMapping
-    import scarlet
+    import lsst.scarlet.lite as scl
 
     image = mbexp.image.array
 
@@ -296,7 +297,7 @@ def show_mbexp_demo(mbexp):
                 minimum=0,
                 stretch=stretch, Q=q,
             )
-            img_rgb = scarlet.display.img_to_rgb(image, norm=asinh)
+            img_rgb = scl.display.img_to_rgb(image, norm=asinh)
             axs[ist, iq].imshow(img_rgb)
             axs[ist, iq].set_title(f'Stretch {stretch}, Q {q}')
 
@@ -400,3 +401,22 @@ def show_image_and_mask(mbexp, band=0):
     axs[0].imshow(np.log(exp.image.array.clip(min=minval)))
     axs[1].imshow(exp.mask.array)
     mplt.show()
+
+    mplt.close(fig)
+
+
+def show_image(im, cat=None, cmap='gray', figsize=(8, 8)):
+    import matplotlib.pyplot as mplt
+
+    with mplt.style.context('dark_background'):
+        fig, ax = mplt.subplots(figsize=figsize)
+        ax.imshow(im, cmap=cmap)
+
+        if cat is not None:
+            ec = 'black'
+            w, = np.where(cat['gauss_flags'] != 0)
+            ax.scatter(cat['col'], cat['row'], c='yellow', edgecolors=ec)
+            ax.scatter(cat['col'][w], cat['row'][w], c='red', edgecolors=ec)
+
+        mplt.show()
+        mplt.close(fig)
