@@ -167,14 +167,15 @@ class DetectAndDeblendTask(Task):
             detexp = afw_image.ExposureF(detexp, deep=True)
 
         if isinstance(self.deblend, ScarletDeblendTask):
-            sources = self._run_with_scarlet(detexp)
+            sources, model_data = self._run_with_scarlet(mbexp, detexp)
         else:
+            model_data = None
             sources = self._run_with_sdss(detexp)
 
         if show:
             vis.show_exp(detexp, use_mpl=True, sources=sources)
 
-        return sources, detexp
+        return sources, detexp, model_data
 
     def _run_with_sdss(self, detexp):
         schema = self.deblend.schema  # should be the same for all tasks
@@ -205,16 +206,22 @@ class DetectAndDeblendTask(Task):
 
         return sources
 
-    def _run_with_scarlet(self, detexp):
+    def _run_with_scarlet(self, mbexp, detexp):
         schema = self.deblend.objectSchema  # should be the same for all tasks
         table = afw_table.SourceTable.make(schema)
         result = self.detect.run(table, detexp)
 
         if result is not None:
             sources = result.sources
-            # TODO deal with Scarlet's different signature and return data
-            # structure
-            self.deblend.run(detexp, sources)
+
+            mbexp_deconvolved = util.make_deconvolved_mbexp(mbexp, sources)
+
+            scl_res = self.deblend.run(
+                mExposure=mbexp,
+                mDeconvolved=mbexp_deconvolved,
+                mergedSources=sources,
+            )
+            model_data = scl_res.scarletModelData
 
             with ContextNoiseReplacer(
                 detexp,
@@ -233,8 +240,9 @@ class DetectAndDeblendTask(Task):
 
         else:
             sources = []
+            model_data = None
 
-        return sources
+        return sources, model_data
 
 
 def detect_and_deblend(
@@ -296,6 +304,7 @@ def measure(
     mbexp,
     detexp,
     sources,
+    model_data,
     config,
     rng,
 ):
@@ -345,7 +354,11 @@ def measure(
     # bmasks will be different within the loop below due to the replacer
     bmasks = get_bmasks(sources=sources, exposure=detexp)
 
-    mbobs_extractor = _get_mbobs_extractor(config, mbexp, sources)
+    mbobs_extractor = _get_mbobs_extractor(
+        mbexp=mbexp,
+        sources=sources,
+        model_data=model_data,
+    )
 
     for i, source in enumerate(sources):
         if source.get('deblend_nChild') != 0:
@@ -437,15 +450,15 @@ def measure(
     return results
 
 
-def _get_mbobs_extractor(config, mbexp, sources):
-    if config['deblender'] == "sdss":
-        mbobs_extractor = MBObsExtractor(mbexp, sources)
-    elif config['deblender'] == "scarlet":
-        mbobs_extractor = ModelSubtractor(mbexp, sources)
-    else:
-        raise RuntimeError(
-            f'unexpected deblend task {type(config["deblender"])}'
+def _get_mbobs_extractor(mbexp, sources, model_data):
+    if model_data is not None:
+        mbobs_extractor = ModelSubtractor(
+            mbexp=mbexp,
+            sources=sources,
+            model_data=model_data,
         )
+    else:
+        mbobs_extractor = MBObsExtractor(mbexp, sources)
 
     return mbobs_extractor
 

@@ -1068,6 +1068,23 @@ def extract_obs(exp, source):
     return obs
 
 
+def make_deconvolved_mbexp(mbexp, sources):
+    from lsst.meas.extensions.scarlet import DeconvolveExposureTask
+
+    task = DeconvolveExposureTask()
+
+    exps = []
+    for exp in mbexp.singles:
+        res = task.run(
+            exp,
+            sources,
+            band=exp.getFilter().bandLabel
+        )
+        exps.append(res.deconvolved)
+
+    return get_mbexp(exps)
+
+
 def extract_psf_image(exposure, orig_cen):
     """
     get the psf associated with this image.

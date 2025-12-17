@@ -455,4 +455,5 @@ def test_lsst_metadetect_deblender(deblender):
 
 
 if __name__ == '__main__':
+    # test_lsst_metadetect_deblender('sdss')
     test_lsst_metadetect_deblender('scarlet')

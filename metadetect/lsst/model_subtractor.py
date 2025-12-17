@@ -4,7 +4,9 @@ from lsst.afw.image import MultibandExposure
 import lsst.afw.image as afw_image
 import lsst.geom as geom
 import lsst.afw.detection as afw_det
+from lsst.afw.table import SourceCatalog
 from lsst.pex.exceptions import LengthError
+from lsst.meas.extensions.scarlet.io.utils import updateCatalogFootprints
 from . import util
 
 LOG = logging.getLogger('lsst_model_subtractor')
@@ -29,9 +31,8 @@ class ModelSubtractor(object):
         A representation of the multi-band data set.
         Create one of these with
             descwl_model_subtractor.get_mbexp(exposure_list)
-    sources: dict of lsst.afw.table.SourceCatalog
-        This is the output of the ScarletDeblendTask, a dict of
-        lsst.afw.table.SourceCatalog keyed by band
+    sources: lsst.afw.table.SourceCatalog
+        This is the output of the detection
 
     TODO
     ----
@@ -60,27 +61,49 @@ class ModelSubtractor(object):
     model = subtractor.get_model(source_id, stamp_size=48)
     """
 
-    def __init__(self, mbexp, sources):
-        assert isinstance(mbexp, MultibandExposure)
-        assert isinstance(sources, dict)
+    def __init__(self, mbexp, sources, model_data):
+        assert isinstance(mbexp, MultibandExposure), (
+            f'For input mbexp, expected MultibandExposure, got {type(mbexp)}'
+        )
+        assert isinstance(sources, SourceCatalog), (
+            f'For input sources, expected SourceCatalog, got {type(sources)}'
+        )
 
         self.orig = mbexp
-        print(type(self.orig.singles[0]))
-        self.filters = mbexp.filters
 
-        self.sources = sources
-        self.source_ids = set()
-        for source in sources[list(sources.keys())[0]]:
-            self.source_ids.add(source.getId())
-
+        # we will work with this copy rather than the original
         self.mbexp = util.copy_mbexp(mbexp)
-        for band in self.filters:
-            psf = util.try_clone_psf(self.orig[band].getPsf())
-            self.mbexp[band].setPsf(psf)
 
         # we need a scratch array because heavy footprings don't
         # have addTo or subtractFrom methods
         self.scratch = util.copy_mbexp(mbexp, clear=True)
+
+        self.sources_orig = sources
+
+        self.bands = mbexp.filters
+
+        # make a deep copy of sources for each band, which will hold models
+        self.band_sources = {
+            band: sources.copy(deep=True) for band in self.bands
+        }
+
+        # Store models in heavy footprints
+        for band, band_sources in self.band_sources.items():
+            updateCatalogFootprints(
+                modelData=model_data,
+                catalog=band_sources,
+                band=band,
+                removeScarletData=False,
+                updateFluxColumns=False,
+            )
+
+        print(type(self.orig.singles[0]))
+
+        # for fast source lookup by id
+        self.source_dict = {}
+        for source in sources:
+            source_id = source.getId()
+            self.source_dict[source_id] = source
 
         self._set_footprints()
         self._build_heavies()
@@ -107,7 +130,7 @@ class ModelSubtractor(object):
         -------
         ExposureF, although more typically one uses the .mbexp attribute
         """
-        if source_id not in self.source_ids:
+        if source_id not in self.source_dict:
             raise ValueError(f'source {source_id} is not in the source list')
 
         self._add_or_subtract_source(source_id, 'add')
@@ -124,7 +147,7 @@ class ModelSubtractor(object):
 
         bbox = self.get_bbox(source_id)
 
-        for band in self.filters:
+        for band in self.bands:
             # Because footprints can only be used to *replace* pixels, we do so
             # on a scratch image and then subtract that from the model image
 
@@ -144,7 +167,7 @@ class ModelSubtractor(object):
 
         bbox = self.get_bbox(source_id)
 
-        for band in self.filters:
+        for band in self.bands:
             # Because footprints can only be used to *replace* pixels, we do so
             # on a scratch image and then subtract that from the model image
 
@@ -214,7 +237,7 @@ class ModelSubtractor(object):
         if type == 'model':
             return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
 
-        if source_id not in self.source_ids:
+        if source_id not in self.source_dict:
             raise ValueError(f'source {source_id} is not in the source list')
 
         bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
@@ -224,8 +247,8 @@ class ModelSubtractor(object):
         else:
             mbexp = self.mbexp
 
-        exposures = [mbexp[band][bbox] for band in self.filters]
-        # return MultibandExposure.fromExposures(self.filters, exposures)
+        exposures = [mbexp[band][bbox] for band in self.bands]
+        # return MultibandExposure.fromExposures(self.bands, exposures)
         return util.get_mbexp(exposures)
 
     def get_mbobs(
@@ -285,7 +308,7 @@ class ModelSubtractor(object):
         if type == 'model':
             return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
 
-        if source_id not in self.source_ids:
+        if source_id not in self.source_dict:
             raise ValueError(f'source {source_id} is not in the source list')
 
         bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
@@ -295,7 +318,7 @@ class ModelSubtractor(object):
         else:
             mbexp = self.mbexp
 
-        source = self.sources[source_id]
+        source = self.source_dict[source_id]
         mbobs = ngmix.MultiBandObsList()
 
         for band in mbexp.bands:
@@ -337,7 +360,7 @@ class ModelSubtractor(object):
         ExposureF
         """
 
-        if source_id not in self.source_ids:
+        if source_id not in self.source_dict:
             raise ValueError(f'source {source_id} is not in the source list')
 
         scratch = self.scratch
@@ -346,7 +369,7 @@ class ModelSubtractor(object):
         bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
 
         exposures = []
-        for band in self.filters:
+        for band in self.bands:
             heavy_fp = heavies[band][source_id]
             heavy_fp.insert(scratch[band].image)
 
@@ -356,7 +379,7 @@ class ModelSubtractor(object):
 
             exposures.append(model_exp)
 
-        # return MultibandExposure.fromExposures(self.filters, exposures)
+        # return MultibandExposure.fromExposures(self.bands, exposures)
         return util.get_mbexp(exposures)
 
     def get_full_model(self):
@@ -372,7 +395,7 @@ class ModelSubtractor(object):
 
         model = util.copy_mbexp(self.mbexp, clear=True)
 
-        for band, sources in self.sources.items():
+        for band, sources in self.band_sources.items():
             LOG.debug('-' * 70)
             LOG.debug(f'band: {band}')
 
@@ -424,11 +447,11 @@ class ModelSubtractor(object):
         lsst.geom.Box2I
         """
 
-        if source_id not in self.source_ids:
+        if source_id not in self.source_dict:
             raise ValueError(f'source {source_id} is not in the source list')
 
         # assumption: bounding boxes same in all bands
-        band = self.filters[0]
+        band = self.bands[0]
 
         if stamp_size is not None:
             parent_id, fp = self.footprints[band][source_id]
@@ -462,7 +485,7 @@ class ModelSubtractor(object):
 
     def _set_footprints(self):
         self.footprints = {}
-        for band, sources in self.sources.items():
+        for band, sources in self.band_sources.items():
             self.footprints[band] = {
                 source.getId(): (source.getParent(), source.getFootprint())
                 for source in sources
@@ -492,7 +515,7 @@ class ModelSubtractor(object):
         mbexp = self.mbexp
         scratch = self.scratch
 
-        for band, sources in self.sources.items():
+        for band, sources in self.band_sources.items():
             LOG.debug('-' * 70)
             LOG.debug(f'band: {band}')
 
