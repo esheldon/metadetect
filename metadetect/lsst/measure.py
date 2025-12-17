@@ -11,6 +11,7 @@ from lsst.meas.algorithms import (
 )
 from lsst.meas.deblender import SourceDeblendTask
 from lsst.meas.extensions.scarlet import ScarletDeblendTask
+from lsst.meas.extensions.scarlet.io.utils import updateCatalogFootprints
 from lsst.meas.base import (
     SingleFrameMeasurementConfig,
     SingleFrameMeasurementTask,
@@ -214,16 +215,29 @@ class DetectAndDeblendTask(Task):
         result = self.detect.run(table, detexp)
 
         if result is not None:
-            sources = result.sources
+            orig_sources = result.sources
 
-            mbexp_deconvolved = util.make_deconvolved_mbexp(mbexp, sources)
+            mbexp_deconvolved = util.make_deconvolved_mbexp(
+                mbexp, orig_sources,
+            )
 
             scl_res = self.deblend.run(
                 mExposure=mbexp,
                 mDeconvolved=mbexp_deconvolved,
-                mergedSources=sources,
+                mergedSources=orig_sources,
             )
             model_data = scl_res.scarletModelData
+            sources = scl_res.deblendedCatalog
+
+            # we need to attach footprints in order to do our basic measurement
+            # task.  We will do this for all bands in the ModelSubtractor
+            updateCatalogFootprints(
+                modelData=model_data,
+                catalog=sources,
+                band='i',
+                removeScarletData=False,
+                updateFluxColumns=False,
+            )
 
             with ContextNoiseReplacer(
                 detexp,

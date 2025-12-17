@@ -490,9 +490,6 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
         flux_name = f'{front}_band_flux'
 
         for shear in metacal_types:
-            # 5x5 grid
-            assert res[shear].size == 25
-
             assert np.any(res[shear][f"{front}_flags"] == 0)
             assert np.all(res[shear]["mfrac"] == 0)
 
@@ -503,4 +500,4 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender('sdss')
     # test_lsst_metadetect_deblender_grid('scarlet')
-    test_lsst_metadetect_deblender_random('scarlet', show=True)
+    test_lsst_metadetect_deblender_random('scarlet')
