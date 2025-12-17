@@ -96,7 +96,7 @@ def test_convention(ginput):
 
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    sources, detexp = metadetect.lsst.measure.detect_and_deblend(
+    sources, detexp, model_data = metadetect.lsst.measure.detect_and_deblend(
         mbexp=data['mbexp'], rng=rng,
     )
 
@@ -106,6 +106,7 @@ def test_convention(ginput):
         mbexp=data['mbexp'],
         detexp=detexp,
         sources=sources,
+        model_data=model_data,
         config=config,
         rng=rng,
     )

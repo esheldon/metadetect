@@ -65,7 +65,7 @@ def run_photometry(
         rng=rng,
     )
 
-    sources, detexp = measure.detect_and_deblend(
+    sources, detexp, model_data = measure.detect_and_deblend(
         mbexp=mbexp,
         rng=rng,
         thresh=config['detect']['thresh'],
@@ -76,6 +76,7 @@ def run_photometry(
         mbexp=mbexp,
         detexp=detexp,
         sources=sources,
+        model_data=model_data,
         config=config,
         rng=rng
     )
