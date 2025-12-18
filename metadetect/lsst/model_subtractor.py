@@ -3,11 +3,19 @@ from contextlib import contextmanager
 from lsst.afw.image import MultibandExposure
 import lsst.afw.image as afw_image
 import lsst.geom as geom
-import lsst.afw.detection as afw_det
 from lsst.afw.table import SourceCatalog
 from lsst.pex.exceptions import LengthError
-from lsst.meas.extensions.scarlet.io.utils import updateCatalogFootprints
+# from lsst.meas.extensions.scarlet.io.utils import updateCatalogFootprints
 from . import util
+
+import numpy as np
+import lsst.scarlet.lite as scl
+from lsst.afw.detection import HeavyFootprintF, makeHeavyFootprint
+from lsst.afw.detection.multiband import MultibandFootprint
+from lsst.afw.image import Mask, MaskedImage, MultibandImage
+from lsst.afw.geom import SpanSet
+from lsst.afw.detection import Footprint as afwFootprint
+from lsst.afw.image import Image as afwImage
 
 LOG = logging.getLogger('lsst_model_subtractor')
 
@@ -17,8 +25,8 @@ class ModelSubtractor(object):
     Create an image with all models subtracted, which is stored in the .mbexp
     attribute
 
-    Provides a method to add back a source.  This works in a context manager to
-    maintain data consistency.
+    Provides a method to add back a child source.  This works in a context
+    manager to maintain data consistency.
 
     Provides methods to get a postage stamp for a deblended source.  One can
     also get a stamp for the model or the original image.
@@ -75,38 +83,31 @@ class ModelSubtractor(object):
         # we will work with this copy rather than the original
         self.mbexp = util.copy_mbexp(mbexp)
 
-        # we need a scratch array because heavy footprings don't
-        # have addTo or subtractFrom methods
-        self.scratch = util.copy_mbexp(mbexp, clear=True)
-
-        self.sources_orig = sources
+        self.sources = sources
 
         self.bands = mbexp.filters
 
-        # make a deep copy of sources for each band, which will hold models
-        self.band_sources = {
-            band: sources.copy(deep=True) for band in self.bands
-        }
-
-        # Store models in heavy footprints
-        for band, band_sources in self.band_sources.items():
-            updateCatalogFootprints(
-                modelData=model_data,
-                catalog=band_sources,
-                band=band,
-                removeScarletData=False,
-                updateFluxColumns=True,
-            )
-
-        # for fast source lookup by id
-        self.source_dict = {}
-        for source in sources:
-            source_id = source.getId()
-            self.source_dict[source_id] = source
-
-        self._set_footprints()
-        self._build_heavies()
         self._build_subtracted_image()
+
+    def children(self):
+        """
+        Generator that yields children Sources
+        """
+        for sid in self.child_ids():
+            yield self.sources.find(sid)
+
+    def child_ids(self):
+        """
+        Generator that yields child ids
+        """
+        for sid in self.heavies:
+            yield sid
+
+    def check_source_id(self, source_id):
+        if source_id not in self.heavies:
+            raise ValueError(
+                f'source {source_id} is not in the child source list',
+            )
 
     @contextmanager
     def add_source(self, source_id):
@@ -129,8 +130,7 @@ class ModelSubtractor(object):
         -------
         ExposureF, although more typically one uses the .mbexp attribute
         """
-        if source_id not in self.source_dict:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
 
         self._add_or_subtract_source(source_id, 'add')
         # self._add_or_subtract_source_new(source_id, 'add')
@@ -142,43 +142,15 @@ class ModelSubtractor(object):
 
     def _add_or_subtract_source(self, source_id, type):
         mbexp = self.mbexp
-        scratch = self.scratch
-
-        bbox = self.get_bbox(source_id)
-
-        for band in self.bands:
-            # Because footprints can only be used to *replace* pixels, we do so
-            # on a scratch image and then subtract that from the model image
-
-            heavy_fp = self.heavies[band][source_id]
-            heavy_fp.insert(scratch[band].image)
-
-            if type == 'add':
-                mbexp[band].image[bbox] += scratch[band].image[bbox]
-            else:
-                mbexp[band].image[bbox] -= scratch[band].image[bbox]
-
-            scratch[band].image[bbox] = 0
-
-    def _add_or_subtract_source_new(self, source_id, type):
-        mbexp = self.mbexp
-        scratch = self.scratch
-
-        bbox = self.get_bbox(source_id)
+        bbox = self.bboxes[source_id]
+        heavy = self.heavies[source_id]
 
         for band in self.bands:
-            # Because footprints can only be used to *replace* pixels, we do so
-            # on a scratch image and then subtract that from the model image
-
-            heavy_fp = self.heavies[band][source_id]
-            heavy_fp.insert(scratch[band].image)
 
             if type == 'add':
-                heavy_fp.addTo(mbexp[band].image[bbox])
+                heavy[band].addTo(mbexp[band].image[bbox])
             else:
-                heavy_fp.subtractFrom(mbexp[band].image[bbox])
-
-            scratch[band].image[bbox] = 0
+                heavy[band].subtractFrom(mbexp[band].image[bbox])
 
     def get_stamp(
         self,
@@ -236,8 +208,7 @@ class ModelSubtractor(object):
         if type == 'model':
             return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
 
-        if source_id not in self.source_dict:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
 
         bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
 
@@ -307,8 +278,7 @@ class ModelSubtractor(object):
         if type == 'model':
             return self.get_model(source_id, stamp_size=stamp_size, clip=clip)
 
-        if source_id not in self.source_dict:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
 
         bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
 
@@ -317,7 +287,7 @@ class ModelSubtractor(object):
         else:
             mbexp = self.mbexp
 
-        source = self.source_dict[source_id]
+        source = self.sources.find(source_id)
         mbobs = ngmix.MultiBandObsList()
 
         for band in mbexp.bands:
@@ -359,26 +329,20 @@ class ModelSubtractor(object):
         ExposureF
         """
 
-        if source_id not in self.source_dict:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
 
-        scratch = self.scratch
         heavies = self.heavies
 
-        bbox = self.get_bbox(source_id, stamp_size=stamp_size, clip=clip)
+        heavy = heavies[source_id]
 
         exposures = []
         for band in self.bands:
-            heavy_fp = heavies[band][source_id]
-            heavy_fp.insert(scratch[band].image)
+            im = heavy[band].extractImage()
+            masked_im = afw_image.MaskedImageF(im.clone())
+            exp = afw_image.ExposureF(masked_im)
+            exp.setFilter(afw_image.FilterLabel(band))
+            exposures.append(exp)
 
-            model_exp = afw_image.ExposureF(scratch[band][bbox], deep=True)
-
-            scratch[band].image[bbox] = 0
-
-            exposures.append(model_exp)
-
-        # return MultibandExposure.fromExposures(self.bands, exposures)
         return util.get_mbexp(exposures)
 
     def get_full_model(self):
@@ -389,45 +353,13 @@ class ModelSubtractor(object):
         -------
         ExposureF
         """
-        heavies = self.heavies
-        scratch = self.scratch
 
         model = util.copy_mbexp(self.mbexp, clear=True)
 
-        for band, sources in self.band_sources.items():
-            LOG.debug('-' * 70)
-            LOG.debug(f'band: {band}')
-
-            for source in sources:
-                source_id = source.getId()
-                heavy_fp = heavies[band][source_id]
-                heavy_fp.insert(scratch[band].image)
-
-                bbox = self.get_bbox(source_id=source_id)
-                # mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                model[band].image[bbox] += scratch[band].image[bbox]
-                scratch[band].image[bbox] = 0
-
-            # parents = sources.getChildren(0)
-            # for parent_record in parents:
-            #     LOG.debug('parent id: %d', parent_record.getId())
-            #
-            #     children = sources.getChildren(parent_record.getId())
-            #     nchild = len(children)
-            #     LOG.debug(
-            #         'processing %d %s',
-            #         nchild,
-            #         'children' if nchild > 1 else 'child',
-            #     )
-            #
-            #     for child in children:
-            #         child_id = child.getId()
-            #         heavy_fp = heavies[band][child_id]
-            #         heavy_fp.insert(scratch[band].image)
-            #
-            #         bbox = self.get_bbox(child_id)
-            #         model[band].image[bbox] += scratch[band].image[bbox]
-            #         scratch[band].image[bbox] = 0
+        for sid, heavy in self.heavies.items():
+            bbox = self.bboxes[sid]
+            for band in self.bands:
+                heavy[band].addTo(model[band].image[bbox])
 
         return model
 
@@ -456,14 +388,10 @@ class ModelSubtractor(object):
         lsst.geom.Box2I
         """
 
-        if source_id not in self.source_dict:
-            raise ValueError(f'source {source_id} is not in the source list')
-
-        # assumption: bounding boxes same in all bands
-        band = self.bands[0]
+        self.check_source_id(source_id)
 
         if stamp_size is not None:
-            parent_id, fp = self.footprints[band][source_id]
+            fp = self.footprints[source_id]
             peak = fp.getPeaks()[0]
 
             # note we previously had -0.5 on each of these based on Bob's code
@@ -487,96 +415,121 @@ class ModelSubtractor(object):
                     )
 
         else:
-            parent_id, fp = self.footprints[band][source_id]
+            parent_id, fp = self.footprints[source_id]
             bbox = fp.getBBox()
 
         return bbox
 
-    def _set_footprints(self):
-        self.footprints = {}
-        for band, sources in self.band_sources.items():
-            self.footprints[band] = {
-                source.getId(): (source.getParent(), source.getFootprint())
-                for source in sources
-            }
-
-    def _build_heavies(self):
-        self.heavies = {}
-        for band, footprints in self.footprints.items():
-            self.heavies[band] = {}
-
-            for id, fp in footprints.items():
-                # TODO test/ask if this is ok
-                self.heavies[band][id] = afw_det.makeHeavyFootprint(
-                    fp[1],
-                    self.mbexp[band].maskedImage,
-                )
-
-                # if fp[1].isHeavy():
-                #     self.heavies[band][id] = fp[1]
-                # elif fp[0] == 0:
-                #     self.heavies[band][id] = afw_det.makeHeavyFootprint(
-                #         fp[1], self.mbexp[band].maskedImage,
-                #     )
-
-    def _build_subtracted_image_direct(self):
-        for full_blend_data in self.model_data.blends.values():
-            for blend_data in full_blend_data.children.values():
-                import IPython; IPython.embed()
-                blend = blend_data.minimal_data_to_blend()
-                for source in blend.sources:
-                    source_model = blend.observation.convolve(
-                        source.get_model()
-                    )
-                    import IPython; IPython.embed()
-
     def _build_subtracted_image(self):
-        heavies = self.heavies
-        mbexp = self.mbexp
-        scratch = self.scratch
+        self.heavies = {}
+        self.footprints = {}
+        self.bboxes = {}
 
-        for band, sources in self.band_sources.items():
-            LOG.debug('-' * 70)
-            LOG.debug(f'band: {band}')
+        model_data = self.model_data
 
-            for source in sources:
-                source_id = source.getId()
-                heavy_fp = heavies[band][source_id]
-                heavy_fp.insert(scratch[band].image)
+        bands = model_data.metadata["bands"]
+        model_psf = model_data.metadata["model_psf"]
+        observed_psf = model_data.metadata["psf"]
 
-                bbox = self.get_bbox(source_id=source_id)
-                # mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                scratch[band].image[bbox] = 0
-
-    def _build_subtracted_image_old(self):
-        heavies = self.heavies
-        mbexp = self.mbexp
-        scratch = self.scratch
-
-        for band, sources in self.band_sources.items():
-            LOG.debug('-' * 70)
-            LOG.debug(f'band: {band}')
-
-            parents = sources.getChildren(0)
-            for parent_record in parents:
-                LOG.debug('parent id: %d', parent_record.getId())
-
-                children = sources.getChildren(parent_record.getId())
-                nchild = len(children)
-                LOG.debug(
-                    'processing %d %s',
-                    nchild,
-                    'children' if nchild > 1 else 'child',
+        for full_blend_data in model_data.blends.values():
+            for blend_data in full_blend_data.children.values():
+                blend = blend_data.minimal_data_to_blend(
+                    model_psf=model_psf[None],
+                    psf=observed_psf,
+                    bands=bands,
                 )
+                for scl_source in blend.sources:
+                    # this id is same as catalog source getId()
+                    sid = scl_source.metadata['id']
+                    source = self.sources.find(sid)
+                    footprint = source.getFootprint()
+                    bbox = footprint.getBBox()
 
-                for child in children:
-                    child_id = child.getId()
-                    heavy_fp = heavies[band][child_id]
-                    print('heavy_fp type:', type(heavy_fp))
-                    heavy_fp.insert(scratch[band].image)
+                    heavy = scarletModelToHeavy(source=scl_source, blend=blend)
 
-                    bbox = self.get_bbox(source_id=child_id)
-                    # mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                    mbexp[band].image[bbox] -= scratch[band].image[bbox]
-                    scratch[band].image[bbox] = 0
+                    for band in bands:
+                        heavy[band].subtractFrom(self.mbexp[band].image[bbox])
+
+                    self.bboxes[sid] = bbox
+                    self.heavies[sid] = heavy
+                    self.footprints[sid] = footprint
+
+
+def scarletModelToHeavy(
+    source: scl.Source,
+    blend: scl.Blend,
+    useFlux=False,
+) -> HeavyFootprintF | MultibandFootprint:
+    """Convert a scarlet_lite model to a `HeavyFootprintF`
+    or `MultibandFootprint`.
+
+    Parameters
+    ----------
+    source:
+        The source to convert to a `HeavyFootprint`.
+    blend:
+        The `Blend` object that contains information about
+        the observation, PSF, etc, used to convolve the
+        scarlet model to the observed seeing in each band.
+    useFlux:
+        Whether or not to re-distribute the flux from the image
+        to conserve flux.
+
+    Returns
+    -------
+    heavy:
+        The footprint (possibly multiband) containing the model for the source.
+    """
+    # We want to convolve the model with the observed PSF,
+    # which means we need to grow the model box by the PSF to
+    # account for all of the flux after convolution.
+
+    # Get the PSF size and radii to grow the box
+    py, px = blend.observation.psfs.shape[1:]
+    dh = py // 2
+    dw = px // 2
+
+    if useFlux:
+        bbox = source.flux_weighted_image.bbox
+    else:
+        bbox = source.bbox.grow((dh, dw))
+    # Only use the portion of the convolved model that fits in the image
+    overlap = bbox & blend.observation.bbox
+    # Load the full multiband model in the larger box
+    if useFlux:
+        # The flux weighted model is already convolved, so we just load it
+        model = source.get_model(use_flux=True).project(bbox=overlap)
+    else:
+        model = source.get_model().project(bbox=overlap)
+        # Convolve the model with the PSF in each band
+        # Always use a real space convolution to limit artifacts
+        model = blend.observation.convolve(model, mode="real")
+
+    # Update xy0 with the origin of the sources box
+    xy0 = geom.Point2I(model.yx0[-1], model.yx0[-2])
+    # Create the spans for the footprint
+    valid = np.max(model.data, axis=0) != 0
+    valid = Mask(valid.astype(np.int32), xy0=xy0)
+    spans = SpanSet.fromMask(valid)
+
+    # Create the MultibandHeavyFootprint and
+    # add the location of the source to the peak catalog.
+    foot = afwFootprint(spans)
+    foot.addPeak(source.center[1], source.center[0], np.max(model.data))
+    if model.n_bands == 1:
+        image = afwImage(
+            array=model.data[0],
+            xy0=valid.getBBox().getMin(),
+            dtype=model.dtype,
+        )
+        maskedImage = MaskedImage(image, dtype=model.dtype)
+        heavy = makeHeavyFootprint(foot, maskedImage)
+    else:
+        # BUG fix:  was blend.bands
+        model = MultibandImage(
+            blend.observation.bands, model.data, valid.getBBox(),
+        )
+        heavy = MultibandFootprint.fromImages(
+            blend.observation.bands, model, footprint=foot
+        )
+    return heavy

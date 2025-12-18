@@ -152,7 +152,8 @@ def show_mbexp_mosaic(
     mbexp_list,
     stretch=DEFAULT_STRETCH,
     q=DEFAULT_Q,
-    mess=None,
+    labels=None,
+    title=None,
     show=True,
 ):
     """
@@ -169,7 +170,7 @@ def show_mbexp_mosaic(
     q: float, optional
         The Q parameter for
         astropy.visualization.lupton_rgb. import AsinhMapping
-    mess: str, optional
+    title: str, optional
         A message to use as title to plot
     show: bool, optional
         If set to True, show on the screen.
@@ -182,6 +183,9 @@ def show_mbexp_mosaic(
 
     nim = len(mbexp_list)
 
+    if labels is None:
+        labels = [f'im{i}' for i in range(nim)]
+
     grid = Grid(nim)
 
     aratio = grid.nrow / grid.ncol
@@ -193,12 +197,18 @@ def show_mbexp_mosaic(
     with mplt.style.context('dark_background'):
         fig, axs = mplt.subplots(
             ncols=grid.ncol, nrows=grid.nrow, figsize=figsize,
+            layout='tight',
         )
 
         for i, mbexp in enumerate(mbexp_list):
             image = mbexp.image.array
 
-            ax = axs.ravel()[i]
+            try:
+                ax = axs.ravel()[i]
+            except AttributeError:
+                ax = axs
+
+            ax.set_title(labels[i])
 
             if image.shape[0] >= 3:
                 import lsst.scarlet.lite as scl
@@ -227,8 +237,18 @@ def show_mbexp_mosaic(
                 minval = 0.1 * noise
                 ax.imshow(np.log(timage.clip(min=minval)))
 
-        if mess is not None:
-            fig.suptitle(mess)
+        try:
+            nax = axs.size
+        except AttributeError:
+            nax = 1
+
+        if nax > nim:
+            for i in range(nim, nax):
+                ax = axs.ravel()[i]
+                ax.axis('off')
+
+        if title is not None:
+            fig.suptitle(title)
 
         if show:
             mplt.show()

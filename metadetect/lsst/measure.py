@@ -226,6 +226,7 @@ class DetectAndDeblendTask(Task):
                 mDeconvolved=mbexp_deconvolved,
                 mergedSources=orig_sources,
             )
+
             model_data = scl_res.scarletModelData
             sources = scl_res.deblendedCatalog
 
@@ -311,6 +312,7 @@ def detect_and_deblend(
 
     if deblender == "scarlet":
         config.deblend.retarget(ScarletDeblendTask)
+        config.deblend.processSingles = True
 
     config.setDefaults()
 
@@ -385,9 +387,10 @@ def measure(
     )
     LOG.info(f'Using {type(mbobs_extractor)} to get stamps')
 
-    for i, source in enumerate(sources):
-        if source.get('deblend_nChild') != 0:
-            continue
+    for i, source in enumerate(mbobs_extractor.children()):
+        source_id = source.getId()
+        # if source.get('deblend_nChild') != 0:
+        #     continue
 
         bmask = bmasks[i]
 
@@ -398,10 +401,11 @@ def measure(
             #     source=source,
             #     stamp_size=config['stamp_size'],
             # )
-            mbobs = mbobs_extractor.get_mbobs(
-                source_id=source.getId(),
-                stamp_size=config['stamp_size'],
-            )
+            with mbobs_extractor.add_source(source_id):
+                mbobs = mbobs_extractor.get_mbobs(
+                    source_id=source.getId(),
+                    stamp_size=config['stamp_size'],
+                )
         except LengthError as err:
             # This is raised when a bbox hits an edge
             LOG.debug('%s', err)

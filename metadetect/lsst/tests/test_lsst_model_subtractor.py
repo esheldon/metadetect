@@ -8,6 +8,7 @@ from metadetect.lsst.measure import detect_and_deblend
 from metadetect.lsst import util
 from metadetect.lsst import vis
 from metadetect.lsst.model_subtractor import ModelSubtractor
+from metadetect.lsst.mbobs_extractor import MBObsExtractor
 from lsst.pex.exceptions import LengthError
 
 logging.basicConfig(
@@ -102,25 +103,59 @@ def test_lsst_model_subtractor_smoke(show=False):
     )
 
     if show:
+        stamp_size = 49
         # vis.show_mbexp(subtractor.mbexp)
-        vis.show_mbexp_mosaic([
-            mbexp,
-            subtractor.get_full_model(),
-            subtractor.mbexp,
-        ])
+        vis.show_mbexp_mosaic(
+            [mbexp, subtractor.get_full_model(), subtractor.mbexp],
+            labels=['orig', 'model', 'subtracted'],
+        )
 
-        for source in sources:
+        for i, source in enumerate(subtractor.children()):
+            source_id = source.getId()
             try:
-                print(source)
-                with subtractor.add_source(source.getId()):
-                    stamp = subtractor.get_stamp(source.getId(), stamp_size=49)
-                    model = subtractor.get_model(source.getId(), stamp_size=49)
-                    vis.show_mbexp_mosaic([subtractor.mbexp, stamp, model])
+                with subtractor.add_source(source_id):
+                    stamp = subtractor.get_stamp(
+                        source_id, stamp_size=stamp_size,
+                    )
+                    model = subtractor.get_model(
+                        source_id, stamp_size=stamp_size,
+                    )
+                    vis.show_mbexp_mosaic(
+                        [subtractor.mbexp, stamp, model],
+                        labels=[
+                            f'inserted {i}', f'inserted stamp {i}',
+                            f'model {i}',
+                        ],
+                    )
             except LengthError:
                 pass
 
-        import IPython
-        IPython.embed()  # noqa
+
+@pytest.mark.skipif(
+    "CATSIM_DIR" not in os.environ,
+    reason='simulation input data is not present',
+)
+def test_lsst_mbobs_extractor_smoke(show=False):
+    rng = np.random.RandomState(seed=116)
+
+    sim_data = make_lsst_sim(225)
+    data = do_coadding(rng=rng, sim_data=sim_data)
+    mbexp = data['mbexp']
+
+    if show:
+        vis.show_mbexp(mbexp)
+
+    sources, detecp, model_data = detect_and_deblend(
+        mbexp=mbexp,
+        rng=rng,
+        deblender='sdss',
+        show=show,
+    )
+
+    _ = MBObsExtractor(
+        mbexp=mbexp,
+        sources=sources,
+    )
 
 
 if __name__ == '__main__':

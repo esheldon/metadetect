@@ -39,12 +39,32 @@ class MBObsExtractor(object):
         )
         self.mbexp = mbexp
 
-        self._source_list = sources
-        self.sources = {}
+        self.sources = sources
 
+        self._child_ids = set()
         for source in sources:
-            sid = source.getId()
-            self.sources[sid] = source
+            if source['deblend_nChild'] == 0:
+                self._child_ids.add(source.getId())
+
+    def children(self):
+        """
+        Generator that yields children Sources
+        """
+        for sid in self.child_ids():
+            yield self.sources.find(sid)
+
+    def child_ids(self):
+        """
+        Get a list of child source ids
+        """
+        for sid in self._child_ids:
+            yield sid
+
+    def check_source_id(self, source_id):
+        if source_id not in self._child_ids:
+            raise ValueError(
+                f'source {source_id} is not in the child source list',
+            )
 
     @contextmanager
     def add_source(self, source_id):
@@ -58,6 +78,7 @@ class MBObsExtractor(object):
         source_id: int
             The id of the source, e.g. from source.getId(), ignored
         """
+        self.check_source_id(source_id)
         yield None
 
     def get_stamp(
@@ -95,12 +116,13 @@ class MBObsExtractor(object):
         ExposureF
         """
 
-        if source_id not in self.sources:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
+
+        source = self.sources.find(source_id)
 
         bbox = util.get_bbox(
             mbexp=self.mbexp,
-            source=self.sources[source_id],
+            source=source,
             stamp_size=stamp_size,
             clip=clip,
         )
@@ -146,10 +168,9 @@ class MBObsExtractor(object):
 
         import ngmix
 
-        if source_id not in self.sources:
-            raise ValueError(f'source {source_id} is not in the source list')
+        self.check_source_id(source_id)
 
-        source = self.sources[source_id]
+        source = self.sources.find(source_id)
 
         bbox = util.get_bbox(
             mbexp=self.mbexp,
