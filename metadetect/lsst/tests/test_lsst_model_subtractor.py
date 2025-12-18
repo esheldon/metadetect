@@ -102,12 +102,14 @@ def test_lsst_model_subtractor_smoke(show=False):
     )
 
     if show:
-        vis.show_mbexp(subtractor.mbexp)
+        # vis.show_mbexp(subtractor.mbexp)
+        vis.show_mbexp_mosaic([
+            mbexp,
+            subtractor.get_full_model(),
+            subtractor.mbexp,
+        ])
 
         for source in sources:
-            if source['deblend_blendNChild'] > 0:
-                continue
-
             try:
                 print(source)
                 with subtractor.add_source(source.getId()):

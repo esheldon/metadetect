@@ -70,6 +70,7 @@ class ModelSubtractor(object):
         )
 
         self.orig = mbexp
+        self.model_data = model_data
 
         # we will work with this copy rather than the original
         self.mbexp = util.copy_mbexp(mbexp)
@@ -94,10 +95,8 @@ class ModelSubtractor(object):
                 catalog=band_sources,
                 band=band,
                 removeScarletData=False,
-                updateFluxColumns=False,
+                updateFluxColumns=True,
             )
-
-        print(type(self.orig.singles[0]))
 
         # for fast source lookup by id
         self.source_dict = {}
@@ -399,26 +398,36 @@ class ModelSubtractor(object):
             LOG.debug('-' * 70)
             LOG.debug(f'band: {band}')
 
-            parents = sources.getChildren(0)
-            for parent_record in parents:
-                LOG.debug('parent id: %d', parent_record.getId())
+            for source in sources:
+                source_id = source.getId()
+                heavy_fp = heavies[band][source_id]
+                heavy_fp.insert(scratch[band].image)
 
-                children = sources.getChildren(parent_record.getId())
-                nchild = len(children)
-                LOG.debug(
-                    'processing %d %s',
-                    nchild,
-                    'children' if nchild > 1 else 'child',
-                )
+                bbox = self.get_bbox(source_id=source_id)
+                # mbexp[band].image[bbox] -= scratch[band].image[bbox]
+                model[band].image[bbox] += scratch[band].image[bbox]
+                scratch[band].image[bbox] = 0
 
-                for child in children:
-                    child_id = child.getId()
-                    heavy_fp = heavies[band][child_id]
-                    heavy_fp.insert(scratch[band].image)
-
-                    bbox = self.get_bbox(child_id)
-                    model[band].image[bbox] += scratch[band].image[bbox]
-                    scratch[band].image[bbox] = 0
+            # parents = sources.getChildren(0)
+            # for parent_record in parents:
+            #     LOG.debug('parent id: %d', parent_record.getId())
+            #
+            #     children = sources.getChildren(parent_record.getId())
+            #     nchild = len(children)
+            #     LOG.debug(
+            #         'processing %d %s',
+            #         nchild,
+            #         'children' if nchild > 1 else 'child',
+            #     )
+            #
+            #     for child in children:
+            #         child_id = child.getId()
+            #         heavy_fp = heavies[band][child_id]
+            #         heavy_fp.insert(scratch[band].image)
+            #
+            #         bbox = self.get_bbox(child_id)
+            #         model[band].image[bbox] += scratch[band].image[bbox]
+            #         scratch[band].image[bbox] = 0
 
         return model
 
@@ -509,6 +518,17 @@ class ModelSubtractor(object):
                 #     self.heavies[band][id] = afw_det.makeHeavyFootprint(
                 #         fp[1], self.mbexp[band].maskedImage,
                 #     )
+
+    def _build_subtracted_image_direct(self):
+        for full_blend_data in self.model_data.blends.values():
+            for blend_data in full_blend_data.children.values():
+                import IPython; IPython.embed()
+                blend = blend_data.minimal_data_to_blend()
+                for source in blend.sources:
+                    source_model = blend.observation.convolve(
+                        source.get_model()
+                    )
+                    import IPython; IPython.embed()
 
     def _build_subtracted_image(self):
         heavies = self.heavies

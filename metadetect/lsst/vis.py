@@ -178,16 +178,27 @@ def show_mbexp_mosaic(
     -------
     fig, axs
     """
+    from espy.plotting import Grid
 
     nim = len(mbexp_list)
 
+    grid = Grid(nim)
+
+    aratio = grid.nrow / grid.ncol
+    if aratio > 1:
+        figsize = (8 / aratio, 8)
+    else:
+        figsize = (8, 8 * aratio)
+
     with mplt.style.context('dark_background'):
-        fig, axs = mplt.subplots(ncols=nim, figsize=(8*nim, 8))
+        fig, axs = mplt.subplots(
+            ncols=grid.ncol, nrows=grid.nrow, figsize=figsize,
+        )
 
         for i, mbexp in enumerate(mbexp_list):
             image = mbexp.image.array
 
-            ax = axs[i]
+            ax = axs.ravel()[i]
 
             if image.shape[0] >= 3:
                 import lsst.scarlet.lite as scl
