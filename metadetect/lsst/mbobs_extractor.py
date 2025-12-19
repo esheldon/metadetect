@@ -61,6 +61,9 @@ class MBObsExtractor(object):
             yield sid
 
     def check_source_id(self, source_id):
+        """
+        Check the source id is present in the catalog
+        """
         if source_id not in self._child_ids:
             raise ValueError(
                 f'source {source_id} is not in the child source list',

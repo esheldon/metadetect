@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import pytest
+import time
 
 import logging
 from metadetect.lsst.measure import detect_and_deblend
@@ -17,10 +18,9 @@ logging.basicConfig(
 )
 
 
-def make_lsst_sim(seed, bands=['g', 'r', 'i']):
+def make_lsst_sim(rng, bands=['g', 'r', 'i']):
     import descwl_shear_sims
 
-    rng = np.random.RandomState(seed=seed)
     coadd_dim = 251
 
     galaxy_catalog = descwl_shear_sims.galaxies.WLDeblendGalaxyCatalog(
@@ -79,66 +79,77 @@ def do_coadding(rng, sim_data, nowarp=True):
     "CATSIM_DIR" not in os.environ,
     reason='simulation input data is not present',
 )
-def test_lsst_model_subtractor_smoke(show=False):
-    rng = np.random.RandomState(seed=116)
+def test_lsst_model_subtractor_smoke(seed=225, ntrial=1, show=False):
+    rng = np.random.RandomState(seed)
 
-    sim_data = make_lsst_sim(225)
-    data = do_coadding(rng=rng, sim_data=sim_data)
-    mbexp = data['mbexp']
+    tm = 0.0
+    for i in range(ntrial):
+        sim_data = make_lsst_sim(rng)
+        data = do_coadding(rng=rng, sim_data=sim_data)
+        mbexp = data['mbexp']
 
-    if show:
-        vis.show_mbexp(mbexp)
+        if show:
+            vis.show_mbexp(mbexp)
 
-    sources, detecp, model_data = detect_and_deblend(
-        mbexp=mbexp,
-        rng=rng,
-        deblender='scarlet',
-        show=show,
-    )
-
-    subtractor = ModelSubtractor(
-        mbexp=mbexp,
-        sources=sources,
-        model_data=model_data,
-    )
-
-    if show:
-        stamp_size = 49
-        # vis.show_mbexp(subtractor.mbexp)
-        vis.show_mbexp_mosaic(
-            [mbexp, subtractor.get_full_model(), subtractor.mbexp],
-            labels=['orig', 'model', 'subtracted'],
+        tm0 = time.time()
+        sources, detecp, model_data = detect_and_deblend(
+            mbexp=mbexp,
+            rng=rng,
+            deblender='scarlet',
+            show=show,
         )
 
-        for i, source in enumerate(subtractor.children()):
-            source_id = source.getId()
-            try:
-                with subtractor.add_source(source_id):
-                    stamp = subtractor.get_stamp(
-                        source_id, stamp_size=stamp_size,
-                    )
-                    model = subtractor.get_model(
-                        source_id, stamp_size=stamp_size,
-                    )
-                    vis.show_mbexp_mosaic(
-                        [subtractor.mbexp, stamp, model],
-                        labels=[
-                            f'inserted {i}', f'inserted stamp {i}',
-                            f'model {i}',
-                        ],
-                    )
-            except LengthError:
-                pass
+        subtractor = ModelSubtractor(
+            mbexp=mbexp,
+            sources=sources,
+            model_data=model_data,
+        )
+
+        tm += time.time() - tm0
+
+        if show:
+            stamp_size = 49
+            # vis.show_mbexp(subtractor.mbexp)
+            vis.show_mbexp_mosaic(
+                [mbexp, subtractor.get_full_model(), subtractor.mbexp],
+                labels=['orig', 'model', 'subtracted'],
+            )
+
+            for i, source in enumerate(subtractor.children()):
+                source_id = source.getId()
+                try:
+                    with subtractor.add_source(source_id):
+                        stamp = subtractor.get_stamp(
+                            source_id,
+                            stamp_size=stamp_size,
+                        )
+                        model = subtractor.get_model(
+                            source_id,
+                            stamp_size=stamp_size,
+                        )
+                        vis.show_mbexp_mosaic(
+                            [subtractor.mbexp, stamp, model],
+                            labels=[
+                                f'inserted {i}',
+                                f'inserted stamp {i}',
+                                f'model {i}',
+                            ],
+                        )
+                except LengthError:
+                    pass
+
+    print('time per:', tm / ntrial)
 
 
 @pytest.mark.skipif(
     "CATSIM_DIR" not in os.environ,
     reason='simulation input data is not present',
 )
-def test_lsst_mbobs_extractor_smoke(show=False):
-    rng = np.random.RandomState(seed=116)
+def test_lsst_mbobs_extractor_smoke(seed=225, show=False):
 
-    sim_data = make_lsst_sim(225)
+    rng = np.random.RandomState(seed)
+    sim_data = make_lsst_sim(rng)
+
     data = do_coadding(rng=rng, sim_data=sim_data)
     mbexp = data['mbexp']
 
@@ -159,4 +170,5 @@ def test_lsst_mbobs_extractor_smoke(show=False):
 
 
 if __name__ == '__main__':
-    test_lsst_model_subtractor_smoke(show=True)
+    # test_lsst_model_subtractor_smoke(seed=225, show=True)
+    test_lsst_model_subtractor_smoke(seed=225, ntrial=20)

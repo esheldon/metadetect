@@ -22,16 +22,9 @@ LOG = logging.getLogger('lsst_model_subtractor')
 
 class ModelSubtractor(object):
     """
-    Create an image with all models subtracted, which is stored in the .mbexp
-    attribute
-
-    Provides a method to add back a child source.  This works in a context
-    manager to maintain data consistency.
-
-    Provides methods to get a postage stamp for a deblended source.  One can
-    also get a stamp for the model or the original image.
-
-    You an also generate the full model of the image.
+    Takes in an image, catalog and models and produces an image with all models
+    subtracted.  Models can be then inserted one at a time and a postage stamp
+    extracted.  Stamps for the model or origina image can also be extracted.
 
     Parameters
     ----------
@@ -42,25 +35,22 @@ class ModelSubtractor(object):
     sources: lsst.afw.table.SourceCatalog
         This is the output of the detection
 
-    TODO
-    ----
-        - This code would use half the memory if heavy footprints supported
-        operations like .addTo(image) or .subtractFrom(image) which should be
-        essentially the same as the code in .insert
+    model_data: LsstScarletBlendData
+        The structure holding model information
 
     Examples
     ---------
 
-    subtractor = ModelSubtractor(exposure, sources)
+    subtractor = ModelSubtractor(exposure, sources, model_data)
 
     # add back one model; since the image had data-model this restores the
     # pixels for the object of interest, but with models of other objects
     # subtracted
 
-    with subtractor.add_source(source_id):
-        # full MultibandExposure is in subtractor.mbexp
-
-        stamp = subtractor.get_stamp(source_id, stamp_size=48)
+    for i, source in subtractor.children():
+        source_id = source.getId()
+        with subtractor.add_source(source_id):
+            stamp = subtractor.get_stamp(source_id, stamp_size=48)
 
     # model of the entire data set as a MultibandExposure
     full_model = subtractor.get_full_model()
@@ -104,6 +94,9 @@ class ModelSubtractor(object):
             yield sid
 
     def check_source_id(self, source_id):
+        """
+        Check the source id is a child and has a model
+        """
         if source_id not in self.heavies:
             raise ValueError(
                 f'source {source_id} is not in the child source list',
@@ -112,11 +105,12 @@ class ModelSubtractor(object):
     @contextmanager
     def add_source(self, source_id):
         """
-        Open a with context that yields the image with all objects
-        subtracted except the specified one.
+        Open a with context with one model temporarily added back to the image.
 
-        since the image had data-model this restores the pixels for the object
-        of interest, minus models of other objects
+        This restores the pixels for the object of interest, with models of
+        other objects still subtracted.
+
+        On exit from the context, the model is again subtracted
 
         with subtractor.add_source(source_id):
             # do something with subtractor.mbexp
@@ -128,7 +122,8 @@ class ModelSubtractor(object):
 
         Yields
         -------
-        ExposureF, although more typically one uses the .mbexp attribute
+        The MultiBandExposure object, although usually the point is
+        to extract a stamp
         """
         self.check_source_id(source_id)
 
@@ -173,7 +168,7 @@ class ModelSubtractor(object):
         ----------
         source_id: int
             The id of the source, e.g. from source.getId()
-        stamp_size: int
+        stamp_size: int, optional
             If sent, a bounding box is created with about this size rather than
             using the footprint bounding box. Typically the returned size is
             stamp_size + 1
@@ -189,9 +184,10 @@ class ModelSubtractor(object):
 
             'deblended' means whatever is in the current subtracted images.
                 If the user is in the add_source() context it will contain
-                the source data because the model will have been added back in
+                that source data because the model will have been added back in
 
-            'original' means a stamp from the original data
+            'original' means a stamp from the original data, without models
+                subtracted
 
             'model' means the model for object
                 You can also use get_model() to get the model
@@ -258,9 +254,10 @@ class ModelSubtractor(object):
 
             'deblended' means whatever is in the current subtracted images.
                 If the user is in the add_source() context it will contain
-                the source data because the model will have been added back in
+                that source data because the model will have been added back in
 
-            'original' means a stamp from the original data
+            'original' means a stamp from the original data, without models
+                subtracted
 
             'model' means the model for object
                 You can also use get_model() to get the model
@@ -460,8 +457,12 @@ def scarletModelToHeavy(
     blend: scl.Blend,
     useFlux=False,
 ) -> HeavyFootprintF | MultibandFootprint:
-    """Convert a scarlet_lite model to a `HeavyFootprintF`
-    or `MultibandFootprint`.
+    """
+    Convert a scarlet_lite model to a `HeavyFootprintF` or
+    `MultibandFootprint`.
+
+    This is a copy of the code from scarlet meas extension with
+    a bug fix for nbands in multi epoch
 
     Parameters
     ----------
