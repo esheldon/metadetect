@@ -252,10 +252,6 @@ def detect_deblend_and_measure(
     """
     run detection, deblending and measurements.
 
-    Note deblending is always run in a hierarchical detection process, but the
-    deblending is only used for getting centers, and because there is currently
-    no other way to split footprints
-
     Parameters
     ----------
     mbexp: lsst.afw.image.MultibandExposure
@@ -269,21 +265,22 @@ def detect_deblend_and_measure(
         If set to True, show images during processing
     """
 
-    sources, detexp, model_data = measure.detect_and_deblend(
-        mbexp=mbexp,
+    dbtask = measure.get_detect_and_deblend_task(
         rng=rng,
         thresh=config['detect']['thresh'],
         deblender=config['deblender'],
-        show=show,
     )
+    sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
 
     results = measure.measure(
         mbexp=mbexp,
         model_data=model_data,
+        meas_task=dbtask.meas,
         detexp=detexp,
         sources=sources,
         config=config,
         rng=rng,
+        show=show,
     )
 
     return results

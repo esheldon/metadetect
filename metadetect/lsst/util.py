@@ -325,10 +325,7 @@ def get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
     mbobs = ngmix.MultiBandObsList()
     for band in mbexp.bands:
         subexp = mbexp[band][bbox]
-        obs = extract_obs(
-            exp=subexp,
-            source=source,
-        )
+        obs = extract_obs(exp=subexp, source=source)
 
         obslist = ngmix.ObsList(meta={'band': band})
         obslist.append(obs)

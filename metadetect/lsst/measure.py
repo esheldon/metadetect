@@ -37,7 +37,7 @@ from ..fitting import (
 )
 
 from . import util
-from .util import ContextNoiseReplacer
+# from .util import ContextNoiseReplacer
 from . import vis
 from .defaults import DEFAULT_THRESH
 
@@ -47,6 +47,9 @@ LOG = logging.getLogger('lsst_measure')
 
 
 class SourceDetectionConfig(OriginalSourceDetectionConfig):
+    """
+    A local version of source detection config
+    """
     @property
     def thresh(self):
         return self.thresholdValue
@@ -60,6 +63,11 @@ SourceDetectionTask.ConfigClass = SourceDetectionConfig
 
 
 class DetectAndDeblendConfig(Config):
+    """
+    A configuration for detection, deblending and basic measurements
+
+    The deblend config may be retargeted to ScarletDeblendTask
+    """
     meas = ConfigurableField[SingleFrameMeasurementConfig](
         doc="Measurement config",
         target=SingleFrameMeasurementTask,
@@ -136,19 +144,27 @@ class DetectAndDeblendConfig(Config):
         self.detect.statsMask = util.get_stats_mask()
 
         # deblend config
-        # these tasks must use the same schema and all be constructed before
-        # any other tasks using the same schema are run because schema is
-        # modified in place by tasks, and the constructor does a check that
-        # fails if we do this afterward
         self.deblend.maxFootprintArea = 0
 
 
 class DetectAndDeblendTask(Task):
+    """
+    Task to do detection on a combined coadd from all bands, deblending and
+    basic measurements on the detection image.
+
+    Additional ngmix measurements will be performed separately
+    """
     ConfigClass = DetectAndDeblendConfig
     _DefaultName = "detect_and_deblend"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # These tasks must use the same schema and all be constructed before
+        # any other tasks using the same schema are run. This is because the
+        # schema is modified in place by tasks, and the constructor does a
+        # check that fails if we do any of this afterward
+
         schema = afw_table.SourceTable.makeMinimalSchema()
         self.makeSubtask("meas", schema=schema)
         self.makeSubtask("detect", schema=schema)
@@ -189,20 +205,20 @@ class DetectAndDeblendTask(Task):
             sources = result.sources
             self.deblend.run(detexp, sources)
 
-            with ContextNoiseReplacer(
-                detexp,
-                sources,
-                self.rng,
-                config=self.meas.config.noiseReplacer,
-            ) as replacer:
-                for source in sources:
-                    if source.get('deblend_nChild') != 0:
-                        continue
-
-                    source_id = source.getId()
-
-                    with replacer.sourceInserted(source_id):
-                        self.meas.callMeasure(source, detexp)
+            # with ContextNoiseReplacer(
+            #     detexp,
+            #     sources,
+            #     self.rng,
+            #     config=self.meas.config.noiseReplacer,
+            # ) as replacer:
+            #     for source in sources:
+            #         if source.get('deblend_nChild') != 0:
+            #             continue
+            #
+            #         source_id = source.getId()
+            #
+            #         with replacer.sourceInserted(source_id):
+            #             self.meas.callMeasure(source, detexp)
 
         else:
             sources = []
@@ -230,8 +246,9 @@ class DetectAndDeblendTask(Task):
             model_data = scl_res.scarletModelData
             sources = scl_res.deblendedCatalog
 
-            # we need to attach footprints in order to do our basic measurement
-            # task.  We will do this for all bands in the ModelSubtractor
+            # we need to attach footprints in order to do basic measurements as
+            # well as do the deblending
+
             updateCatalogFootprints(
                 modelData=model_data,
                 catalog=sources,
@@ -257,11 +274,11 @@ class DetectAndDeblendTask(Task):
             #         with replacer.sourceInserted(source_id):
             #             self.meas.callMeasure(source, detexp)
 
-            for source in sources:
-                if source.get('deblend_nChild') != 0:
-                    continue
-
-                self.meas.callMeasure(source, detexp)
+            # for source in sources:
+            #     if source.get('deblend_nChild') != 0:
+            #         continue
+            #
+            #     self.meas.callMeasure(source, detexp)
 
         else:
             sources = []
@@ -270,12 +287,10 @@ class DetectAndDeblendTask(Task):
         return sources, model_data
 
 
-def detect_and_deblend(
-    mbexp,
+def get_detect_and_deblend_task(
     rng=None,
     thresh=DEFAULT_THRESH,
     deblender="sdss",
-    show=False,
     config=None,
 ):
     """
@@ -288,14 +303,10 @@ def detect_and_deblend(
 
     Parameters
     ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The exposures to process
     rng: np.random.RandomState
         Random number generator for noise replacer
     thresh: float, optional
         The detection threshold in units of the sky noise
-    show: bool, optional
-        If set to True, show images
 
     Returns
     -------
@@ -323,7 +334,7 @@ def detect_and_deblend(
     task = DetectAndDeblendTask(config=config)
     if rng is not None:
         task.rng = rng
-    return task.run(mbexp, show)
+    return task
 
 
 def measure(
@@ -331,8 +342,10 @@ def measure(
     detexp,
     sources,
     model_data,
+    meas_task,
     config,
     rng,
+    show=False,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -377,20 +390,21 @@ def measure(
     wcs = mbexp.singles[0].getWcs()
     results = []
 
-    # bmasks will be different within the loop below due to the replacer
     bmasks = get_bmasks(sources=sources, exposure=detexp)
 
-    mbobs_extractor = _get_mbobs_extractor(
+    extractor = _get_extractor(
         mbexp=mbexp,
         sources=sources,
         model_data=model_data,
     )
-    LOG.info(f'Using {type(mbobs_extractor)} to get stamps')
 
-    for i, source in enumerate(mbobs_extractor.children()):
+    for i, source in enumerate(extractor.children()):
+
+        # perform basic measurements using stack algorithms
+        # see DetectAndDeblendConfig for details
+        meas_task.callMeasure(source, detexp)
+
         source_id = source.getId()
-        # if source.get('deblend_nChild') != 0:
-        #     continue
 
         bmask = bmasks[i]
 
@@ -401,9 +415,9 @@ def measure(
             #     source=source,
             #     stamp_size=config['stamp_size'],
             # )
-            with mbobs_extractor.add_source(source_id):
-                mbobs = mbobs_extractor.get_mbobs(
-                    source_id=source.getId(),
+            with extractor.add_source(source_id):
+                mbobs = extractor.get_mbobs(
+                    source_id=source_id,
                     stamp_size=config['stamp_size'],
                 )
         except LengthError as err:
@@ -471,6 +485,9 @@ def measure(
 
         results.append(res)
 
+    if show:
+        vis.show_mbexp(mbexp, sources=list(extractor.children()))
+
     if len(results) > 0:
         results = eu.numpy_util.combine_arrlist(results)
     else:
@@ -479,20 +496,34 @@ def measure(
     return results
 
 
-def _get_mbobs_extractor(mbexp, sources, model_data):
+def _get_extractor(mbexp, sources, model_data):
     if model_data is not None:
+        LOG.info('Using ModelSubtractor to get stamps')
         mbobs_extractor = ModelSubtractor(
             mbexp=mbexp,
             sources=sources,
             model_data=model_data,
         )
     else:
+        LOG.info('Using MBObsExtractor to get stamps')
         mbobs_extractor = MBObsExtractor(mbexp, sources)
 
     return mbobs_extractor
 
 
 def get_pgauss_fitter(config):
+    """
+    Get a PGaussMom fitter
+
+    Parameters
+    ----------
+    config: dict
+        The measurement configuration with "pgauss" sub-dict
+
+    Returns
+    -------
+    ngmix.prepsfmom.PGaussMom
+    """
     return ngmix.prepsfmom.PGaussMom(fwhm=config['pgauss']['fwhm'])
 
 

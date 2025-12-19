@@ -5,7 +5,7 @@ import pytest
 import time
 
 import logging
-from metadetect.lsst.measure import detect_and_deblend
+from metadetect.lsst.measure import get_detect_and_deblend_task
 from metadetect.lsst import util
 from metadetect.lsst import vis
 from metadetect.lsst.model_subtractor import ModelSubtractor
@@ -92,10 +92,9 @@ def test_lsst_model_subtractor_smoke(seed=225, ntrial=1, show=False):
             vis.show_mbexp(mbexp)
 
         tm0 = time.time()
-        sources, detecp, model_data = detect_and_deblend(
+        dbtask = get_detect_and_deblend_task(rng=rng, deblender='scarlet')
+        sources, detecp, model_data = dbtask.run(
             mbexp=mbexp,
-            rng=rng,
-            deblender='scarlet',
             show=show,
         )
 
@@ -156,10 +155,9 @@ def test_lsst_mbobs_extractor_smoke(seed=225, show=False):
     if show:
         vis.show_mbexp(mbexp)
 
-    sources, detecp, model_data = detect_and_deblend(
+    dbtask = get_detect_and_deblend_task(rng=rng, deblender='sdss')
+    sources, detecp, model_data = dbtask.run(
         mbexp=mbexp,
-        rng=rng,
-        deblender='sdss',
         show=show,
     )
 
@@ -170,5 +168,5 @@ def test_lsst_mbobs_extractor_smoke(seed=225, show=False):
 
 
 if __name__ == '__main__':
-    # test_lsst_model_subtractor_smoke(seed=225, show=True)
-    test_lsst_model_subtractor_smoke(seed=225, ntrial=20)
+    test_lsst_model_subtractor_smoke(seed=225, show=True)
+    # test_lsst_model_subtractor_smoke(seed=225, ntrial=20)

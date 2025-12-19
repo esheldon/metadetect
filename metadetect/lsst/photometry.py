@@ -65,10 +65,12 @@ def run_photometry(
         rng=rng,
     )
 
-    sources, detexp, model_data = measure.detect_and_deblend(
-        mbexp=mbexp,
-        rng=rng,
+    dbtask = measure.get_detect_and_deblend_task(
         thresh=config['detect']['thresh'],
+        rng=rng,
+    )
+    sources, detexp, model_data = dbtask.run(
+        mbexp=mbexp,
         show=show,
     )
 
@@ -77,6 +79,7 @@ def run_photometry(
         detexp=detexp,
         sources=sources,
         model_data=model_data,
+        meas_task=dbtask.meas,
         config=config,
         rng=rng
     )

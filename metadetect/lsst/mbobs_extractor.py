@@ -131,7 +131,6 @@ class MBObsExtractor(object):
         )
 
         exposures = [self.mbexp[band][bbox] for band in self.filters]
-        # return MultibandExposure.fromExposures(self.filters, exposures)
         return util.get_mbexp(exposures)
 
     def get_mbobs(
@@ -186,10 +185,7 @@ class MBObsExtractor(object):
 
         for band in self.mbexp.bands:
             subexp = self.mbexp[band][bbox]
-            obs = util.extract_obs(
-                exp=subexp,
-                source=source,
-            )
+            obs = util.extract_obs(exp=subexp, source=source)
 
             obslist = ngmix.ObsList(meta={'band': band})
             obslist.append(obs)

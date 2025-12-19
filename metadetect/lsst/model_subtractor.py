@@ -289,10 +289,7 @@ class ModelSubtractor(object):
 
         for band in mbexp.bands:
             subexp = mbexp[band][bbox]
-            obs = util.extract_obs(
-                exp=subexp,
-                source=source,
-            )
+            obs = util.extract_obs(exp=subexp, source=source)
 
             obslist = ngmix.ObsList(meta={'band': band})
             obslist.append(obs)

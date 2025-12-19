@@ -266,7 +266,8 @@ def _extract_xy(mbexp, sources):
         y0 = bbox.getBeginY()
         x = []
         y = []
-        for source in sources[mbexp.bands[0]]:
+        # for source in sources[mbexp.bands[0]]:
+        for source in sources:
             peak = source.getFootprint().getPeaks()[0]
             cen = peak.getCentroid()
             x.append(cen.getX() - x0)
