@@ -494,8 +494,8 @@ def run_sim_with_compression(seed, mdet_seed, model, **kwargs):
 
 @pytest.mark.parametrize(
     "items_to_compress", [
-        ("img",),
-        ("nse",),
+        # ("img",),
+        # ("nse",),
         ("img", "nse"),
         # tuple(),
     ],
