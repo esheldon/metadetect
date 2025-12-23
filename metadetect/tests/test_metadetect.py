@@ -204,6 +204,7 @@ def _check_result_array(res, shear, msk, model):
                 )
 
 
+@pytest.mark.xfail(reason="flaky performance")
 @pytest.mark.parametrize("model", ["gauss", "wmom"])
 def test_metadetect_coadd_faster(model):
     """

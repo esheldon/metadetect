@@ -1,6 +1,7 @@
 """
 test using lsst simple sim
 """
+
 import sys
 import numpy as np
 import pytest
@@ -79,11 +80,10 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize('nowarp', [False, True])
-def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
-    print('-'*70)
+def test_lsst_photometry_smoke(subtract_sky, nowarp):
+    print('-' * 70)
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
@@ -94,9 +94,6 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
 
     if subtract_sky is not None:
         config['subtract_sky'] = subtract_sky
-
-    if meas_type is not None:
-        config['meas_type'] = meas_type
 
     res = lsst_phot.run_photometry(
         mbexp=data['mbexp'],
@@ -109,20 +106,18 @@ def test_lsst_photometry_smoke(meas_type, subtract_sky, nowarp):
     # 5x5 on the grid
     assert res.size == 25
 
-    if meas_type is None:
-        front = 'wmom'
-    else:
-        front = meas_type
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res.dtype.names
 
-    gname = f'{front}_g'
-    flux_name = f'{front}_band_flux'
-    assert gname in res.dtype.names
+        flux_name = f'{front}_band_flux'
 
-    assert np.any(res[f"{front}_flags"] == 0)
-    assert np.all(res["mfrac"] == 0)
+        assert np.any(res[f"{front}_flags"] == 0)
+        assert np.all(res["mfrac"] == 0)
 
-    assert len(res[flux_name].shape) == 2
-    assert res[flux_name].shape[1] == len(bands)
+        assert len(res[flux_name].shape) == 2
+        assert res[flux_name].shape[1] == len(bands)
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ from .skysub import subtract_sky_mbexp
 from .configs import get_config
 from . import measure
 from .metadetect import (
-    fit_original_psfs_mbexp, get_mfrac_mbexp, get_fitter, combine_ormasks,
+    fit_original_psfs_mbexp, get_mfrac_mbexp, combine_ormasks,
     add_ormask, add_original_psf, add_mfrac,
 )
 
@@ -14,7 +14,9 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 LOG = logging.getLogger('lsst_photometry')
 
 
-def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show=False):
+def run_photometry(
+    mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show=False,
+):
     """
     Run photometry on the input data
 
@@ -36,7 +38,8 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
         of all masks from the original exposures, but a mask indicating problem
         areas such as bright objects or apodized edges.
 
-        In the future we expect the MultibandExposure to have an ormask attribute
+        In the future we expect the MultibandExposure to have an ormask
+        attribute
     config: dict, optional
         Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
@@ -62,8 +65,6 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
         rng=rng,
     )
 
-    fitter = get_fitter(config, rng=rng)
-
     sources, detexp = measure.detect_and_deblend(
         mbexp=mbexp,
         rng=rng,
@@ -75,8 +76,8 @@ def run_photometry(mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show
         mbexp=mbexp,
         detexp=detexp,
         sources=sources,
-        fitter=fitter,
-        stamp_size=config['stamp_size'],
+        config=config,
+        rng=rng
     )
 
     if res is not None:

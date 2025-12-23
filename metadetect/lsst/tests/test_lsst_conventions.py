@@ -5,7 +5,7 @@ import pytest
 import sys
 import numpy as np
 import logging
-from metadetect.lsst.metadetect import get_fitter
+from metadetect.lsst.configs import get_config
 import metadetect.lsst.measure
 from metadetect.lsst import util
 
@@ -100,17 +100,19 @@ def test_convention(ginput):
         mbexp=data['mbexp'], rng=rng,
     )
 
-    config = {'meas_type': 'wmom', 'weight': {'fwhm': 1.2}}
-    fitter = get_fitter(config, rng=rng)
+    config = get_config()
 
     res = metadetect.lsst.measure.measure(
-        mbexp=data['mbexp'], detexp=detexp, sources=sources, fitter=fitter,
-        stamp_size=47,
+        mbexp=data['mbexp'],
+        detexp=detexp,
+        sources=sources,
+        config=config,
+        rng=rng,
     )
 
-    w, = np.where(res['wmom_flags'] == 0)
+    w, = np.where(res['gauss_flags'] == 0)
 
-    g1, g2 = res['wmom_g'][w].mean(axis=0)
+    g1, g2 = res['gauss_g'][w].mean(axis=0)
 
     if g1in > 0:
         assert g1 > 0

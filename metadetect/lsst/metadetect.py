@@ -4,7 +4,6 @@ import ngmix
 from ngmix.gexceptions import BootPSFFailure
 from lsst.pex.config import (
     Config,
-    ChoiceField,
     ConfigField,
     ConfigurableField,
     Field,
@@ -19,11 +18,9 @@ from .. import procflags
 from .skysub import subtract_sky_mbexp
 
 from .defaults import (
-    DEFAULT_FWHM_REG,
-    DEFAULT_FWHM_SMOOTH,
-    DEFAULT_STAMP_SIZES,
+    DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
-    DEFAULT_WEIGHT_FWHMS,
+    DEFAULT_PGAUSS_FWHM,
 )
 from . import measure
 from .metacal_exposures import get_metacal_mbexps_fixnoise
@@ -33,7 +30,13 @@ LOG = logging.getLogger('lsst_metadetect')
 
 
 def run_metadetect(
-    mbexp, noise_mbexp, rng, mfrac_mbexp=None, ormasks=None, config=None, show=False,
+    mbexp,
+    noise_mbexp,
+    rng,
+    mfrac_mbexp=None,
+    ormasks=None,
+    config=None,
+    show=False,
 ):
     """
     Run metadetection on the input MultiBandObsList
@@ -58,7 +61,8 @@ def run_metadetect(
         of all masks from the original exposures, but a mask indicating problem
         areas such as bright objects or apodized edges.
 
-        In the future we expect the MultibandExposure to have an ormask attribute
+        In the future we expect the MultibandExposure to have an ormask
+        attribute
     rng: np.random.RandomState
         Random number generator
     config: dict, optional
@@ -84,75 +88,32 @@ def run_metadetect(
     config.freeze()
     config.validate()
     task = MetadetectTask(config=config)
-    result = task.run(mbexp, noise_mbexp, rng, mfrac_mbexp, ormasks, show=show,)
+    result = task.run(
+        mbexp,
+        noise_mbexp,
+        rng,
+        mfrac_mbexp,
+        ormasks,
+        show=show,
+    )
     return result
 
 
-class WeightConfig(Config):
+class PGaussConfig(Config):
     fwhm = Field[float](
-        doc="FWHM of the Gaussian weight function (in arcseconds)",
-        default=None,
-    )
-    fwhm_smooth = Field[float](
-        doc="FWHM of the Gaussian smoothing function (in arcseconds)",
-        default=DEFAULT_FWHM_SMOOTH,
-    )
-    fwhm_reg = Field[float](
-        doc="FWHM of the Gaussian regularization function (in arcseconds)",
-        default=DEFAULT_FWHM_REG,
-    )
-
-
-class LmParseConfig(Config):
-    maxfev = Field[int](
-        doc="Maximum number of function evaluations",
-        default=4000,
-    )
-    ftol = Field[float](
-        doc="Relative error desired in the sum of squares",
-        default=1.0e-5,
-    )
-    xtol = Field[float](
-        doc="Relative error desired in the approximate solution",
-        default=1.0e-5,
-    )
-
-
-class PsfConfig(Config):
-    """Config class for fitting original PSFs."""
-    model = ChoiceField[str](
-        doc="Model for fitting original PSFs",
-        default="am",
-        allowed={
-            "am": "Adaptive moments",  # TODO: What are the other possible values?
-            "gauss": "Gaussian",
-        },
-        optional=False,
-    )
-    ntry = Field[int](
-        doc="Number of tries for fitting original PSFs",
-        default=4,
-    )
-    lm_pars = ConfigField[LmParseConfig](
-        doc="Config for Levenberg-Marquardt fitting",
+        doc="FWHM of the Gaussian weight function for PGauss (in arcseconds)",
+        default=DEFAULT_PGAUSS_FWHM,
     )
 
 
 class MetacalConfig(Config):
-    use_noise_image = Field[bool](
-        doc="Whether to use the noise image",
-        default=True,
-    )
-    psf = ChoiceField[str](
-        doc="PSF model",
-        default="fitgauss",
-        allowed={
-            "fitgauss": "Fit a Gaussian to the PSF",
-        }
-    )
     types = ListField[str](
         doc="List of artificial shears to apply.",
-        default=["noshear", "1p", "1m",],
+        default=[
+            "noshear",
+            "1p",
+            "1m",
+        ],
     )
 
     def validate(self):
@@ -171,54 +132,36 @@ class MetadetectConfig(Config):
         doc="Whether to subtract the sky before running metadetect",
         default=DEFAULT_SUBTRACT_SKY,
     )
-    meas_type = ChoiceField[str](
-        doc="Measurement type",
-        default="wmom",
-        allowed={
-            "wmom": "Weighted moments",
-            "ksigma": "Fourier moments",  # TODO: improve docstring
-            "pgauss": "Pre-seeing moments",
-            "am": "Adaptive moments",
-            "gauss": "Gaussian Fit",
-        }
-    )
 
-    weight = ConfigField[WeightConfig](
-        doc="FWHM of the Gaussian weight function (in arcseconds)",
-    )
-
-    psf = ConfigField[PsfConfig](
-        doc="Config for fitting the original PSFs",
+    pgauss = ConfigField[PGaussConfig](
+        doc="PGauss config",
     )
 
     detect = ConfigurableField(
         doc="Detection config",
         target=SourceDetectionTask,
     )
+
     metacal = ConfigField[MetacalConfig](
-        doc="Config for metacal",
+        doc="Metacal config",
     )
 
-    @property
-    def stamp_size(self):
-        # Caution: This provides a backdoor entry to change the behavior
-        # by changing the DEFAULT_STAMP_SIZES.
-        return DEFAULT_STAMP_SIZES[self.meas_type]
+    stamp_size = Field[int](
+        doc="The stamp size to use for measurements",
+        default=DEFAULT_STAMP_SIZE,
+    )
+
+    shear_bands = ListField[str](
+        doc="List of bands to use for shear measurements. Default is to use all bands.",
+        default=None,
+        optional=True,
+    )
 
     def setDefaults(self):
         super().setDefaults()
-        self.weight.fwhm = DEFAULT_WEIGHT_FWHMS.get(self.meas_type, None)
 
     def validate(self):
         super().validate()
-
-        if self.stamp_size != DEFAULT_STAMP_SIZES[self.meas_type]:
-            raise FieldValidationError(
-                self.__class__.stamp_size,
-                self,
-                f"stamp_size must be {DEFAULT_STAMP_SIZES[self.meas_type]} "
-                f"for meas_type {self.meas_type}",
-            )
 
 
 class MetadetectTask(Task):
@@ -238,18 +181,17 @@ class MetadetectTask(Task):
         ormasks=None,
         show=False,
     ):
-
         # This is to support methods that are not yet refactored.
         config = self.config.toDict()
-        # Because this is a property and not a Field, we set this explicitly.
-        config['stamp_size'] = self.config.stamp_size
         config['detect']['thresh'] = self.detect.config.thresholdValue
 
         ormask = combine_ormasks(mbexp, ormasks)
         mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
 
         if self.config.subtract_sky:
-            subtract_sky_mbexp(mbexp=mbexp, thresh=self.config.detect.thresholdValue)
+            subtract_sky_mbexp(
+                mbexp=mbexp, thresh=self.config.detect.thresholdValue
+            )
 
         psf_stats = fit_original_psfs_mbexp(
             mbexp=mbexp,
@@ -257,20 +199,18 @@ class MetadetectTask(Task):
             rng=rng,
         )
 
-        fitter = get_fitter(config, rng=rng)
-
         metacal_types = config['metacal'].get('types', None)
 
-        mdict, noise_mdict = get_metacal_mbexps_fixnoise(
-            mbexp=mbexp, noise_mbexp=noise_mbexp, types=metacal_types,
+        mdict, _ = get_metacal_mbexps_fixnoise(
+            mbexp=mbexp,
+            noise_mbexp=noise_mbexp,
+            types=metacal_types,
         )
 
         result = {}
         for shear_str, mcal_mbexp in mdict.items():
-
             res = detect_deblend_and_measure(
                 mbexp=mcal_mbexp,
-                fitter=fitter,
                 config=config,
                 rng=rng,
                 show=show,
@@ -291,7 +231,6 @@ class MetadetectTask(Task):
 
 def detect_deblend_and_measure(
     mbexp,
-    fitter,
     config,
     rng,
     show=False,
@@ -307,15 +246,11 @@ def detect_deblend_and_measure(
     ----------
     mbexp: lsst.afw.image.MultibandExposure
         The metacal'ed exposures to process
-    fitter: e.g. ngmix.gaussmom.GaussMom or ngmix.ksigmamom.KSigmaMom
-        For calculating moments
     config: dict, optional
         Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
-    thresh: float
-        The detection threshold in units of the sky noise
-    stamp_size: int
-        Size for postage stamps.
+    rng: np.random.RandomState
+        Random number generator
     show: bool, optional
         If set to True, show images during processing
     """
@@ -329,18 +264,11 @@ def detect_deblend_and_measure(
         show=show,
     )
 
-    if config['weight'] is not None:
-        fwhm_reg = config['weight'].get('fwhm_reg', 0)
-    else:
-        fwhm_reg = 0
-
     results = measure.measure(
         mbexp=mbexp,
         detexp=detexp,
         sources=sources,
-        fitter=fitter,
-        stamp_size=config['stamp_size'],
-        fwhm_reg=fwhm_reg,
+        config=config,
         rng=rng,
     )
 
@@ -352,7 +280,6 @@ def add_mfrac(config, mfrac, res, exp):
     calculate and add mfrac to the input result array
     """
     if np.any(mfrac > 0):
-
         # we are using the positions with the metacal shear removed for
         # this.
 
@@ -490,55 +417,6 @@ def add_original_psf(psf_stats, res):
     res['psfrec_T'][:] = psf_stats['T']
 
 
-def get_fitter(config, rng=None):
-    """
-    get the fitter based on the 'fitter' input
-    """
-
-    meas_type = config['meas_type']
-
-    if meas_type == 'am':
-        fitter_obj = ngmix.admom.AdmomFitter(rng=rng)
-        guesser = ngmix.guessers.GMixPSFGuesser(
-            rng=rng, ngauss=1, guess_from_moms=True,
-        )
-        fitter = ngmix.runners.Runner(
-            fitter=fitter_obj, guesser=guesser,
-            ntry=2,
-        )
-        # TODO is there a better way?
-        fitter.kind = 'am'
-
-    elif meas_type == 'gauss':
-        fitter = 'gauss'
-    else:
-        fwhm = config['weight']['fwhm']
-
-        if meas_type == 'wmom':
-            fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
-        else:
-            # for backwards compatibility with older ngmix that did not
-            # support the fwhm_smooth keyword.
-            sm_kwargs = {}
-            if config['weight']['fwhm_smooth'] > 0:
-                sm_kwargs["fwhm_smooth"] = config['weight']['fwhm_smooth']
-
-            if meas_type == 'ksigma':
-                fitter = ngmix.ksigmamom.KSigmaMom(
-                    fwhm=fwhm,
-                    **sm_kwargs
-                )
-            elif meas_type == 'pgauss':
-                fitter = ngmix.prepsfmom.PGaussMom(
-                    fwhm=fwhm,
-                    **sm_kwargs
-                )
-            else:
-                raise ValueError("bad meas_type: '%s'" % meas_type)
-
-    return fitter
-
-
 def combine_ormasks(mbexp, ormasks):
     """
     logical or together all the ormasks, or if ormasks is None create zeroed
@@ -584,7 +462,7 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
             raise ValueError('no variance are finite')
 
         var = np.median(exp.variance.array[w])
-        wgt = 1/var
+        wgt = 1 / var
         wgts.append(wgt)
         wsum += wgt
 
@@ -593,7 +471,7 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
         else:
             mfrac += wgt * mfrac_exp.image.array
 
-    mfrac *= 1.0/wsum
+    mfrac *= 1.0 / wsum
 
     return mfrac, wgts
 
@@ -613,7 +491,9 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
     fitter = ngmix.admom.AdmomFitter(rng=rng)
     guesser = ngmix.guessers.GMixPSFGuesser(
-        rng=rng, ngauss=1, guess_from_moms=True,
+        rng=rng,
+        ngauss=1,
+        guess_from_moms=True,
     )
     runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4)
 
@@ -632,7 +512,7 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
             psf_im = measure.extract_psf_image(exp, cen)
 
-            psf_cen = (np.array(psf_im.shape)-1.0)/2.0
+            psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
             psf_jacob = jac.copy()
             psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
 
@@ -647,13 +527,13 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
             g1, g2 = res['e']
             T = res['T']
 
-            g1sum += g1*wgt
-            g2sum += g2*wgt
-            Tsum += T*wgt
+            g1sum += g1 * wgt
+            g2sum += g2 * wgt
+            Tsum += T * wgt
 
-        g1 = g1sum/wsum
-        g2 = g2sum/wsum
-        T = Tsum/wsum
+        g1 = g1sum / wsum
+        g2 = g2sum / wsum
+        T = Tsum / wsum
 
         flags = 0
 

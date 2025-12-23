@@ -924,3 +924,43 @@ def override_config(config, config_override: dict):
                 config.toDict()[key] = value
             else:
                 setattr(config, key, value)
+
+
+def get_fitter(config, rng=None):
+    """
+    get the fitter based on the 'fitter' input
+    """
+
+    meas_type = config['meas_type']
+
+    if meas_type == 'am':
+        fitter_obj = ngmix.admom.AdmomFitter(rng=rng)
+        guesser = ngmix.guessers.GMixPSFGuesser(
+            rng=rng,
+            ngauss=1,
+            guess_from_moms=True,
+        )
+        fitter = ngmix.runners.Runner(
+            fitter=fitter_obj,
+            guesser=guesser,
+            ntry=2,
+        )
+        # TODO is there a better way?
+        fitter.kind = 'am'
+
+    elif meas_type == 'gauss':
+        fitter = 'gauss'
+    else:
+        fwhm = config['weight']['fwhm']
+
+        if meas_type == 'wmom':
+            fitter = ngmix.gaussmom.GaussMom(fwhm=fwhm)
+        else:
+            if meas_type == 'ksigma':
+                fitter = ngmix.ksigmamom.KSigmaMom(fwhm=fwhm)
+            elif meas_type == 'pgauss':
+                fitter = ngmix.prepsfmom.PGaussMom(fwhm=fwhm)
+            else:
+                raise ValueError("bad meas_type: '%s'" % meas_type)
+
+    return fitter

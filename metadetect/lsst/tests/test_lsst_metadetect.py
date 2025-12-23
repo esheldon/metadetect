@@ -9,12 +9,11 @@ import logging
 import ngmix
 import metadetect
 from metadetect import procflags
-from metadetect.lsst.metadetect import run_metadetect, get_fitter
+from metadetect.lsst.metadetect import run_metadetect
+from metadetect.lsst.measure import get_pgauss_fitter
 from metadetect.lsst.configs import get_config
 from metadetect.lsst import util
 import lsst.afw.image as afw_image
-
-ngmix_v = float(ngmix.__version__[:3])
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -86,10 +85,9 @@ def do_coadding(rng, sim_data, nowarp):
     return util.extract_multiband_coadd_data(coadd_data_list)
 
 
-@pytest.mark.parametrize('meas_type', [None, 'wmom', 'ksigma', 'pgauss'])
 @pytest.mark.parametrize('subtract_sky', [None, False, True])
 @pytest.mark.parametrize("metacal_types_option", [None, "1p1m", "full"])
-def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
+def test_lsst_metadetect_smoke(subtract_sky, metacal_types_option):
     rng = np.random.RandomState(seed=116)
 
     bands = ['r', 'i']
@@ -100,9 +98,6 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
 
     if subtract_sky is not None:
         config['subtract_sky'] = subtract_sky
-
-    if meas_type is not None:
-        config['meas_type'] = meas_type
 
     if metacal_types_option is not None:
         if metacal_types_option == "1p1m":
@@ -126,30 +121,86 @@ def test_lsst_metadetect_smoke(meas_type, subtract_sky, metacal_types_option):
             metacal_type in res.keys()
         ), f"metacal_type={metacal_type} not in res.keys()"
 
-    if meas_type is None:
-        front = 'wmom'
-    else:
-        front = meas_type
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
 
-    gname = f'{front}_g'
-    flux_name = f'{front}_band_flux'
-    assert gname in res['noshear'].dtype.names
+        flux_name = f'{front}_band_flux'
+
+        for shear in metacal_types:
+            # 5x5 grid
+            assert res[shear].size == 25
+
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
+
+            assert len(res[shear][flux_name].shape) == len(bands)
+            assert len(res[shear][flux_name][0]) == len(bands)
+
+
+def test_lsst_metadetect_shear_bands_missing():
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['g', 'r', 'i', 'z']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+    config = {"shear_bands": ["r", "Y"]}
+    with pytest.raises(RuntimeError) as e:
+        run_metadetect(rng=rng, config=config, **data)
+
+    assert "'r', 'Y'" in str(e.value)
+
+
+def test_lsst_metadetect_shear_bands():
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['g', 'r', 'i', 'z']
+    nband = len(bands)
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {"shear_bands": ["r", "z"]}
+    metacal_types = ['noshear', '1p', '1m']
+
+    detected = afw_image.Mask.getPlaneBitMask('DETECTED')
+    res = run_metadetect(rng=rng, config=config, **data)
+
+    # we remove the DETECTED bit
+    assert np.all(res['noshear']['bmask'] & detected == 0)
+
+    for metacal_type in metacal_types:
+        assert (
+            metacal_type in res.keys()
+        ), f"metacal_type={metacal_type} not in res.keys()"
+
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
+
+        flux_name = f'{front}_band_flux'
+
+        for shear in metacal_types:
+            # 5x5 grid
+            assert res[shear].size == 25
+
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
+            assert res[shear][flux_name].shape == (25, nband)
 
     for shear in metacal_types:
-        # 5x5 grid
-        assert res[shear].size == 25
+        assert np.all(res[shear]["shear_bands"] == np.array([["13"]]))
+        # g and i band should be all NaNs for gauss
+        assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 0]))
+        assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 2]))
+        # rest should be finite
+        assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 1]))
+        assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 3]))
+        assert np.all(np.isfinite(res[shear]["pgauss_band_flux"]))
 
-        assert np.any(res[shear][f"{front}_flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
 
-        assert len(res[shear][flux_name].shape) == len(bands)
-        assert len(res[shear][flux_name][0]) == len(bands)
-
-
-@pytest.mark.skipif(ngmix_v < 2.1, reason="requires ngmix 2.1 or higher")
-@pytest.mark.parametrize('meas_type', ['wmom', 'ksigma', 'pgauss'])
-@pytest.mark.parametrize('fwhm_smooth', [None, 1.2])
-def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
+def test_lsst_metadetect_pgauss():
     rng = np.random.RandomState(seed=882)
 
     bands = ['r', 'i']
@@ -158,159 +209,32 @@ def test_lsst_metadetect_weight(meas_type, fwhm_smooth):
 
     fwhm = 2.0
     config = {
-        'meas_type': meas_type,
-        'weight': {
+        'pgauss': {
             'fwhm': fwhm,
         }
     }
-    if meas_type != 'wmom' and fwhm_smooth is not None:
-        config['weight']['fwhm_smooth'] = fwhm_smooth
 
-    fitter = get_fitter(config=get_config(config), rng=rng)
-    assert fitter.fwhm == fwhm
-    if meas_type != 'wmom' and fwhm_smooth is not None:
-        assert fitter.fwhm_smooth == fwhm_smooth
-
-    res = run_metadetect(rng=rng, config=config, **data)
-
-    gname = f'{meas_type}_g'
-    flux_name = f'{meas_type}_band_flux'
-    assert gname in res['noshear'].dtype.names
-
-    for shear in ('noshear', '1p', '1m'):
-        # 5x5 grid
-        assert res[shear].size == 25
-
-        assert np.any(res[shear][f"{meas_type}_flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
-
-        assert len(res[shear][flux_name].shape) == len(bands)
-        assert len(res[shear][flux_name][0]) == len(bands)
-
-
-@pytest.mark.parametrize('fwhm_reg', [0, 0.8])
-def test_lsst_metadetect_fwhm_reg(fwhm_reg):
-    rng = np.random.RandomState(seed=882)
-
-    meas_type = 'pgauss'
-    bands = ['r', 'i']
-    sim_data = make_lsst_sim(35, bands=bands)
-    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-    fwhm = 2.0
-    config = {
-        'meas_type': meas_type,
-        'weight': {
-            'fwhm': fwhm,
-            'fwhm_reg': fwhm_reg,
-        }
-    }
-
-    fitter = get_fitter(config=get_config(config), rng=rng)
+    fitter = get_pgauss_fitter(config=get_config(config))
     assert fitter.fwhm == fwhm
 
     res = run_metadetect(rng=rng, config=config, **data)
 
-    gname = f'{meas_type}_g'
-    flux_name = f'{meas_type}_band_flux'
-    assert gname in res['noshear'].dtype.names
+    for front in ['gauss', 'pgauss']:
+        if front == 'gauss':
+            gname = f'{front}_g'
+            assert gname in res['noshear'].dtype.names
 
-    for shear in ('noshear', '1p', '1m'):
-        # 5x5 grid
-        assert res[shear].size == 25
+        flux_name = f'{front}_band_flux'
 
-        assert np.any(res[shear][f"{meas_type}_flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
+        for shear in ('noshear', '1p', '1m'):
+            # 5x5 grid
+            assert res[shear].size == 25
 
-        assert len(res[shear][flux_name].shape) == len(bands)
-        assert len(res[shear][flux_name][0]) == len(bands)
+            assert np.any(res[shear][f"{front}_flags"] == 0)
+            assert np.all(res[shear]["mfrac"] == 0)
 
-
-def test_lsst_metadetect_fwhm_reg_shapenoise():
-
-    sdevs = {}
-    for fwhm_reg in [0, 0.8]:
-        meas_type = 'pgauss'
-        bands = ['r', 'i']
-        sim_data = make_lsst_sim(35, bands=bands)
-        rng = np.random.RandomState(seed=882)
-        data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-        fwhm = 2.0
-        config = {
-            'meas_type': meas_type,
-            'weight': {
-                'fwhm': fwhm,
-                'fwhm_reg': fwhm_reg,
-            }
-        }
-
-        fitter = get_fitter(config=get_config(config), rng=rng)
-        assert fitter.fwhm == fwhm
-
-        res = run_metadetect(rng=rng, config=config, **data)
-
-        w, = np.where(res['noshear'][f'{meas_type}_flags'] == 0)
-
-        sdevs[fwhm_reg] = res['noshear'][f'{meas_type}_g'][w, 0].std()
-
-    assert sdevs[0.8] < 0.6 * sdevs[0]
-
-
-def test_lsst_metadetect_am():
-    rng = np.random.RandomState(seed=882)
-
-    # only single band for am currently
-    bands = ['i']
-    sim_data = make_lsst_sim(116, bands=bands)
-    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-    meas_type = 'am'
-    config = {'meas_type': meas_type}
-
-    res = run_metadetect(rng=rng, config=config, **data)
-
-    gname = f'{meas_type}_g'
-    flux_name = f'{meas_type}_band_flux'
-    assert gname in res['noshear'].dtype.names
-
-    for shear in ('noshear', '1p', '1m'):
-        # 5x5 grid
-        assert res[shear].size == 25
-
-        assert np.any(res[shear]["am_flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
-
-        assert len(res[shear][flux_name].shape) == len(bands)
-        with pytest.raises(TypeError):
-            len(res[shear][flux_name][0])
-
-
-def test_lsst_metadetect_gauss():
-    rng = np.random.RandomState(seed=918)
-
-    bands = ['r', 'i', 'z']
-    sim_data = make_lsst_sim(116, bands=bands)
-    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
-
-    meas_type = 'gauss'
-    config = {'meas_type': meas_type}
-
-    res = run_metadetect(rng=rng, config=config, **data)
-
-    gname = f'{meas_type}_g'
-    flux_name = f'{meas_type}_band_flux'
-    assert gname in res['noshear'].dtype.names
-
-    for shear in ('noshear', '1p', '1m'):
-        # 5x5 grid of sources
-        assert res[shear].size == 25
-
-        assert np.all(res[shear][f"{meas_type}_flags"] == 0)
-        assert np.all(res[shear]["mfrac"] == 0)
-
-        assert res[shear][flux_name].shape[1] == len(bands)
-        assert np.all(np.isfinite(res[shear][flux_name]))
+            assert len(res[shear][flux_name].shape) == len(bands)
+            assert len(res[shear][flux_name][0]) == len(bands)
 
 
 def test_lsst_metadetect_fullcoadd_smoke():
@@ -320,10 +244,10 @@ def test_lsst_metadetect_fullcoadd_smoke():
     sim_data = make_lsst_sim(882, bands=bands)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=False)
 
-    config = {'meas_type': 'pgauss'}
+    config = {}
     res = run_metadetect(config=config, rng=rng, **data)
 
-    front = 'pgauss'
+    front = 'gauss'
     gname = f'{front}_g'
     flux_name = f'{front}_band_flux'
     assert gname in res['noshear'].dtype.names
@@ -332,7 +256,7 @@ def test_lsst_metadetect_fullcoadd_smoke():
         # 5x5 grid
         assert res[shear].size == 25
 
-        assert np.any(res[shear]["pgauss_flags"] == 0)
+        assert np.any(res[shear][f"{front}_flags"] == 0)
         assert np.all(res[shear]["mfrac"] == 0)
 
         assert len(res[shear][flux_name].shape) == len(bands)
@@ -369,8 +293,13 @@ def test_lsst_zero_weights(show=False):
 
         if do_zero:
             for shear_type, tres in resdict.items():
-                assert np.any(tres['wmom_flags'] & procflags.ZERO_WEIGHTS != 0)
-                assert np.any(tres['wmom_psf_flags'] & procflags.NO_ATTEMPT != 0)
+                w, = np.where(
+                    tres['stamp_flags'] & procflags.ZERO_WEIGHTS != 0
+                )
+                assert w.size > 0, 'expected some stamp_flags set'
+                assert np.all(tres['gauss_flags'][w] == procflags.NO_ATTEMPT)
+                assert np.all(tres['pgauss_flags'][w] == procflags.NO_ATTEMPT)
+
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
@@ -424,31 +353,29 @@ def test_lsst_masked_as_bright(show=False):
                 assert tres.size == 25
 
 
-@pytest.mark.parametrize('meas_type', ['ksigma', 'pgauss'])
-def test_lsst_metadetect_prepsf_stars(meas_type):
+def test_lsst_metadetect_prepsf_stars():
     seed = 55
     rng = np.random.RandomState(seed=seed)
 
     sim_data = make_lsst_sim(seed, hlr=1.0e-4, mag=23)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    config = {'meas_type': meas_type}
+    config = {}
 
     res = run_metadetect(rng=rng, config=config, **data)
 
-    n = metadetect.util.Namer(front=meas_type)
+    n = metadetect.util.Namer(front='pgauss')
 
     data = res['noshear']
 
-    wlowT, = np.where(data[f'{meas_type}_flags'] != 0)
-    wgood, = np.where(data[f'{meas_type}_flags'] == 0)
+    wlowT, = np.where(data[n('flags')] != 0)
+    wgood, = np.where(data[n('flags')] == 0)
 
     # some will have T < 0 due to noise. Expect some with flags set
     assert wlowT.size > 0
 
     assert np.any((data[n('flags')][wlowT] & ngmix.flags.NONPOS_SIZE) != 0)
 
-    assert np.any(np.isnan(data[n('g')][wlowT]))
     for field in data.dtype.names:
         if field != "shear_bands":
             assert np.all(np.isfinite(data[field][wgood])), field
@@ -480,7 +407,7 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
         res = run_metadetect(config=None, rng=rng, **data)
 
         for shear in ('noshear', '1p', '1m'):
-            assert np.any(res[shear]["wmom_flags"] == 0)
+            assert np.any(res[shear]["gauss_flags"] == 0)
             assert np.any(
                 (res[shear]["mfrac"] > 0.40)
                 & (res[shear]["mfrac"] < 0.60)
@@ -489,8 +416,6 @@ def test_lsst_metadetect_mfrac_ormask(show=False):
 
 
 if __name__ == '__main__':
-    # test_lsst_metadetect_am()
-    test_lsst_metadetect_gauss()
-    # test_lsst_masked_as_bright(show=True)
+    test_lsst_masked_as_bright(show=True)
     # test_lsst_metadetect_smoke('wmom', 'False')
     # test_lsst_metadetect_mfrac_ormask(show=True)

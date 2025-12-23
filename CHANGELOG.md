@@ -1,14 +1,12 @@
-# changelog
-
-## unreleased
-
-### added
+## 0.13.0 - 2025-12-02
 
 ### changed
 
-### removed
-
-### fixed
+    - Update lsst/metadetect to fit gauss and measure pgauss
+    - Removed optional fitters such as wmom, ksigma
+    - Update task configs for this limitation
+    - Remove unused metacal config parameters
+    - keep track of problems with stamp images in separate stamp_flags field
 
 ## 0.12.0 - 2023-04-03
 
