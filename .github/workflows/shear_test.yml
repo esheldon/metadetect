@@ -56,4 +56,4 @@ jobs:
       - name: test shear meas
         shell: bash -l {0}
         run: |
-          pytest -vvs shear_meas_test/test_shear_meas.py -k test_shear_meas_simple_with_compression
+          pytest -vvs shear_meas_test/test_shear_meas.py
