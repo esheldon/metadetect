@@ -25,13 +25,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: mamba-org/setup-micromamba@v2.0.7
         with:
-          python-version: ${{ matrix.pyver }}
-          channels: conda-forge,defaults
-          channel-priority: strict
-          show-channel-urls: true
-          miniforge-version: latest
+          environment-name: test
+          condarc: |
+            channels:
+              - conda-forge
+            channel_priority: strict
+            show_channel_urls: true
+            always_yes: true
+          create-args: >-
+            python=${{ matrix.pyver }}
+            pip
+            cfitsio
 
       - name: free disk space
         uses: endersonmenezes/free-disk-space@v3

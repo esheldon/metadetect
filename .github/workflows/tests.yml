@@ -47,6 +47,7 @@ jobs:
           create-args: >-
             python=${{ matrix.pyver }}
             pip
+            cfitsio
 
       - name: configure conda and install code
         shell: bash -l {0}
