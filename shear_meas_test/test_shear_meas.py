@@ -508,9 +508,6 @@ def run_sim_with_compression(seed, mdet_seed, model, **kwargs):
         ("wmom", 1e6, 7, 128),
         ("wmom", 1e2, 7, 1280),
         ("wmom", 1.5e1, 7, 12800),
-        # ("wmom", 1e6, 7, 64),
-        # ("wmom", 1e6, None, 9500),
-        # ("wmom", 12, 7, 64),
     ],
 )
 def test_shear_meas_simple_with_compression(model, snr, ngrid, ntrial, items_to_compress, fzqvalue):
