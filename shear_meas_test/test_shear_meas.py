@@ -603,6 +603,7 @@ def test_shear_meas_simple_with_compression(model, snr, ngrid, ntrial, items_to_
     assert np.abs(m) < max(1e-3, 3*merr)
     assert np.abs(c) < 3*cerr
 
+
 @pytest.mark.parametrize(
     'model,snr,ngrid', [
         ("wmom", 1e6, 7),
