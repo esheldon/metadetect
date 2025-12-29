@@ -1,5 +1,10 @@
 import logging
 from contextlib import contextmanager, ExitStack
+from lsst.pex.exceptions import (
+    InvalidParameterError,
+    LengthError,
+)
+import lsst.geom as geom
 import ngmix
 import numpy as np
 
@@ -32,12 +37,12 @@ class ContextNoiseReplacer(object):
         # Notes for metacal.
         #
         # For metacal we should generate a noise image so that the exact noise
-        # field is used for all versions of the metacal images.  The assumption is
-        # that, because these noise data should contain no signal, metacal is not
-        # calibrating it.  Thus it doesn't matter whether or not the noise field is
-        # representative of the full covariance of the true image noise.  Rather by
-        # making the field the same for all metacal images we reduce variance in
-        # the calculation of the response
+        # field is used for all versions of the metacal images.  The assumption
+        # is that, because these noise data should contain no signal, metacal
+        # is not calibrating it.  Thus it doesn't matter whether or not the
+        # noise field is representative of the full covariance of the true
+        # image noise.  Rather by making the field the same for all metacal
+        # images we reduce variance in the calculation of the response
 
         if config is None:
             config = NoiseReplacerConfig()
@@ -48,7 +53,9 @@ class ContextNoiseReplacer(object):
 
         if noise_image is None:
             # TODO remove_poisson should be true for real data
-            noise_image = get_noise_image(exposure, rng=rng, remove_poisson=False)
+            noise_image = get_noise_image(
+                exposure, rng=rng, remove_poisson=False
+            )
 
         footprints = {}
         for source in sources:
@@ -124,6 +131,7 @@ class MultibandNoiseReplacer(object):
         with replacer.insertSource(source_id):
             # do something with exposures
     """
+
     def __init__(self, mbexp, sources, rng):
         self.mbexp = mbexp
         self.sources = sources
@@ -268,9 +276,7 @@ def get_noise_image(exp, rng, remove_poisson):
     use = np.where(np.isfinite(variance) & np.isfinite(signal))
 
     if remove_poisson:
-        gains = [
-            amp.getGain() for amp in exp.getDetector().getAmplifiers()
-        ]
+        gains = [amp.getGain() for amp in exp.getDetector().getAmplifiers()]
         mean_gain = np.mean(gains)
 
         corrected_var = variance[use] - signal[use] / mean_gain
@@ -285,6 +291,100 @@ def get_noise_image(exp, rng, remove_poisson):
     noise_exp.variance.array[:, :] = var
 
     return noise_exp.getMaskedImage()
+
+
+def get_stamp_mbobs(mbexp, source, stamp_size, clip=False):
+    """
+    Get a postage stamp MultibandExposure
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures
+    source: lsst.afw.table.SourceRecord
+        The source for which to get the stamp
+    stamp_size: int
+        If sent, a bounding box is created with about this size rather than
+        using the footprint bounding box. Typically the returned size is
+        stamp_size + 1
+    clip: bool, optional
+        If set to True, clip the bbox to fit into the exposure.
+
+        If clip is False and the bbox does not fit, a
+        lsst.pex.exceptions.LengthError is raised
+
+        Only relevant if stamp_size is sent.  Default False
+
+    Returns
+    -------
+    lsst.afw.image.ExposureF
+    """
+
+    bbox = get_bbox(mbexp, source, stamp_size, clip=clip)
+
+    mbobs = ngmix.MultiBandObsList()
+    for band in mbexp.bands:
+        subexp = mbexp[band][bbox]
+        obs = extract_obs(exp=subexp, source=source)
+
+        obslist = ngmix.ObsList(meta={'band': band})
+        obslist.append(obs)
+        mbobs.append(obslist)
+
+    return mbobs
+
+
+def get_bbox(mbexp, source, stamp_size, clip=False):
+    """
+    Get a bounding box at the location of the specified source.
+
+    Parameters
+    ----------
+    mbexp: lsst.afw.image.MultibandExposure
+        The exposures
+    source: lsst.afw.table.SourceRecord
+        The source for which to get the stamp
+    stamp_size: int
+        If sent, a bounding box is created with about this size rather than
+        using the footprint bounding box. Typically the returned size is
+        stamp_size + 1
+    clip: bool, optional
+        If set to True, clip the bbox to fit into the exposure.
+
+        If clip is False and the bbox does not fit, a
+        lsst.pex.exceptions.LengthError is raised
+
+        Only relevant if stamp_size is sent.  Default False
+
+    Returns
+    -------
+    lsst.geom.Box2I
+    """
+
+    fp = source.getFootprint()
+    peak = fp.getPeaks()[0]
+
+    x_peak, y_peak = peak.getIx(), peak.getIy()
+
+    bbox = geom.Box2I(
+        geom.Point2I(x_peak, y_peak),
+        geom.Extent2I(1, 1),
+    )
+    bbox.grow(stamp_size // 2)
+
+    exp_bbox = mbexp.getBBox()
+    if clip:
+        bbox.clip(exp_bbox)
+    else:
+        if not exp_bbox.contains(bbox):
+            source_id = source.getId()
+            raise LengthError(
+                f'requested stamp size {stamp_size} for source '
+                f'{source_id} does not fit into the exposoure.  '
+                f'Use clip=True to clip the bbox to fit'
+            )
+
+    return bbox
 
 
 def get_mbexp(exposures):
@@ -380,10 +480,9 @@ def coadd_exposures(exposures):
     wsum = 0.0
 
     for i, exp in enumerate(exposures):
-
         shape = exp.image.array.shape
 
-        ycen, xcen = (np.array(shape) - 1)/2
+        ycen, xcen = (np.array(shape) - 1) / 2
         cen = geom.Point2D(xcen, ycen)
 
         psfobj = exp.getPsf()
@@ -402,12 +501,12 @@ def coadd_exposures(exposures):
 
         w = np.where(exp.variance.array > 0)
         medvar = np.median(exp.variance.array[w])
-        this_weight = 1.0/medvar
+        this_weight = 1.0 / medvar
 
         coadd_exp.image.array[w] += exp.image.array[w] * this_weight
         psf_im += this_psfim * this_weight
 
-        weight[w] += 1.0/exp.variance.array[w]
+        weight[w] += 1.0 / exp.variance.array[w]
 
         wsum += this_weight
 
@@ -415,16 +514,16 @@ def coadd_exposures(exposures):
         logger.info('found wsum <= 0')
         return None
 
-    fac = 1.0/wsum
+    fac = 1.0 / wsum
 
     coadd_exp.image.array[:, :] *= fac
 
     # the psf is always normalized
-    psf_im *= 1.0/psf_im.sum()
+    psf_im *= 1.0 / psf_im.sum()
 
     coadd_exp.variance.array[:, :] = np.inf
     w = np.where(weight > 0)
-    coadd_exp.variance.array[w] = 1/weight[w]
+    coadd_exp.variance.array[w] = 1 / weight[w]
 
     coadd_psf = get_stack_kernel_psf(psf_im)
     coadd_exp.setPsf(coadd_psf)
@@ -451,11 +550,7 @@ def get_stack_kernel_psf(psf_image):
     from lsst.meas.algorithms import KernelPsf
     from lsst.afw.math import FixedKernel
 
-    return KernelPsf(
-        FixedKernel(
-            afw_image.ImageD(psf_image.astype(float))
-        )
-    )
+    return KernelPsf(FixedKernel(afw_image.ImageD(psf_image.astype(float))))
 
 
 def coadd_mbobs(mbobs):
@@ -496,20 +591,20 @@ def coadd_mbobs(mbobs):
 
         wsum += this_weight
 
-    fac = 1.0/wsum
+    fac = 1.0 / wsum
 
     coadd_image[:, :] *= fac
 
     # the psf is always normalized
-    coadd_psf *= 1.0/coadd_psf.sum()
+    coadd_psf *= 1.0 / coadd_psf.sum()
 
     # use the jacobians from the last obs
     jac = obs.jacobian
     psf_jac = obs.psf.jacobian
 
-    fake_noise = coadd_psf.max() / 1.e6
+    fake_noise = coadd_psf.max() / 1.0e6
     psf_weight = np.zeros(coadd_psf.shape)
-    psf_weight += (1.0/fake_noise**2)
+    psf_weight += 1.0 / fake_noise**2
 
     psf_obs = ngmix.Observation(
         image=coadd_psf,
@@ -540,14 +635,14 @@ def trim_odd_image(im):
         assert dims[1] % 2 != 0, 'image must have odd dims'
 
         dims = np.array(dims)
-        cen = (dims-1)//2
+        cen = (dims - 1) // 2
         cen = cen.astype('i4')
 
         distances = (
-            cen[0]-0,
-            dims[0]-cen[0]-1,
-            cen[1]-0,
-            dims[1]-cen[1]-1,
+            cen[0] - 0,
+            dims[0] - cen[0] - 1,
+            cen[1] - 0,
+            dims[1] - cen[1] - 1,
         )
         logger.debug('distances: %s' % str(distances))
         min_dist = min(distances)
@@ -559,8 +654,8 @@ def trim_odd_image(im):
 
         # adding +1 for slices
         new_im = im[
-            start_row:end_row+1,
-            start_col:end_col+1,
+            start_row: end_row + 1,
+            start_col: end_col + 1,
         ].copy()
 
         logger.debug('new dims: %s' % str(new_im.shape))
@@ -622,14 +717,12 @@ def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
     exp.mask.array[:, :] = mask
 
     w = np.where(obs.weight > 0)
-    exp.variance.array[w] = 1.0/obs.weight[w]
+    exp.variance.array[w] = 1.0 / obs.weight[w]
 
     if copy_psf:
         psf_image = obs.psf.image
         stack_psf = KernelPsf(
-            FixedKernel(
-                afw_image.ImageD(psf_image.astype(float))
-            )
+            FixedKernel(afw_image.ImageD(psf_image.astype(float)))
         )
         exp.setPsf(stack_psf)
 
@@ -682,20 +775,20 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     dims = exp.image.array.shape
     weight = np.zeros(dims)
     w = np.where(exp.variance.array > 0)
-    weight[w] = 1.0/exp.variance.array[w]
+    weight[w] = 1.0 / exp.variance.array[w]
 
     psf_obj = exp.getPsf()
     psf_image = psf_obj.computeKernelImage(cen).array
 
     assert psf_image.shape[0] == psf_image.shape[1], 'psf is not square'
     assert psf_image.shape[0] % 2 != 0, 'psf dims are not odd'
-    psf_cen = (np.array(psf_image.shape)-1.0)/2.0
+    psf_cen = (np.array(psf_image.shape) - 1.0) / 2.0
 
     psf_jac = jac.copy()
     psf_jac.set_cen(row=psf_cen[0], col=psf_cen[1])
 
-    psf_err = psf_image.max()*0.0001
-    psf_weight = psf_image*0 + 1.0/psf_err**2
+    psf_err = psf_image.max() * 0.0001
+    psf_weight = psf_image * 0 + 1.0 / psf_err**2
 
     psf_obs = ngmix.Observation(
         image=psf_image,
@@ -813,8 +906,16 @@ def get_stats_mask(*args, **kwargs):
     # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
 
     import lsst.afw.image as afw_image
+
     afw_image.Mask.addMaskPlane('BRIGHT')
-    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA', 'BRIGHT']
+    stats_mask = [
+        'BAD',
+        'EDGE',
+        'DETECTED',
+        'DETECTED_NEGATIVE',
+        'NO_DATA',
+        'BRIGHT',
+    ]
 
     return stats_mask
 
@@ -836,6 +937,7 @@ def get_detection_mask(*args, **kwargs):
     """
 
     import lsst.afw.image as afw_image
+
     afw_image.Mask.addMaskPlane('BRIGHT')
     mask = ['EDGE', 'NO_DATA', 'BRIGHT']
 
@@ -893,6 +995,213 @@ def extract_multiband_coadd_data(coadd_data_list):
         'mfrac_mbexp': mfrac_mbexp,
         'ormasks': ormasks,
     }
+
+
+def extract_obs(exp, source):
+    """
+    convert an image object into an ngmix.Observation, including
+    a psf observation
+
+    parameters
+    ----------
+    imobj: lsst.afw.image.ExposureF
+        The exposure
+    source: lsst.afw.table.SourceRecord
+        The source record
+
+    returns
+    --------
+    obs: ngmix.Observation
+        The Observation unless all the weight are zero, in which
+        case AllZeroWeightError is raised
+    """
+
+    im = exp.image.array
+
+    wt = _extract_weight(exp)
+    if np.all(wt <= 0):
+        raise AllZeroWeightError('all weights <= 0')
+
+    bmask = exp.mask.array
+    jacob = _extract_jacobian_at_source(
+        exp=exp,
+        source=source,
+    )
+
+    orig_cen = source.getCentroid()
+
+    psf_im = extract_psf_image(exposure=exp, orig_cen=orig_cen)
+
+    # fake the psf pixel noise
+    psf_err = psf_im.max() * 0.0001
+    psf_wt = psf_im * 0 + 1.0 / psf_err**2
+
+    # use canonical center for the psf
+    psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
+    psf_jacob = jacob.copy()
+    psf_jacob.set_cen(row=psf_cen[0], col=psf_cen[1])
+
+    # we will have need of the bit names which we can only
+    # get from the mask object
+    # this is sort of monkey patching, but I'm not sure of
+    # a better solution
+
+    meta = {'orig_cen': orig_cen}
+
+    psf_obs = ngmix.Observation(
+        psf_im,
+        weight=psf_wt,
+        jacobian=psf_jacob,
+    )
+    obs = ngmix.Observation(
+        im,
+        weight=wt,
+        bmask=bmask,
+        jacobian=jacob,
+        psf=psf_obs,
+        meta=meta,
+    )
+
+    return obs
+
+
+def make_deconvolved_mbexp(mbexp, sources):
+    from lsst.meas.extensions.scarlet import DeconvolveExposureTask
+
+    task = DeconvolveExposureTask()
+
+    exps = []
+    for exp in mbexp.singles:
+        res = task.run(
+            exp,
+            sources,
+            band=exp.getFilter().bandLabel
+        )
+        exps.append(res.deconvolved)
+
+    return get_mbexp(exps)
+
+
+def extract_psf_image(exposure, orig_cen):
+    """
+    get the psf associated with this image.
+
+    coadded psfs from DM are generally not square, but the coadd in cells code
+    makes them so.  We will assert they are square and odd dimensions
+
+    Parameters
+    ----------
+    exposure: lsst.afw.image.ExposureF
+        The exposure data
+    orig_cen: lsst.geom.Point2D
+        The location at which to draw the image
+
+    Returns
+    -------
+    ndarray
+    """
+    try:
+        psfobj = exposure.getPsf()
+        psfim = psfobj.computeKernelImage(orig_cen).array
+    except InvalidParameterError:
+        raise MissingDataError("could not reconstruct PSF")
+
+    psfim = np.asarray(psfim, dtype='f4')
+
+    shape = psfim.shape
+    assert shape[0] == shape[1], 'require square psf images'
+    assert shape[0] % 2 != 0, 'require odd psf images'
+
+    return psfim
+
+
+def _extract_psf_image_fix(exposure, orig_cen):
+    """
+    get the psf associated with this image
+
+    coadded psfs are generally not square, so we will
+    trim it to be square and preserve the center to
+    be at the new canonical center
+
+    TODO: should we really trim the psf to be even?  will this
+    cause a shift due being off-center?
+    """
+    try:
+        psfobj = exposure.getPsf()
+        psfim = psfobj.computeKernelImage(orig_cen).array
+    except InvalidParameterError:
+        raise MissingDataError("could not reconstruct PSF")
+
+    psfim = np.asarray(psfim, dtype='f4')
+
+    psfim = trim_odd_image(psfim)
+    return psfim
+
+
+def _extract_weight(exp):
+    """
+    TODO get the estimated sky variance rather than this hack
+    TODO should we zero out other bits?
+
+    extract a weight map
+
+    Areas with NO_DATA will get zero weight.
+
+    Because the variance map includes the full poisson variance, which
+    depends on the signal, we instead extract the median of the parts of
+    the image without NO_DATA set
+
+    parameters
+    ----------
+    exp: sub exposure object
+    """
+
+    # TODO implement bit checking
+    var_image = exp.variance.array
+
+    weight = var_image.copy()
+
+    weight[:, :] = 0
+
+    wuse = np.where(var_image > 0)
+
+    if wuse[0].size > 0:
+        medvar = np.median(var_image[wuse])
+        weight[:, :] = 1.0 / medvar
+    else:
+        print('    weight is all zero, found none that passed cuts')
+
+    return weight
+
+
+def _extract_jacobian_at_source(exp, source):
+    """
+    extract an ngmix.Jacobian from the image object
+    and object record
+
+    exp: lsst.afw.image.ExposureF
+        An exposure object
+    source: lsst.afw.table.SourceRecord
+        The source record created during detection
+
+    returns
+    --------
+    Jacobian: ngmix.Jacobian
+        The local jacobian
+    """
+
+    orig_cen = exp.getWcs().skyToPixel(source.getCoord())
+
+    if np.isnan(orig_cen.getY()):
+        # fall back to integer pixel location
+        peak = source.getFootprint().getPeaks()[0]
+        orig_cen_i = peak.getI()
+        orig_cen = geom.Point2D(
+            x=orig_cen_i.getX(),
+            y=orig_cen_i.getY(),
+        )
+
+    return get_jacobian(exp, orig_cen)
 
 
 def override_config(config, config_override: dict):
@@ -964,3 +1273,29 @@ def get_fitter(config, rng=None):
                 raise ValueError("bad meas_type: '%s'" % meas_type)
 
     return fitter
+
+
+class AllZeroWeightError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+class MissingDataError(Exception):
+    """
+    Some number was out of range
+    """
+
+    def __init__(self, value):
+        super().__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)

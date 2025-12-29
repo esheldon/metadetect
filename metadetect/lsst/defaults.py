@@ -28,6 +28,7 @@ DEFAULT_DETECT_CONFIG = {
 # programatically based on the measurement_type
 DEFAULT_MDET_CONFIG = {
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
+    'deblender': 'sdss',
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'pgauss': deepcopy(DEFAULT_PGAUSS_CONFIG),

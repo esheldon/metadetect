@@ -5,6 +5,7 @@ from ngmix.gexceptions import BootPSFFailure
 from lsst.pex.config import (
     Config,
     ConfigField,
+    ChoiceField,
     ConfigurableField,
     Field,
     FieldValidationError,
@@ -24,7 +25,7 @@ from .defaults import (
 )
 from . import measure
 from .metacal_exposures import get_metacal_mbexps_fixnoise
-from .util import get_integer_center, get_jacobian, override_config
+from . import util
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -83,7 +84,7 @@ def run_metadetect(
     config = MetadetectConfig()
     config.setDefaults()
 
-    override_config(config, config_override)
+    util.override_config(config, config_override)
 
     config.freeze()
     config.validate()
@@ -116,6 +117,16 @@ class MetacalConfig(Config):
         ],
     )
 
+    reconv_type = ChoiceField(
+        dtype=str,
+        doc="Type of reconvolution kernel to use",
+        default="fitgauss",
+        allowed={
+            "fitgauss": "Use a gaussian fit to determine reconvolution kernel",
+            "gauss": "Use k-space power to determine reconvolution kernel",
+        },
+    )
+
     def validate(self):
         super().validate()
         if not set(self.types).issubset({"noshear", "1p", "1m", "2p", "2m"}):
@@ -142,6 +153,16 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
+    deblender = ChoiceField(
+        dtype=str,
+        doc="Type of deblender to run",
+        default="sdss",
+        allowed={
+            "sdss": "The SDSS style deblender",
+            "scarlet": "The Scarlet deblender",
+        },
+    )
+
     metacal = ConfigField[MetacalConfig](
         doc="Metacal config",
     )
@@ -152,7 +173,10 @@ class MetadetectConfig(Config):
     )
 
     shear_bands = ListField[str](
-        doc="List of bands to use for shear measurements. Default is to use all bands.",
+        doc=(
+            "List of bands to use for shear measurements. "
+            "Default is to use all bands."
+        ),
         default=None,
         optional=True,
     )
@@ -201,10 +225,15 @@ class MetadetectTask(Task):
 
         metacal_types = config['metacal'].get('types', None)
 
+        if config['metacal']['reconv_type'] == 'fitgauss':
+            perband_psf_stats = psf_stats['perband']
+        else:
+            perband_psf_stats = None
+
         mdict, _ = get_metacal_mbexps_fixnoise(
             mbexp=mbexp,
             noise_mbexp=noise_mbexp,
-            psf_stats=psf_stats['perband'],
+            psf_stats=perband_psf_stats,
             types=metacal_types,
         )
 
@@ -239,10 +268,6 @@ def detect_deblend_and_measure(
     """
     run detection, deblending and measurements.
 
-    Note deblending is always run in a hierarchical detection process, but the
-    deblending is only used for getting centers, and because there is currently
-    no other way to split footprints
-
     Parameters
     ----------
     mbexp: lsst.afw.image.MultibandExposure
@@ -256,21 +281,22 @@ def detect_deblend_and_measure(
         If set to True, show images during processing
     """
 
-    LOG.info('measuring with blended stamps')
-
-    sources, detexp = measure.detect_and_deblend(
-        mbexp=mbexp,
+    dbtask = measure.get_detect_and_deblend_task(
         rng=rng,
         thresh=config['detect']['thresh'],
-        show=show,
+        deblender=config['deblender'],
     )
+    sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
 
     results = measure.measure(
         mbexp=mbexp,
+        model_data=model_data,
+        meas_task=dbtask.meas,
         detexp=detexp,
         sources=sources,
         config=config,
         rng=rng,
+        show=show,
     )
 
     return results
@@ -284,12 +310,12 @@ def add_mfrac(config, mfrac, res, exp):
         # we are using the positions with the metacal shear removed for
         # this.
 
-        cen, _ = get_integer_center(
+        cen, _ = util.get_integer_center(
             wcs=exp.getWcs(),
             bbox=exp.getBBox(),
             as_double=True,
         )
-        jac = get_jacobian(exp=exp, cen=cen)
+        jac = util.get_jacobian(exp=exp, cen=cen)
 
         res['mfrac'] = measure_weighted_mfrac(
             mfrac=mfrac,
@@ -509,14 +535,14 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
         Tsum = 0.0
 
         for iband, exp, wgt in zip(range(nband), mbexp, wgts):
-            cen, _ = get_integer_center(
+            cen, _ = util.get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
                 as_double=True,
             )
-            jac = get_jacobian(exp=exp, cen=cen)
+            jac = util.get_jacobian(exp=exp, cen=cen)
 
-            psf_im = measure.extract_psf_image(exp, cen)
+            psf_im = util.extract_psf_image(exp, cen)
 
             psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
             psf_jacob = jac.copy()

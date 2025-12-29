@@ -70,12 +70,14 @@ def make_lsst_sim(rng, gal_type, sky_n_sigma, star_density=0):
 
 def make_exp(dims):
     import lsst.afw.image as afw_image
+
     exp = afw_image.ExposureF(width=dims[1], height=dims[0])
     return exp
 
 
 def show_mask(exp):
     import lsst.afw.display as afw_display
+
     display = afw_display.getDisplay(backend='ds9')
     display.mtv(exp.mask)
     input('hit a key')
@@ -83,6 +85,7 @@ def show_mask(exp):
 
 def show_image(exp):
     import lsst.afw.display as afw_display
+
     display = afw_display.getDisplay(backend='ds9')
     display.mtv(exp)
     display.scale('log', 'minmax')
@@ -90,10 +93,9 @@ def show_image(exp):
 
 
 def check_skysub(meanvals, errvals, image_noise, true_sky):
-
     meansky = meanvals.mean()
     stdsky = meanvals.std()
-    errsky = stdsky/np.sqrt(meanvals.size)
+    errsky = stdsky / np.sqrt(meanvals.size)
     errmean = errvals.mean()
 
     tol = image_noise / 10
@@ -201,7 +203,8 @@ def test_skysub_sim_fixed_gal(sky_n_sigma):
             show_image(exp)
 
         lsst_skysub.iterate_detection_and_skysub(
-            exposure=exp, thresh=5,
+            exposure=exp,
+            thresh=5,
         )
         meta = exp.getMetadata()
         if 'BGMEAN' not in meta:
@@ -239,7 +242,9 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
 
     for itrial in tqdm.trange(ntrial):
         sim = make_lsst_sim(
-            rng, gal_type='wldeblend', star_density=star_density,
+            rng,
+            gal_type='wldeblend',
+            star_density=star_density,
             sky_n_sigma=sky_n_sigma,
         )
 
@@ -253,25 +258,23 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
 
         if True:
             lsst_skysub.iterate_detection_and_skysub(
-                exposure=exp, thresh=5,
+                exposure=exp,
+                thresh=5,
             )
             meta = exp.getMetadata()
             sky_meas = meta['BGMEAN']
         else:
             # this one is for debugging; we do the iterations ourselves so we
             # can display the result
-            _, _ = lsst_measure.detect_and_deblend(
-                exposure=exp, thresh=5,
-            )
+            dbtask = lsst_measure.get_detect_and_deblend_task(thresh=5)
+            _ = dbtask.run(exp)
             if False:
                 show_mask(exp)
 
             lsst_skysub.determine_and_subtract_sky(exp)
             sky_meas = exp.getMetadata()['BGMEAN']
 
-            _, _ = lsst_measure.detect_and_deblend(
-                exposure=exp, thresh=5,
-            )
+            _ = dbtask.run(exp)
             if False:
                 show_mask(exp)
 
