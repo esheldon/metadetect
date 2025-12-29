@@ -22,7 +22,9 @@ logging.basicConfig(
 )
 
 
-def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None, layout='grid'):
+def make_lsst_sim(
+    seed, mag=20, hlr=0.5, bands=None, layout='grid', psf_type='gauss',
+):
     import descwl_shear_sims
 
     rng = np.random.RandomState(seed=seed)
@@ -40,7 +42,13 @@ def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None, layout='grid'):
         hlr=hlr,
     )
 
-    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
+    if psf_type == 'ps':
+        psf = descwl_shear_sims.psfs.make_ps_psf(
+            rng=rng,
+            dim=300,
+        )
+    else:
+        psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
 
     sim_data = descwl_shear_sims.make_sim(
         rng=rng,
@@ -162,6 +170,35 @@ def test_lsst_metadetect_reconv(metacal_reconv_option):
         assert test_config['metacal']['reconv_type'] == 'fitgauss'
 
     res = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+
+@pytest.mark.xfail
+def test_lsst_metadetect_reconv_size():
+    """
+    Was surprised the fitgauss is actually giving a larger psf
+
+    TODO figure this out
+    """
+    rng = np.random.RandomState(seed=232)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(5520, bands=bands, psf_type='ps')
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {}
+    config['metacal'] = {}
+    config['metacal']['reconv_type'] = 'fitgauss'
+    res_fitgauss = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+    config['metacal']['reconv_type'] = 'gauss'
+    res_gauss = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+    mT_fitgauss = res_fitgauss['noshear']['gauss_psf_T'].mean()
+    mT_gauss = res_gauss['noshear']['gauss_psf_T'].mean()
+
+    assert mT_fitgauss < mT_gauss, (
+        f'expected fitgauss T < gauss T, got {mT_fitgauss} > {mT_gauss}'
+    )
 
 
 def test_lsst_metadetect_shear_bands_missing():
@@ -523,4 +560,5 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender_random('sdss', show=True)
-    test_lsst_metadetect_deblender_random('scarlet', show=True)
+    test_lsst_metadetect_reconv_size()
+    # test_lsst_metadetect_deblender_random('scarlet', show=True)
