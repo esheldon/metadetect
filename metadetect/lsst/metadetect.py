@@ -204,6 +204,7 @@ class MetadetectTask(Task):
         mdict, _ = get_metacal_mbexps_fixnoise(
             mbexp=mbexp,
             noise_mbexp=noise_mbexp,
+            psf_stats=psf_stats['perband'],
             types=metacal_types,
         )
 
@@ -484,7 +485,8 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
     This can fail and flags will be set, but we proceed
     """
 
-    assert len(wgts) == len(mbexp)
+    nband = len(mbexp)
+    assert len(wgts) == nband
     wsum = sum(wgts)
     if wsum <= 0:
         raise ValueError(f'got sum(wgts) = {wsum}')
@@ -497,12 +499,16 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
     )
     runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4)
 
+    perband = np.zeros(
+        nband, dtype=[('e1', 'f8'), ('e2', 'f8'), ('T', 'f8')]
+    )
+
     try:
-        g1sum = 0.0
-        g2sum = 0.0
+        e1sum = 0.0
+        e2sum = 0.0
         Tsum = 0.0
 
-        for exp, wgt in zip(mbexp, wgts):
+        for iband, exp, wgt in zip(range(nband), mbexp, wgts):
             cen, _ = get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
@@ -524,28 +530,39 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
             if res['flags'] != 0:
                 raise BootPSFFailure('failed to fit psf')
 
-            g1, g2 = res['e']
+            e1, e2 = res['e']
             T = res['T']
 
-            g1sum += g1 * wgt
-            g2sum += g2 * wgt
+            e1sum += e1 * wgt
+            e2sum += e2 * wgt
             Tsum += T * wgt
 
-        g1 = g1sum / wsum
-        g2 = g2sum / wsum
+            perband['e1'][iband] = e1
+            perband['e2'][iband] = e2
+            perband['T'][iband] = T
+
+        e1 = e1sum / wsum
+        e2 = e2sum / wsum
         T = Tsum / wsum
 
         flags = 0
 
+        g1, g2 = ngmix.shape.e1e2_to_g1g2(e1=e1, e2=e2)
+
     except BootPSFFailure:
         flags = procflags.PSF_FAILURE
-        g1 = -9999.0
-        g2 = -9999.0
+        e1 = -9999.0
+        e2 = -9999.0
         T = -9999.0
+
+        perband = None
 
     return {
         'flags': flags,
+        'e1': e1,
+        'e2': e2,
         'g1': g1,
         'g2': g2,
         'T': T,
+        'perband': perband,
     }
