@@ -140,6 +140,30 @@ def test_lsst_metadetect_smoke(subtract_sky, metacal_types_option):
             assert len(res[shear][flux_name][0]) == len(bands)
 
 
+@pytest.mark.parametrize("metacal_reconv_option", [None, "fitgauss", "gauss"])
+def test_lsst_metadetect_reconv(metacal_reconv_option):
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {}
+
+    if metacal_reconv_option is not None:
+        config['metacal'] = {}
+        config['metacal']['reconv_type'] = metacal_reconv_option
+
+    test_config = get_config(config)
+
+    if metacal_reconv_option is not None:
+        assert test_config['metacal']['reconv_type'] == metacal_reconv_option
+    else:
+        assert test_config['metacal']['reconv_type'] == 'fitgauss'
+
+    res = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+
 def test_lsst_metadetect_shear_bands_missing():
     rng = np.random.RandomState(seed=116)
 

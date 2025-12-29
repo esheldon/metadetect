@@ -17,7 +17,9 @@ DEFAULT_SUBTRACT_SKY = False
 
 # Control of the metacal process
 # currently we don't have any defaults
-DEFAULT_METACAL_CONFIG = {}
+DEFAULT_METACAL_CONFIG = {
+    'reconv_type': 'fitgauss',
+}
 
 # detection config, this may expand
 DEFAULT_DETECT_CONFIG = {
