@@ -175,9 +175,8 @@ def test_lsst_metadetect_reconv(metacal_reconv_option):
 @pytest.mark.xfail
 def test_lsst_metadetect_reconv_size():
     """
-    Was surprised the fitgauss is actually giving a larger psf
-
-    TODO figure this out
+    This currently fails because the PSF images have no noise.  fitgauss
+    will outperform gauss for noisy PSFs
     """
     rng = np.random.RandomState(seed=232)
 
@@ -196,8 +195,12 @@ def test_lsst_metadetect_reconv_size():
     mT_fitgauss = res_fitgauss['noshear']['gauss_psf_T'].mean()
     mT_gauss = res_gauss['noshear']['gauss_psf_T'].mean()
 
-    assert mT_fitgauss < mT_gauss, (
-        f'expected fitgauss T < gauss T, got {mT_fitgauss} > {mT_gauss}'
+    fwhm_fitgauss = ngmix.moments.T_to_fwhm(mT_fitgauss)
+    fwhm_gauss = ngmix.moments.T_to_fwhm(mT_gauss)
+
+    assert fwhm_fitgauss < fwhm_gauss, (
+        'expected fitgauss fwhm < gauss fwhm, '
+        f'got {fwhm_fitgauss} > {fwhm_gauss}'
     )
 
 
