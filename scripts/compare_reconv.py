@@ -35,8 +35,6 @@ def fit_gauss(im, noise, rng):
 def get_psf(e1, e2, dim=49, scale=SCALE):
     psf = galsim.Moffat(
         fwhm=0.8, beta=2.5,
-    # psf = galsim.Gaussian(
-    #     fwhm=0.8,
     ).shear(
         e1=e1,
         e2=e2,
