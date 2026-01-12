@@ -15,7 +15,7 @@ STEP = 0.01
 
 
 def get_metacal_mbexps_fixnoise(
-    mbexp, noise_mbexp, psf_stats=None, types=None,
+    mbexp, noise_mbexp, types=None, psf_stats=None,
 ):
     """
     Get metacal MultibandExposures with fixed noise
@@ -52,7 +52,7 @@ def get_metacal_mbexps_fixnoise(
     return mdict, noise_mdict
 
 
-def get_metacal_mbexps(mbexp, psf_stats=None, types=None, rot=False):
+def get_metacal_mbexps(mbexp, types=None, rot=False, psf_stats=None):
     """
     Get metacal MultibandExposures
 
