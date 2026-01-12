@@ -153,8 +153,7 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
-    deblender = ChoiceField(
-        dtype=str,
+    deblender = ChoiceField[str](
         doc="Type of deblender to run",
         default="sdss",
         allowed={

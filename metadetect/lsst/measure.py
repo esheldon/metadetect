@@ -257,29 +257,6 @@ class DetectAndDeblendTask(Task):
                 updateFluxColumns=True,
             )
 
-            # the noise replacer is not working properly with this
-            # catalog/detexp.  it is leaving the detexp with noise
-            # with ContextNoiseReplacer(
-            #     detexp,
-            #     sources,
-            #     self.rng,
-            #     config=self.meas.config.noiseReplacer,
-            # ) as replacer:
-            #     for source in sources:
-            #         if source.get('deblend_nChild') != 0:
-            #             continue
-            #
-            #         source_id = source.getId()
-            #
-            #         with replacer.sourceInserted(source_id):
-            #             self.meas.callMeasure(source, detexp)
-
-            # for source in sources:
-            #     if source.get('deblend_nChild') != 0:
-            #         continue
-            #
-            #     self.meas.callMeasure(source, detexp)
-
         else:
             sources = []
             model_data = None
