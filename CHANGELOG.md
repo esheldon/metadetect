@@ -7,7 +7,8 @@
     - Update task configs for this limitation
     - Remove unused metacal config parameters
     - keep track of problems with stamp images in separate stamp_flags field
-    - support fitgauss method for getting reconvolution kernel
+    - support fitgauss method for getting reconvolution kernel in the lsst
+      sub-package. This is now the default.
 
 ## 0.12.0 - 2023-04-03
 
