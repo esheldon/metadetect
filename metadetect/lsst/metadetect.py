@@ -1,7 +1,7 @@
 import logging
 import numpy as np
 import ngmix
-from ngmix.gexceptions import BootPSFFailure
+from ngmix.gexceptions import BootPSFFailure, GMixRangeError
 from lsst.pex.config import (
     Config,
     ConfigField,
@@ -574,7 +574,7 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
         g1, g2 = ngmix.shape.e1e2_to_g1g2(e1=e1, e2=e2)
 
-    except BootPSFFailure:
+    except (BootPSFFailure, GMixRangeError):
         flags = procflags.PSF_FAILURE
         e1 = -9999.0
         e2 = -9999.0
