@@ -350,7 +350,7 @@ def measure(
     if len(sources) == 0:
         return None
 
-    pgauss_fitter = get_pgauss_fitter(config)
+    pgauss_fitter = get_pgauss_fitter(config['pgauss'])
 
     nband = len(mbexp.bands)
     shear_band_names = config["shear_bands"] or mbexp.bands
@@ -488,20 +488,20 @@ def _get_extractor(mbexp, sources, model_data):
     return mbobs_extractor
 
 
-def get_pgauss_fitter(config):
+def get_pgauss_fitter(pgauss_config):
     """
     Get a PGaussMom fitter
 
     Parameters
     ----------
-    config: dict
+    pgauss_config: dict
         The measurement configuration with "pgauss" sub-dict
 
     Returns
     -------
     ngmix.prepsfmom.PGaussMom
     """
-    return ngmix.prepsfmom.PGaussMom(fwhm=config['pgauss']['fwhm'])
+    return ngmix.prepsfmom.PGaussMom(fwhm=pgauss_config['fwhm'])
 
 
 def _get_combined_struct(gauss_res, pgauss_res):
