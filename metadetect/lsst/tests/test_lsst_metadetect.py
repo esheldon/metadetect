@@ -22,7 +22,9 @@ logging.basicConfig(
 )
 
 
-def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None, layout='grid'):
+def make_lsst_sim(
+    seed, mag=20, hlr=0.5, bands=None, layout='grid', psf_type='gauss',
+):
     import descwl_shear_sims
 
     rng = np.random.RandomState(seed=seed)
@@ -40,7 +42,13 @@ def make_lsst_sim(seed, mag=20, hlr=0.5, bands=None, layout='grid'):
         hlr=hlr,
     )
 
-    psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type='gauss')
+    if psf_type == 'ps':
+        psf = descwl_shear_sims.psfs.make_ps_psf(
+            rng=rng,
+            dim=300,
+        )
+    else:
+        psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
 
     sim_data = descwl_shear_sims.make_sim(
         rng=rng,
@@ -138,6 +146,62 @@ def test_lsst_metadetect_smoke(subtract_sky, metacal_types_option):
 
             assert len(res[shear][flux_name].shape) == len(bands)
             assert len(res[shear][flux_name][0]) == len(bands)
+
+
+@pytest.mark.parametrize("metacal_reconv_option", [None, "fitgauss", "gauss"])
+def test_lsst_metadetect_reconv(metacal_reconv_option):
+    rng = np.random.RandomState(seed=116)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(116, bands=bands)
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {}
+
+    if metacal_reconv_option is not None:
+        config['metacal'] = {}
+        config['metacal']['reconv_type'] = metacal_reconv_option
+
+    test_config = get_config(config)
+
+    if metacal_reconv_option is not None:
+        assert test_config['metacal']['reconv_type'] == metacal_reconv_option
+    else:
+        assert test_config['metacal']['reconv_type'] == 'fitgauss'
+
+    res = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+
+@pytest.mark.xfail
+def test_lsst_metadetect_reconv_size():
+    """
+    This currently fails because the PSF images have no noise.  fitgauss
+    will outperform gauss for noisy PSFs
+    """
+    rng = np.random.RandomState(seed=232)
+
+    bands = ['r', 'i']
+    sim_data = make_lsst_sim(5520, bands=bands, psf_type='ps')
+    data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
+
+    config = {}
+    config['metacal'] = {}
+    config['metacal']['reconv_type'] = 'fitgauss'
+    res_fitgauss = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+    config['metacal']['reconv_type'] = 'gauss'
+    res_gauss = run_metadetect(rng=rng, config=config, **data)  # noqa
+
+    mT_fitgauss = res_fitgauss['noshear']['gauss_psf_T'].mean()
+    mT_gauss = res_gauss['noshear']['gauss_psf_T'].mean()
+
+    fwhm_fitgauss = ngmix.moments.T_to_fwhm(mT_fitgauss)
+    fwhm_gauss = ngmix.moments.T_to_fwhm(mT_gauss)
+
+    assert fwhm_fitgauss < fwhm_gauss, (
+        'expected fitgauss fwhm < gauss fwhm, '
+        f'got {fwhm_fitgauss} > {fwhm_gauss}'
+    )
 
 
 def test_lsst_metadetect_shear_bands_missing():
@@ -500,4 +564,5 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender_random('sdss', show=True)
-    test_lsst_metadetect_deblender_random('scarlet', show=True)
+    test_lsst_metadetect_reconv_size()
+    # test_lsst_metadetect_deblender_random('scarlet', show=True)
