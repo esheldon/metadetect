@@ -215,7 +215,8 @@ def test_lsst_metadetect_pgauss():
         }
     }
 
-    fitter = get_pgauss_fitter(config=get_config(config))
+    config = get_config(config)
+    fitter = get_pgauss_fitter(pgauss_config=config['pgauss'])
     assert fitter.fwhm == fwhm
 
     res = run_metadetect(rng=rng, config=config, **data)
