@@ -99,52 +99,161 @@ def show_mbexp(
     The axis used for plotting
     """
 
-    image = mbexp.image.array
+    with mplt.style.context('dark_background'):
+        image = mbexp.image.array
 
-    if ax is None:
-        fig, ax = mplt.subplots()
+        if ax is None:
+            fig, ax = mplt.subplots()
 
-    if image.shape[0] >= 3:
-        import scarlet
-        from astropy.visualization.lupton_rgb import AsinhMapping
+        if image.shape[0] >= 3:
+            import lsst.scarlet.lite as scl
+            from astropy.visualization.lupton_rgb import AsinhMapping
 
-        timage = image[:3, :, :].clip(min=0)
+            timage = image[:3, :, :].clip(min=0)
 
-        asinh = AsinhMapping(
-            minimum=0,
-            stretch=stretch,
-            Q=q,
-        )
+            asinh = AsinhMapping(
+                minimum=0,
+                stretch=stretch,
+                Q=q,
+            )
 
-        img_rgb = scarlet.display.img_to_rgb(timage, norm=asinh)
+            img_rgb = scl.display.img_to_rgb(timage, norm=asinh)
 
-        ax.imshow(img_rgb)
+            ax.imshow(img_rgb)
 
-    else:
-        noise = np.sqrt(np.median(mbexp.variance.array))
-        if image.shape[0] == 1:
-            timage = image[0]
         else:
-            timage = image.sum(axis=0)
+            noise = np.sqrt(np.median(mbexp.variance.array))
+            if image.shape[0] == 1:
+                timage = image[0]
+            else:
+                timage = image.sum(axis=0)
 
-        noise = np.sqrt(np.median(mbexp.variance.array))
-        minval = 0.1 * noise
-        ax.imshow(np.log(timage.clip(min=minval)))
+            noise = np.sqrt(np.median(mbexp.variance.array))
+            minval = 0.1 * noise
+            ax.imshow(np.log(timage.clip(min=minval)))
 
-    if sources is not None:
-        x, y = _extract_xy(mbexp, sources)
-        ax.scatter(
-            x, y,
-            s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
-        )
+        if sources is not None:
+            x, y = _extract_xy(mbexp, sources)
+            ax.scatter(
+                x, y,
+                s=SIZE, color=COLOR, edgecolor=EDGECOLOR,
+            )
 
-    if mess is not None:
-        ax.set_title(mess)
+        if mess is not None:
+            ax.set_title(mess)
 
-    if show:
-        mplt.show()
+        if show:
+            mplt.show()
 
     return ax
+
+
+def show_mbexp_mosaic(
+    mbexp_list,
+    stretch=DEFAULT_STRETCH,
+    q=DEFAULT_Q,
+    labels=None,
+    title=None,
+    show=True,
+):
+    """
+    visialize a MultibandExposure
+
+    Parameters
+    ----------
+    mbexp_list: [lsst.afw.image.MultibandExposure]
+        MutibandExposure objects to visualize.  Currently must be at least
+        three bands.
+    stretch: float, optional
+        The stretch parameter for
+        astropy.visualization.lupton_rgb. import AsinhMapping
+    q: float, optional
+        The Q parameter for
+        astropy.visualization.lupton_rgb. import AsinhMapping
+    title: str, optional
+        A message to use as title to plot
+    show: bool, optional
+        If set to True, show on the screen.
+
+    Returns
+    -------
+    fig, axs
+    """
+    from espy.plotting import Grid
+
+    nim = len(mbexp_list)
+
+    if labels is None:
+        labels = [f'im{i}' for i in range(nim)]
+
+    grid = Grid(nim)
+
+    aratio = grid.nrow / grid.ncol
+    if aratio > 1:
+        figsize = (8 / aratio, 8)
+    else:
+        figsize = (8, 8 * aratio)
+
+    with mplt.style.context('dark_background'):
+        fig, axs = mplt.subplots(
+            ncols=grid.ncol, nrows=grid.nrow, figsize=figsize,
+            layout='tight',
+        )
+
+        for i, mbexp in enumerate(mbexp_list):
+            image = mbexp.image.array
+
+            try:
+                ax = axs.ravel()[i]
+            except AttributeError:
+                ax = axs
+
+            ax.set_title(labels[i])
+
+            if image.shape[0] >= 3:
+                import lsst.scarlet.lite as scl
+                from astropy.visualization.lupton_rgb import AsinhMapping
+
+                timage = image[:3, :, :].clip(min=0)
+
+                asinh = AsinhMapping(
+                    minimum=0,
+                    stretch=stretch,
+                    Q=q,
+                )
+
+                img_rgb = scl.display.img_to_rgb(timage, norm=asinh)
+
+                ax.imshow(img_rgb)
+
+            else:
+                noise = np.sqrt(np.median(mbexp.variance.array))
+                if image.shape[0] == 1:
+                    timage = image[0]
+                else:
+                    timage = image.sum(axis=0)
+
+                noise = np.sqrt(np.median(mbexp.variance.array))
+                minval = 0.1 * noise
+                ax.imshow(np.log(timage.clip(min=minval)))
+
+        try:
+            nax = axs.size
+        except AttributeError:
+            nax = 1
+
+        if nax > nim:
+            for i in range(nim, nax):
+                ax = axs.ravel()[i]
+                ax.axis('off')
+
+        if title is not None:
+            fig.suptitle(title)
+
+        if show:
+            mplt.show()
+
+    return fig, axs
 
 
 def _extract_xy(mbexp, sources):
@@ -157,7 +266,8 @@ def _extract_xy(mbexp, sources):
         y0 = bbox.getBeginY()
         x = []
         y = []
-        for source in sources[mbexp.bands[0]]:
+        # for source in sources[mbexp.bands[0]]:
+        for source in sources:
             peak = source.getFootprint().getPeaks()[0]
             cen = peak.getCentroid()
             x.append(cen.getX() - x0)
@@ -277,7 +387,7 @@ def show_mbexp_demo(mbexp):
         three bands.
     """
     from astropy.visualization.lupton_rgb import AsinhMapping
-    import scarlet
+    import lsst.scarlet.lite as scl
 
     image = mbexp.image.array
 
@@ -296,7 +406,7 @@ def show_mbexp_demo(mbexp):
                 minimum=0,
                 stretch=stretch, Q=q,
             )
-            img_rgb = scarlet.display.img_to_rgb(image, norm=asinh)
+            img_rgb = scl.display.img_to_rgb(image, norm=asinh)
             axs[ist, iq].imshow(img_rgb)
             axs[ist, iq].set_title(f'Stretch {stretch}, Q {q}')
 
@@ -334,7 +444,7 @@ def show_multi_mbobs(mbobs):
     mplt.show()
 
 
-def show_multi_mbexp(mbexp, sources=None):
+def show_mbexp_each_band(mbexp, sources=None):
     """
     Show images from a ngmix.MultiBandObsList
 
@@ -400,3 +510,22 @@ def show_image_and_mask(mbexp, band=0):
     axs[0].imshow(np.log(exp.image.array.clip(min=minval)))
     axs[1].imshow(exp.mask.array)
     mplt.show()
+
+    mplt.close(fig)
+
+
+def show_image(im, cat=None, cmap='gray', figsize=(8, 8)):
+    import matplotlib.pyplot as mplt
+
+    with mplt.style.context('dark_background'):
+        fig, ax = mplt.subplots(figsize=figsize)
+        ax.imshow(im, cmap=cmap)
+
+        if cat is not None:
+            ec = 'black'
+            w, = np.where(cat['gauss_flags'] != 0)
+            ax.scatter(cat['col'], cat['row'], c='yellow', edgecolors=ec)
+            ax.scatter(cat['col'][w], cat['row'][w], c='red', edgecolors=ec)
+
+        mplt.show()
+        mplt.close(fig)

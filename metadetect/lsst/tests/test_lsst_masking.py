@@ -122,7 +122,7 @@ def test_apply_apodized_bright_masks(show=False):
         )
 
         if show:
-            vis.show_multi_mbexp(data['mbexp'])
+            vis.show_mbexp_each_band(data['mbexp'])
 
         bright = exp.mask.getPlaneBitMask('BRIGHT')
         bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
@@ -251,7 +251,7 @@ def test_apply_apodized_bright_masks_subexp(show=False):
     assert np.allclose(y, yp)
 
     if show:
-        vis.show_multi_mbexp(data['mbexp'])
+        vis.show_mbexp_each_band(data['mbexp'])
 
     cell_size = 50
     start_x = x - xy0.x - 25
@@ -360,7 +360,7 @@ def test_apply_apodized_edge_masks(show=False):
     )
 
     if show:
-        vis.show_multi_mbexp(data['mbexp'])
+        vis.show_mbexp_each_band(data['mbexp'])
 
     band0 = data['mbexp'].bands[0]
     edge = data['mbexp'][band0].mask.getPlaneBitMask('APODIZED_EDGE')
@@ -448,7 +448,7 @@ def test_apply_apodized_bright_masks_metadetect(show=False):
         res = run_metadetect(config=None, rng=rng, **data)
 
         if show:
-            vis.show_multi_mbexp(data['mbexp'], sources=res['noshear'])
+            vis.show_mbexp_each_band(data['mbexp'], sources=res['noshear'])
 
         # bright = exp.mask.getPlaneBitMask('BRIGHT')
         bright_expanded = exp.mask.getPlaneBitMask('BRIGHT_EXPANDED')
