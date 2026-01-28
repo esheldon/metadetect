@@ -110,3 +110,4 @@ venv.bak/
 *.png
 *.fits.fz
 pytest_session.txt
+.vscode/
