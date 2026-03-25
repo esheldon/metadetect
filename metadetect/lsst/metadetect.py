@@ -165,6 +165,7 @@ class MetadetectConfig(Config):
             "sdss": "The SDSS style deblender",
             "scarlet": "The Scarlet deblender",
         },
+        deprecated="Deprecated and unused",
     )
 
     metacal = ConfigField[MetacalConfig](
