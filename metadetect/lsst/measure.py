@@ -307,7 +307,7 @@ def get_detect_and_deblend_task(
     config = DetectAndDeblendConfig()
     config.setDefaults()
 
-    if config_override.get('deblend', {}).pop("name") == "scarlet":
+    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
         config.deblend.retarget(ScarletDeblendTask)
 
     util.override_config(config, config_override)
