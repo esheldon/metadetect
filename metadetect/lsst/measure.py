@@ -297,12 +297,12 @@ def get_detect_and_deblend_task(
         config_override['detect']['thresholdValue'] = thresh
 
     config = DetectAndDeblendConfig()
+    config.setDefaults()
 
     if deblender == "scarlet":
         config.deblend.retarget(ScarletDeblendTask)
         config.deblend.processSingles = True
 
-    config.setDefaults()
 
     util.override_config(config, config_override)
 
