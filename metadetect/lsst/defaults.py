@@ -26,11 +26,22 @@ DEFAULT_DETECT_CONFIG = {
     'thresh': DEFAULT_THRESH,
 }
 
+# deblender config
+DEFAULT_DEBLEND_SDSS_CONFIG = {
+    'name': 'sdss',
+    'maxFootprintArea': 0,
+}
+
+DEFAULT_DEBLEND_SCARLET_CONFIG = {
+    'name': 'scarlet',
+    'processSingles': True,
+    'maxFootprintArea': 0,
+}
 # the pgauss subconfig and the stamp_size defaults we be filled in
 # programatically based on the measurement_type
 DEFAULT_MDET_CONFIG = {
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
-    'deblender': 'sdss',
+    'deblend': deepcopy(DEFAULT_DEBLEND_SDSS_CONFIG),
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'pgauss': deepcopy(DEFAULT_PGAUSS_CONFIG),
