@@ -284,6 +284,8 @@ def get_detect_and_deblend_task(
         Random number generator for noise replacer
     thresh: float, optional
         The detection threshold in units of the sky noise
+    config: dict, optional
+        The configuration dictionary to override the defaults with.
 
     Returns
     -------
@@ -299,10 +301,8 @@ def get_detect_and_deblend_task(
     config = DetectAndDeblendConfig()
     config.setDefaults()
 
-    if deblender == "scarlet":
+    if config_override.get('deblend', {}).pop("name") == "scarlet":
         config.deblend.retarget(ScarletDeblendTask)
-        config.deblend.processSingles = True
-
 
     util.override_config(config, config_override)
 

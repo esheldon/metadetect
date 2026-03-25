@@ -283,7 +283,7 @@ def detect_deblend_and_measure(
     dbtask = measure.get_detect_and_deblend_task(
         rng=rng,
         thresh=config['detect']['thresh'],
-        deblender=config['deblender'],
+        config=config,
     )
     sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
 

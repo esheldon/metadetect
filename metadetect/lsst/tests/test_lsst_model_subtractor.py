@@ -5,6 +5,10 @@ import pytest
 import time
 
 import logging
+from metadetect.lsst.defaults import (
+    DEFAULT_DEBLEND_SDSS_CONFIG,
+    DEFAULT_DEBLEND_SCARLET_CONFIG,
+)
 from metadetect.lsst.measure import get_detect_and_deblend_task
 from metadetect.lsst import util
 from metadetect.lsst import vis
@@ -92,7 +96,8 @@ def test_lsst_model_subtractor_smoke(seed=225, ntrial=1, show=False):
             vis.show_mbexp(mbexp)
 
         tm0 = time.time()
-        dbtask = get_detect_and_deblend_task(rng=rng, deblender='scarlet')
+        config_override = {'deblend': DEFAULT_DEBLEND_SCARLET_CONFIG}
+        dbtask = get_detect_and_deblend_task(rng=rng, config=config_override)
         sources, detecp, model_data = dbtask.run(
             mbexp=mbexp,
             show=show,
@@ -155,7 +160,8 @@ def test_lsst_mbobs_extractor_smoke(seed=225, show=False):
     if show:
         vis.show_mbexp(mbexp)
 
-    dbtask = get_detect_and_deblend_task(rng=rng, deblender='sdss')
+    config_override = {'deblend': DEFAULT_DEBLEND_SDSS_CONFIG}
+    dbtask = get_detect_and_deblend_task(rng=rng, config=config_override)
     sources, detecp, model_data = dbtask.run(
         mbexp=mbexp,
         show=show,
