@@ -267,7 +267,7 @@ class DetectAndDeblendTask(Task):
 def get_detect_and_deblend_task(
     rng=None,
     thresh=DEFAULT_THRESH,
-    deblender="sdss",
+    deblender=None,
     config=None,
 ):
     """
@@ -284,12 +284,20 @@ def get_detect_and_deblend_task(
         Random number generator for noise replacer
     thresh: float, optional
         The detection threshold in units of the sky noise
+    config: dict, optional
+        The configuration dictionary to override the defaults with.
 
     Returns
     -------
     sources, detexp
         The sources and the detection exposure
     """
+    if deblender is not None:
+        LOG.warning(
+            "'deblender' kwargs is not used and will be removed soon. "
+            "Specify the deblender via the config kwarg instead."
+        )
+
     config_override = config if config is not None else {}
     if thresh:
         if 'detect' not in config_override:
@@ -297,12 +305,10 @@ def get_detect_and_deblend_task(
         config_override['detect']['thresholdValue'] = thresh
 
     config = DetectAndDeblendConfig()
-
-    if deblender == "scarlet":
-        config.deblend.retarget(ScarletDeblendTask)
-        config.deblend.processSingles = True
-
     config.setDefaults()
+
+    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
+        config.deblend.retarget(ScarletDeblendTask)
 
     util.override_config(config, config_override)
 

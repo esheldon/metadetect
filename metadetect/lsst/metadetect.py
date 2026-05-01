@@ -160,6 +160,7 @@ class MetadetectConfig(Config):
             "sdss": "The SDSS style deblender",
             "scarlet": "The Scarlet deblender",
         },
+        deprecated="Deprecated and unused",
     )
 
     metacal = ConfigField[MetacalConfig](
@@ -283,7 +284,7 @@ def detect_deblend_and_measure(
     dbtask = measure.get_detect_and_deblend_task(
         rng=rng,
         thresh=config['detect']['thresh'],
-        deblender=config['deblender'],
+        config=config,
     )
     sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
 
