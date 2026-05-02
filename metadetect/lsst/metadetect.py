@@ -250,6 +250,7 @@ class MetadetectTask(Task):
 
         result = {}
         for shear_str, mcal_mbexp in mdict.items():
+            # This method needs to be refactored.
             res = detect_deblend_and_measure(
                 mbexp=mcal_mbexp,
                 config=config,
@@ -306,11 +307,14 @@ def detect_deblend_and_measure(
         the bounding box edge of ``mbexp`` will be excluded for measurement.
     """
 
-    dbtask = measure.get_detect_and_deblend_task(
-        rng=rng,
-        thresh=config['detect']['thresh'],
-        config=config,
-    )
+    config = DetectAndDeblendConfig()
+
+    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
+        config.deblend.retarget(ScarletDeblendTask)
+
+    dbtask = DetectAndDeblendTask(config=config)
+    if rng is not None:
+        dbtask.rng = rng
     sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
 
     if border > 0:

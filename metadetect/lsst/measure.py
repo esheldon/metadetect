@@ -170,6 +170,7 @@ class DetectAndDeblendTask(Task):
         self.makeSubtask("detect", schema=schema)
         self.makeSubtask("deblend", schema=schema)
         self.rng = np.random.RandomState(seed=self.config.seed)
+        self.schema = schema
 
     def run(self, mbexp, show=False):
         if len(mbexp.singles) > 1:
@@ -183,26 +184,29 @@ class DetectAndDeblendTask(Task):
         if not isinstance(detexp, afw_image.ExposureF):
             detexp = afw_image.ExposureF(detexp, deep=True)
 
+        table = afw_table.SourceTable.make(self.schema)
+        result = self.detect.run(table, detexp)
+        if result is not None:
+            sources = result.sources
+        else:
+            sources = []
+
         if isinstance(self.deblend, ScarletDeblendTask):
             LOG.info('Using Scarlet deblender')
-            sources, model_data = self._run_with_scarlet(mbexp, detexp)
+            sources, model_data = self._run_with_scarlet(mbexp, sources)
         else:
             LOG.info('Using SDSS deblender')
             model_data = None
-            sources = self._run_with_sdss(detexp)
+            sources = self._run_with_sdss(detexp, sources)
 
         if show:
             vis.show_exp(detexp, use_mpl=True, sources=sources)
 
         return sources, detexp, model_data
 
-    def _run_with_sdss(self, detexp):
-        schema = self.deblend.schema  # should be the same for all tasks
-        table = afw_table.SourceTable.make(schema)
-        result = self.detect.run(table, detexp)
+    def _run_with_sdss(self, detexp, sources):
 
-        if result is not None:
-            sources = result.sources
+        if len(sources) > 0:
             self.deblend.run(detexp, sources)
 
             # with ContextNoiseReplacer(
@@ -225,14 +229,9 @@ class DetectAndDeblendTask(Task):
 
         return sources
 
-    def _run_with_scarlet(self, mbexp, detexp):
-        schema = self.deblend.objectSchema  # should be the same for all tasks
-        table = afw_table.SourceTable.make(schema)
-        result = self.detect.run(table, detexp)
+    def _run_with_scarlet(self, mbexp, orig_sources):
 
-        if result is not None:
-            orig_sources = result.sources
-
+        if len(orig_sources) > 0:
             mbexp_deconvolved = util.make_deconvolved_mbexp(
                 mbexp, orig_sources,
             )
