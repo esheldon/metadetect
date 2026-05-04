@@ -117,8 +117,7 @@ class MetacalConfig(Config):
         ],
     )
 
-    reconv_type = ChoiceField(
-        dtype=str,
+    reconv_type = ChoiceField[str](
         doc="Type of reconvolution kernel to use",
         default="fitgauss",
         allowed={

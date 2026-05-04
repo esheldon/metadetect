@@ -75,7 +75,7 @@ class ModelSubtractor(object):
 
         self.sources = sources
 
-        self.bands = mbexp.filters
+        self.bands = mbexp.bands
 
         self._build_subtracted_image()
 
