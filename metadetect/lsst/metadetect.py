@@ -71,8 +71,8 @@ def run_metadetect(
         Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
     get_psf_stats: bool, optional
-        If set to True, also return the psf stats.  See the returned data of
-        fit_original_psfs_mbexp
+        If set to True, also return the psf stats as a 'psf_stats' entry
+        in the result dict.  See the returned data of fit_original_psfs_mbexp
     show: bool, optional
         if set to True images will be shown
 
@@ -83,8 +83,7 @@ def run_metadetect(
         if there was a problem doing the metacal steps; this only happens if
         the setting metacal_psf is set to 'fitgauss' and the fitting fails
 
-    If get_psf_stats=True the psf stats are also returned. See the
-    returned data of fit_original_psfs_mbexp
+        If get_psf_stats=True then there is an extra entry 'psf_stats'
     """
 
     config_override = config if config is not None else {}
@@ -264,9 +263,9 @@ class MetadetectTask(Task):
             result[shear_str] = res
 
         if get_psf_stats:
-            return result, psf_stats
-        else:
-            return result
+            result['psf_stats'] = psf_stats
+
+        return result
 
 
 def detect_deblend_and_measure(

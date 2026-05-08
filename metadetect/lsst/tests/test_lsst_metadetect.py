@@ -240,9 +240,10 @@ def test_lsst_metadetect_shear_bands():
     metacal_types = ['noshear', '1p', '1m']
 
     detected = afw_image.Mask.getPlaneBitMask('DETECTED')
-    res, psf_stats = run_metadetect(
+    res = run_metadetect(
         rng=rng, config=config, get_psf_stats=True, **data,
     )
+    psf_stats = res.pop('psf_stats')
 
     # we remove the DETECTED bit
     assert np.all(res['noshear']['bmask'] & detected == 0)
