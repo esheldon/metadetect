@@ -11,7 +11,8 @@
       sub-package. This is now the default.
     - Fixed bug where psfrec original PSF quantities were calculatede
       over all bands rather than shear bands.
-    - Added 'perband_psf_stats' to result dict of MetadetectTask.run()
+    - Added abilityu to optionally add 'psf_stats' to
+      result dict of MetadetectTask.run()
 
 ## 0.12.0 - 2023-04-03
 
