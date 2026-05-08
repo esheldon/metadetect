@@ -353,16 +353,10 @@ def measure(
     pgauss_fitter = get_pgauss_fitter(config['pgauss'])
 
     nband = len(mbexp.bands)
-    shear_band_names = config["shear_bands"] or mbexp.bands
-    if not all([sb in mbexp.bands for sb in shear_band_names]):
-        raise RuntimeError(
-            "Not all requested bands for shear are available. "
-            f"Bands `{shear_band_names}` were requested but the only "
-            f"bands available are `{mbexp.bands}`."
-        )
-    shear_bands = [
-        i for i, band in enumerate(mbexp.bands) if band in shear_band_names
-    ]
+    shear_band_indices = util.extract_shear_band_indices(
+        mbexp=mbexp,
+        config=config,
+    )
     exp_bbox = mbexp.getBBox()
     wcs = mbexp.singles[0].getWcs()
     results = []
@@ -412,7 +406,7 @@ def measure(
             this_gauss_res = get_wavg_output_struct(
                 nband=nband,
                 model='gauss',
-                shear_bands=shear_bands,
+                shear_bands=shear_band_indices,
             )
             this_pgauss_res = get_wavg_output_struct(
                 nband=nband,
@@ -439,7 +433,7 @@ def measure(
                 bmask_flags=0,
                 psf_runner=psf_runner,
                 rng=rng,
-                shear_bands=shear_bands,
+                shear_bands=shear_band_indices,
             )
 
             this_pgauss_res = fit_mbobs_wavg(
@@ -582,6 +576,7 @@ def get_output_dtype():
         ('ra', 'f8'),
         ('dec', 'f8'),
         ('psfrec_flags', 'i4'),  # psfrec is the original psf
+        ('psfrec_navg', 'i2'),  # psfrec is the original psf
         ('psfrec_g', 'f8', 2),
         ('psfrec_T', 'f8'),
         # values from .mask of input exposures
