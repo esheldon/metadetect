@@ -60,6 +60,7 @@ def run_photometry(
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
 
     psf_stats = fit_original_psfs_mbexp(
+        config=config,
         mbexp=mbexp,
         wgts=wgts,
         rng=rng,

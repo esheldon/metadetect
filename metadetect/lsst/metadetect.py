@@ -37,6 +37,7 @@ def run_metadetect(
     mfrac_mbexp=None,
     ormasks=None,
     config=None,
+    get_psf_stats=False,
     show=False,
 ):
     """
@@ -69,15 +70,21 @@ def run_metadetect(
     config: dict, optional
         Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
+    get_psf_stats: bool, optional
+        If set to True, also return the psf stats.  See the returned data of
+        fit_original_psfs_mbexp
     show: bool, optional
         if set to True images will be shown
 
     Returns
     -------
-    result dict
-        This is keyed by shear string 'noshear', '1p', ... or None if there was
-        a problem doing the metacal steps; this only happens if the setting
-        metacal_psf is set to 'fitgauss' and the fitting fails
+    result dict:
+        The result dict is keyed by shear string 'noshear', '1p', ... or None
+        if there was a problem doing the metacal steps; this only happens if
+        the setting metacal_psf is set to 'fitgauss' and the fitting fails
+
+    If get_psf_stats=True the psf stats are also returned. See the
+    returned data of fit_original_psfs_mbexp
     """
 
     config_override = config if config is not None else {}
@@ -89,15 +96,15 @@ def run_metadetect(
     config.freeze()
     config.validate()
     task = MetadetectTask(config=config)
-    result = task.run(
+    return task.run(
         mbexp,
         noise_mbexp,
         rng,
         mfrac_mbexp,
         ormasks,
         show=show,
+        get_psf_stats=get_psf_stats,
     )
-    return result
 
 
 class PGaussConfig(Config):
@@ -201,6 +208,7 @@ class MetadetectTask(Task):
         rng,
         mfrac_mbexp=None,
         ormasks=None,
+        get_psf_stats=False,
         show=False,
     ):
         # This is to support methods that are not yet refactored.
@@ -255,8 +263,10 @@ class MetadetectTask(Task):
 
             result[shear_str] = res
 
-        result['perband_psf_stats'] = psf_stats['perband']
-        return result
+        if get_psf_stats:
+            return result, psf_stats
+        else:
+            return result
 
 
 def detect_deblend_and_measure(

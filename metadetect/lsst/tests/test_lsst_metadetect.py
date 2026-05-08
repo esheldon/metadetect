@@ -240,7 +240,9 @@ def test_lsst_metadetect_shear_bands():
     metacal_types = ['noshear', '1p', '1m']
 
     detected = afw_image.Mask.getPlaneBitMask('DETECTED')
-    res = run_metadetect(rng=rng, config=config, **data)
+    res, psf_stats = run_metadetect(
+        rng=rng, config=config, get_psf_stats=True, **data,
+    )
 
     # we remove the DETECTED bit
     assert np.all(res['noshear']['bmask'] & detected == 0)
@@ -265,7 +267,8 @@ def test_lsst_metadetect_shear_bands():
             assert np.all(res[shear]["mfrac"] == 0)
             assert res[shear][flux_name].shape == (25, nband)
 
-    perband = res['perband_psf_stats']
+    perband = psf_stats['perband']
+
     assert perband.size == len(bands)
     shear_band_indices, = np.where(perband['is_shear_band'])
     assert shear_band_indices.size == len(shear_bands)
@@ -389,17 +392,17 @@ def test_lsst_zero_weights(show=False):
             data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
             data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
 
-            if show:
-                import matplotlib.pyplot as mplt
-                fig, axs = mplt.subplots(ncols=2)
-                axs[0].imshow(data['mbexp']['i'].image.array)
-                axs[1].imshow(data['mbexp']['i'].variance.array)
-                mplt.show()
+        if show:
+            import matplotlib.pyplot as mplt
+            fig, axs = mplt.subplots(ncols=2)
+            axs[0].imshow(data['mbexp']['i'].image.array)
+            axs[1].imshow(data['mbexp']['i'].variance.array)
+            mplt.show()
 
         resdict = run_metadetect(rng=rng, config=None, **data)
 
         if do_zero:
-            for shear_type, tres in resdict.items():
+            for key, tres in resdict.items():
                 w, = np.where(
                     tres['stamp_flags'] & procflags.ZERO_WEIGHTS != 0
                 )
@@ -410,7 +413,9 @@ def test_lsst_zero_weights(show=False):
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
-                assert tres.size == 25
+                assert tres.size == 25, (
+                    f'checking {shear_type} for size 25'
+                )
 
         nobj.append(resdict['noshear'].size)
 
@@ -605,5 +610,6 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender_random('sdss', show=True)
-    test_lsst_metadetect_reconv_size()
+    # test_lsst_metadetect_reconv_size()
     # test_lsst_metadetect_deblender_random('scarlet', show=True)
+    test_lsst_zero_weights(show=True)
