@@ -5,8 +5,8 @@ from .skysub import subtract_sky_mbexp
 from .configs import get_config
 from . import measure
 from .metadetect import (
-    fit_original_psfs_mbexp, get_mfrac_mbexp, combine_ormasks,
-    add_ormask, add_original_psf, add_mfrac, average_psf_stats,
+    _fit_original_psfs_mbexp, get_mfrac_mbexp, combine_ormasks,
+    add_ormask, add_original_psf, add_mfrac, _average_psf_stats,
 )
 
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -71,11 +71,11 @@ def run_photometry(
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
 
-    psf_stats_perband = fit_original_psfs_mbexp(
+    psf_stats_perband = _fit_original_psfs_mbexp(
         mbexp=mbexp,
         rng=rng,
     )
-    psf_stats = average_psf_stats(
+    psf_stats = _average_psf_stats(
         psf_stats=psf_stats_perband,
         wgts=wgts,
     )

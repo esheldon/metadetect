@@ -227,11 +227,11 @@ class MetadetectTask(Task):
                 mbexp=mbexp, thresh=self.config.detect.thresholdValue
             )
 
-        psf_stats_perband = fit_original_psfs_mbexp(
+        psf_stats_perband = _fit_original_psfs_mbexp(
             mbexp=mbexp,
             rng=rng,
         )
-        psf_stats = average_psf_stats(
+        psf_stats = _average_psf_stats(
             psf_stats=psf_stats_perband,
             wgts=wgts,
         )
@@ -525,7 +525,7 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
     return mfrac, wgts
 
 
-def fit_original_psfs_mbexp(mbexp, rng):
+def _fit_original_psfs_mbexp(mbexp, rng):
     """
     fit the original psfs at the center of the image for each band
 
@@ -594,14 +594,14 @@ def fit_original_psfs_mbexp(mbexp, rng):
     return perband
 
 
-def average_psf_stats(psf_stats, wgts):
+def _average_psf_stats(psf_stats, wgts):
     """
     Compute the weighted verage of psf stats over bands.
 
     Parameters
     ----------
     psf_stats: numpy structured array
-        Per-band PSF stats as returned by fit_original_psfs_mbexp.
+        Per-band PSF stats as returned by _fit_original_psfs_mbexp.
         Array has fields: e1, e2, T, flags
     wgts: list
         Per-band weights, indexed by band position (same order as psf_stats).
