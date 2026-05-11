@@ -6,7 +6,7 @@ from .configs import get_config
 from . import measure
 from .metadetect import (
     fit_original_psfs_mbexp, get_mfrac_mbexp, combine_ormasks,
-    add_ormask, add_original_psf, add_mfrac,
+    add_ormask, add_original_psf, add_mfrac, average_psf_stats,
 )
 
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -53,6 +53,14 @@ def run_photometry(
 
     config = get_config(config)
 
+    shear_bands = config['shear_bands'] or mbexp.bands
+    if not all(band in mbexp.bands for band in shear_bands):
+        raise RuntimeError(
+            "Not all requested bands for shear are available. "
+            f"Bands `{shear_bands}` were requested but the only "
+            f"bands available are `{mbexp.bands}`."
+        )
+
     ormask = combine_ormasks(mbexp, ormasks)
     mfrac, wgts = get_mfrac_mbexp(mbexp, mfrac_mbexp)
 
@@ -63,10 +71,13 @@ def run_photometry(
     if config['subtract_sky']:
         subtract_sky_mbexp(mbexp=mbexp, thresh=config['detect']['thresh'])
 
-    psf_stats = fit_original_psfs_mbexp(
+    psf_stats_perband = fit_original_psfs_mbexp(
         mbexp=mbexp,
-        wgts=wgts,
         rng=rng,
+    )
+    psf_stats = average_psf_stats(
+        psf_stats=psf_stats_perband,
+        wgts=wgts,
     )
 
     dbtask = measure.get_detect_and_deblend_task(

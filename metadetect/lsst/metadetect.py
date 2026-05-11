@@ -207,6 +207,14 @@ class MetadetectTask(Task):
         config = self.config.toDict()
         config['detect']['thresh'] = self.detect.config.thresholdValue
 
+        shear_bands = config['shear_bands'] or mbexp.bands
+        if not all(band in mbexp.bands for band in shear_bands):
+            raise RuntimeError(
+                "Not all requested bands for shear are available. "
+                f"Bands `{shear_bands}` were requested but the only "
+                f"bands available are `{mbexp.bands}`."
+            )
+
         ormask = combine_ormasks(mbexp, ormasks)
         mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
 
@@ -219,16 +227,19 @@ class MetadetectTask(Task):
                 mbexp=mbexp, thresh=self.config.detect.thresholdValue
             )
 
-        psf_stats = fit_original_psfs_mbexp(
+        psf_stats_perband = fit_original_psfs_mbexp(
             mbexp=mbexp,
-            wgts=wgts,
             rng=rng,
+        )
+        psf_stats = average_psf_stats(
+            psf_stats=psf_stats_perband,
+            wgts=wgts,
         )
 
         metacal_types = config['metacal'].get('types', None)
 
         if config['metacal']['reconv_type'] == 'fitgauss':
-            perband_psf_stats = psf_stats['perband']
+            perband_psf_stats = psf_stats_perband
         else:
             perband_psf_stats = None
 
@@ -257,6 +268,15 @@ class MetadetectTask(Task):
                 add_original_psf(psf_stats, res)
 
             result[shear_str] = res
+
+        # For additional information needed only for unit tests, include them
+        # under a catch-all key called '_diagnostics'. The calling code must
+        # not rely on this key being present or having the same structure.
+        result['_diagnostics'] = {
+            'psf_stats_perband': psf_stats_perband,
+            'weight_perband': {band: wgt for band, wgt in zip(mbexp.bands, wgts)},
+            'psf_stats_average': psf_stats,
+        }
 
         return result
 
@@ -505,19 +525,13 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
     return mfrac, wgts
 
 
-def fit_original_psfs_mbexp(mbexp, rng, wgts):
+def fit_original_psfs_mbexp(mbexp, rng):
     """
-    fit the original psfs at the center of the image and get the mean g1,g2,T
-    across all bands
+    fit the original psfs at the center of the image for each band
 
-    This can fail and flags will be set, but we proceed
+    Individual band fits can fail and flags will be set for that band, but
+    successful band fits are preserved.
     """
-
-    nband = len(mbexp)
-    assert len(wgts) == nband
-    wsum = sum(wgts)
-    if wsum <= 0:
-        raise ValueError(f'got sum(wgts) = {wsum}')
 
     fitter = ngmix.admom.AdmomFitter(rng=rng)
     guesser = ngmix.guessers.GMixPSFGuesser(
@@ -527,16 +541,19 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
     )
     runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4)
 
+    nband = len(mbexp.bands)
     perband = np.zeros(
-        nband, dtype=[('e1', 'f8'), ('e2', 'f8'), ('T', 'f8')]
+        nband, dtype=[
+            ('band', 'U1'),
+            ('e1', 'f8'),
+            ('e2', 'f8'),
+            ('T', 'f8'),
+            ('flags', 'i4'),
+        ]
     )
 
-    try:
-        e1sum = 0.0
-        e2sum = 0.0
-        Tsum = 0.0
-
-        for iband, exp, wgt in zip(range(nband), mbexp, wgts):
+    for iband, (band, exp) in enumerate(zip(mbexp.bands, mbexp)):
+        try:
             cen, _ = util.get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
@@ -560,37 +577,87 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
             e1, e2 = res['e']
             T = res['T']
+            flags = 0
 
-            e1sum += e1 * wgt
-            e2sum += e2 * wgt
-            Tsum += T * wgt
+        except BootPSFFailure:
+            flags = procflags.PSF_FAILURE
+            e1 = -9999.0
+            e2 = -9999.0
+            T = -9999.0
 
-            perband['e1'][iband] = e1
-            perband['e2'][iband] = e2
-            perband['T'][iband] = T
+        perband['band'][iband] = band
+        perband['e1'][iband] = e1
+        perband['e2'][iband] = e2
+        perband['T'][iband] = T
+        perband['flags'][iband] = flags
 
-        e1 = e1sum / wsum
-        e2 = e2sum / wsum
-        T = Tsum / wsum
+    return perband
 
-        flags = 0
 
-        g1, g2 = ngmix.shape.e1e2_to_g1g2(e1=e1, e2=e2)
+def average_psf_stats(psf_stats, wgts):
+    """
+    Compute the weighted verage of psf stats over bands.
 
-    except (BootPSFFailure, GMixRangeError):
+    Parameters
+    ----------
+    psf_stats: numpy structured array
+        Per-band PSF stats as returned by fit_original_psfs_mbexp.
+        Array has fields: e1, e2, T, flags
+    wgts: list
+        Per-band weights, indexed by band position (same order as psf_stats).
+
+    Returns
+    -------
+    dict
+        Averaged psf stats with fields flags, e1, e2, g1, g2, and T.
+
+    Notes
+    -----
+    The g1 and g2 values are computed from the average e1 and e2 values.
+    They are not averaged g1 and g2 values over bands.
+    """
+
+    if len(wgts) != len(psf_stats):
+        raise ValueError(
+            f'len(wgts) = {len(wgts)} != len(psf_stats) = {len(psf_stats)}'
+        )
+
+    if any(wgt < 0 for wgt in wgts):
+        raise ValueError(f'got negative weight: {wgts}')
+
+    # Check for any failures
+    flags = 0
+    for iband in range(len(psf_stats)):
+        if wgts[iband] > 0:
+            flags |= psf_stats['flags'][iband]
+
+    if flags != 0:
+        return {
+            'flags': flags,
+            'e1': -9999.0,
+            'e2': -9999.0,
+            'g1': -9999.0,
+            'g2': -9999.0,
+            'T': -9999.0,
+        }
+
+    average_psf_stats = {'flags': 0}
+    for key in ('e1', 'e2', 'T'):
+        average_psf_stats[key] = sum(
+            psf_stats[key][iband] * wgts[iband] for iband in range(len(psf_stats))
+        ) / sum(wgts)
+
+    try:
+        g1, g2 = ngmix.shape.e1e2_to_g1g2(
+            e1=average_psf_stats['e1'],
+            e2=average_psf_stats['e2'],
+        )
+    except GMixRangeError:
         flags = procflags.PSF_FAILURE
-        e1 = -9999.0
-        e2 = -9999.0
-        T = -9999.0
+        g1 = -9999.0
+        g2 = -9999.0
 
-        perband = None
+    average_psf_stats['g1'] = g1
+    average_psf_stats['g2'] = g2
 
-    return {
-        'flags': flags,
-        'e1': e1,
-        'e2': e2,
-        'g1': g1,
-        'g2': g2,
-        'T': T,
-        'perband': perband,
-    }
+    return average_psf_stats

@@ -356,6 +356,7 @@ def test_lsst_zero_weights(show=False):
                 mplt.show()
 
         resdict = run_metadetect(rng=rng, config=None, **data)
+        del resdict['_diagnostics']
 
         if do_zero:
             for shear_type, tres in resdict.items():
@@ -395,6 +396,7 @@ def test_lsst_masked_as_bright(show=False):
             data['noise_mbexp']['i'].mask.array[50:100, 50:100] |= bright
 
         resdict = run_metadetect(rng=rng, config=None, **data)
+        del resdict['_diagnostics']
 
         if show:
             import matplotlib.pyplot as mplt
