@@ -42,23 +42,31 @@ def make_lsst_sim(
         hlr=hlr,
     )
 
-    if psf_type == 'ps':
-        psf = descwl_shear_sims.psfs.make_ps_psf(
-            rng=rng,
-            dim=300,
-        )
-    else:
-        psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
+    # This way we get different PSFs per band for PS PSF
+    sim_data = {'band_data': {}}
+    for band in bands:
+        if psf_type == 'ps':
+            psf = descwl_shear_sims.psfs.make_ps_psf(
+                rng=rng,
+                dim=300,
+            )
+        else:
+            psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
 
-    sim_data = descwl_shear_sims.make_sim(
-        rng=rng,
-        galaxy_catalog=galaxy_catalog,
-        coadd_dim=coadd_dim,
-        g1=0.02,
-        g2=0.00,
-        psf=psf,
-        bands=bands,
-    )
+        tsim_data = descwl_shear_sims.make_sim(
+            rng=rng,
+            galaxy_catalog=galaxy_catalog,
+            coadd_dim=coadd_dim,
+            g1=0.02,
+            g2=0.00,
+            psf=psf,
+            bands=bands,
+        )
+        for key in tsim_data:
+            if key == 'band_data':
+                sim_data['band_data'][band] = tsim_data['band_data'][band]
+            else:
+                sim_data[key] = tsim_data[key]
     return sim_data
 
 
@@ -221,15 +229,18 @@ def test_lsst_metadetect_shear_bands():
     rng = np.random.RandomState(seed=116)
 
     bands = ['g', 'r', 'i', 'z']
+    shear_bands = ['r', 'z']
+
     nband = len(bands)
-    sim_data = make_lsst_sim(116, bands=bands)
+    sim_data = make_lsst_sim(116, bands=bands, psf_type='ps')
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    config = {"shear_bands": ["r", "z"]}
+    config = {"shear_bands": shear_bands}
     metacal_types = ['noshear', '1p', '1m']
 
     detected = afw_image.Mask.getPlaneBitMask('DETECTED')
     res = run_metadetect(rng=rng, config=config, **data)
+    diagnostics = res.pop('_diagnostics')
 
     # we remove the DETECTED bit
     assert np.all(res['noshear']['bmask'] & detected == 0)
@@ -253,6 +264,36 @@ def test_lsst_metadetect_shear_bands():
             assert np.any(res[shear][f"{front}_flags"] == 0)
             assert np.all(res[shear]["mfrac"] == 0)
             assert res[shear][flux_name].shape == (25, nband)
+
+    perband = diagnostics['psf_stats_perband']
+    assert perband.size == len(bands)
+
+    wgts = diagnostics['weight_perband']
+    assert len(wgts) == len(bands)
+    assert all(band in bands for band in wgts)
+    for iband, band in enumerate(bands):
+        assert perband['band'][iband] == band
+        if band in shear_bands:
+            assert wgts[band] > 0
+        else:
+            assert wgts[band] == 0
+
+    wgts_list = list(wgts.values())
+    psf_stats = diagnostics['psf_stats_average']
+    T = np.average(perband['T'], weights=wgts_list)
+    e1 = np.average(perband['e1'], weights=wgts_list)
+    e2 = np.average(perband['e2'], weights=wgts_list)
+    g1, g2 = ngmix.shape.e1e2_to_g1g2(e1, e2)
+
+    assert psf_stats['T'] == T
+    assert psf_stats['e1'] == e1
+    assert psf_stats['e2'] == e2
+    assert psf_stats['g1'] == g1
+    assert psf_stats['g2'] == g2
+
+    np.testing.assert_allclose(res['noshear']['psfrec_g'][:, 0], g1)
+    np.testing.assert_allclose(res['noshear']['psfrec_g'][:, 1], g2)
+    np.testing.assert_allclose(res['noshear']['psfrec_T'], T)
 
     for shear in metacal_types:
         assert np.all(res[shear]["shear_bands"] == np.array([["13"]]))
