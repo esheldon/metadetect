@@ -210,6 +210,10 @@ class MetadetectTask(Task):
         ormask = combine_ormasks(mbexp, ormasks)
         mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
 
+        for i, band in enumerate(mbexp.bands):
+            if band not in shear_bands:
+                wgts[i] = 0
+
         if self.config.subtract_sky:
             subtract_sky_mbexp(
                 mbexp=mbexp, thresh=self.config.detect.thresholdValue
