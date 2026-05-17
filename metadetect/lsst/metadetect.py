@@ -1,8 +1,8 @@
 import logging
 import numpy as np
 import ngmix
+
 from ngmix.gexceptions import BootPSFFailure, GMixRangeError
-import lsst.geom as geom
 from lsst.pex.config import (
     Config,
     ConfigField,
@@ -306,62 +306,6 @@ class MetadetectTask(Task):
         }
 
         return result
-
-
-def detect_deblend_and_measure(
-    mbexp,
-    config,
-    rng,
-    show=False,
-    border=0,
-):
-    """
-    run detection, deblending and measurements.
-
-    Parameters
-    ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The metacal'ed exposures to process
-    config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, Entries
-        in this dict override defaults; see lsst_configs.py
-    rng: np.random.RandomState
-        Random number generator
-    show: bool, optional
-        If set to True, show images during processing
-    border: bool, optional
-        If positive, detections whose centroids lie ``border`` pixels away from
-        the bounding box edge of ``mbexp`` will be excluded for measurement.
-    """
-
-    config = DetectAndDeblendConfig()
-
-    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
-        config.deblend.retarget(ScarletDeblendTask)
-
-    dbtask = DetectAndDeblendTask(config=config)
-    if rng is not None:
-        dbtask.rng = rng
-    sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
-
-    if border > 0:
-        inner_bbox = geom.Box2D(detexp.getBBox()).erodedBy(border)
-        sources = sources.copy(deep=not sources.isContiguous())
-        within_border = inner_bbox.contains(sources.getX(), sources.getY())
-        sources = sources[within_border]
-
-    results = measure.measure(
-        mbexp=mbexp,
-        model_data=model_data,
-        meas_task=dbtask.meas,
-        detexp=detexp,
-        sources=sources,
-        config=config,
-        rng=rng,
-        show=show,
-    )
-
-    return results
 
 
 def add_mfrac(config, mfrac, res, exp):
