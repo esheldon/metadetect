@@ -297,52 +297,6 @@ class MetadetectTask(Task):
         return result
 
 
-def detect_deblend_and_measure(
-    mbexp,
-    config,
-    rng,
-    show=False,
-):
-    """
-    run detection, deblending and measurements.
-
-    Parameters
-    ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The metacal'ed exposures to process
-    config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, Entries
-        in this dict override defaults; see lsst_configs.py
-    rng: np.random.RandomState
-        Random number generator
-    show: bool, optional
-        If set to True, show images during processing
-    """
-
-    config = DetectAndDeblendConfig()
-
-    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
-        config.deblend.retarget(ScarletDeblendTask)
-
-    dbtask = DetectAndDeblendTask(config=config)
-    if rng is not None:
-        dbtask.rng = rng
-    sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
-
-    results = measure.measure(
-        mbexp=mbexp,
-        model_data=model_data,
-        meas_task=dbtask.meas,
-        detexp=detexp,
-        sources=sources,
-        config=config,
-        rng=rng,
-        show=show,
-    )
-
-    return results
-
-
 def add_mfrac(config, mfrac, res, exp):
     """
     calculate and add mfrac to the input result array
