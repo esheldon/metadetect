@@ -9,7 +9,7 @@ from metadetect.lsst.defaults import (
     DEFAULT_DEBLEND_SDSS_CONFIG,
     DEFAULT_DEBLEND_SCARLET_CONFIG,
 )
-from metadetect.lsst.measure import get_detect_and_deblend_task
+from metadetect.lsst.photometry import get_detect_and_deblend_task
 from metadetect.lsst import util
 from metadetect.lsst import vis
 from metadetect.lsst.model_subtractor import ModelSubtractor
