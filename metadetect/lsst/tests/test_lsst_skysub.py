@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 import tqdm
 import logging
+from metadetect.lsst.photometry import get_detect_and_deblend_task
 import metadetect.lsst.skysub as lsst_skysub
-import metadetect.lsst.measure as lsst_measure
 from lsst.utils import getPackageDir
 
 try:
@@ -13,6 +13,7 @@ try:
     skip_tests_on_simulations = False
 except LookupError:
     skip_tests_on_simulations = True
+
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -285,7 +286,7 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
         else:
             # this one is for debugging; we do the iterations ourselves so we
             # can display the result
-            dbtask = lsst_measure.get_detect_and_deblend_task(thresh=5)
+            dbtask = get_detect_and_deblend_task(thresh=5)
             _ = dbtask.run(exp)
             if False:
                 show_mask(exp)
