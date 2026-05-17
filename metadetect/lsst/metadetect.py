@@ -19,6 +19,8 @@ from .. import procflags
 from .skysub import subtract_sky_mbexp
 
 from .defaults import (
+    DEFAULT_DEBLEND_SCARLET_CONFIG,
+    DEFAULT_DEBLEND_SDSS_CONFIG,
     DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
     DEFAULT_PGAUSS_FWHM,
@@ -34,6 +36,7 @@ def run_metadetect(
     mbexp,
     noise_mbexp,
     rng,
+    deblender='sdss',
     mfrac_mbexp=None,
     ormasks=None,
     config=None,
@@ -89,6 +92,16 @@ def run_metadetect(
     config_override = config if config is not None else {}
     config = MetadetectConfig()
     config.setDefaults()
+
+    if deblender == 'scarlet':
+        # Load the default scarlet config
+        config_override['deblend'] = deepcopy(DEFAULT_DEBLEND_SCARLET_CONFIG)
+        assert config_override['deblend'].pop('name') == 'scarlet'
+    elif deblender == 'sdss':
+        # SDSS deblender is the default, so no need to override
+        assert config_override['deblend'].pop('name') == 'sdss'
+    else:
+        raise ValueError(f"Unknown deblender: {deblender}")
 
     util.override_config(config, config_override)
 
@@ -158,6 +171,11 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
+    detect_and_deblend = ConfigurableField(
+        doc="Detection and Deblending config",
+        target=DetectAndDeblendTask,
+    )
+
     deblender = ChoiceField[str](
         doc="Type of deblender to run",
         default="sdss",
@@ -200,6 +218,7 @@ class MetadetectTask(Task):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.makeSubtask("detect")
+        self.makeSubtask("detect_and_deblend")
 
     def run(
         self,
@@ -244,11 +263,19 @@ class MetadetectTask(Task):
             types=metacal_types,
         )
 
+        dbtask = self.detect_and_deblend
         result = {}
         for shear_str, mcal_mbexp in mdict.items():
-            # This method needs to be refactored.
-            res = detect_deblend_and_measure(
-                mbexp=mcal_mbexp,
+            if rng is not None:
+                dbtask.rng = rng
+            sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
+
+            res = measure.measure(
+                mbexp=mbexp,
+                model_data=model_data,
+                meas_task=dbtask.meas,
+                detexp=detexp,
+                sources=sources,
                 config=config,
                 rng=rng,
                 show=show,
