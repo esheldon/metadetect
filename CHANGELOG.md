@@ -1,4 +1,4 @@
-## 0.13.0 - 2025-12-02
+## 0.13.0 - 2025-12-02, 2026-05-08
 
 ### changed
 
@@ -9,6 +9,10 @@
     - keep track of problems with stamp images in separate stamp_flags field
     - support fitgauss method for getting reconvolution kernel in the lsst
       sub-package. This is now the default.
+    - Fixed bug where psfrec original PSF quantities were calculatede
+      over all bands rather than shear bands.
+    - Added abilityu to optionally add 'psf_stats' to
+      result dict of MetadetectTask.run()
 
 ## 0.12.0 - 2023-04-03
 

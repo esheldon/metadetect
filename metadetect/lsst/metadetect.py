@@ -37,6 +37,7 @@ def run_metadetect(
     mfrac_mbexp=None,
     ormasks=None,
     config=None,
+    get_psf_stats=False,
     show=False,
 ):
     """
@@ -69,15 +70,20 @@ def run_metadetect(
     config: dict, optional
         Configuration for the fitter, metacal, psf, detect, Entries
         in this dict override defaults; see lsst_configs.py
+    get_psf_stats: bool, optional
+        If set to True, also return the psf stats as a 'psf_stats' entry
+        in the result dict.  See the returned data of fit_original_psfs_mbexp
     show: bool, optional
         if set to True images will be shown
 
     Returns
     -------
-    result dict
-        This is keyed by shear string 'noshear', '1p', ... or None if there was
-        a problem doing the metacal steps; this only happens if the setting
-        metacal_psf is set to 'fitgauss' and the fitting fails
+    result dict:
+        The result dict is keyed by shear string 'noshear', '1p', ... or None
+        if there was a problem doing the metacal steps; this only happens if
+        the setting metacal_psf is set to 'fitgauss' and the fitting fails
+
+        If get_psf_stats=True then there is an extra entry 'psf_stats'
     """
 
     config_override = config if config is not None else {}
@@ -89,15 +95,15 @@ def run_metadetect(
     config.freeze()
     config.validate()
     task = MetadetectTask(config=config)
-    result = task.run(
+    return task.run(
         mbexp,
         noise_mbexp,
         rng,
         mfrac_mbexp,
         ormasks,
         show=show,
+        get_psf_stats=get_psf_stats,
     )
-    return result
 
 
 class PGaussConfig(Config):
@@ -201,6 +207,7 @@ class MetadetectTask(Task):
         rng,
         mfrac_mbexp=None,
         ormasks=None,
+        get_psf_stats=False,
         show=False,
     ):
         # This is to support methods that are not yet refactored.
@@ -217,6 +224,7 @@ class MetadetectTask(Task):
 
         psf_stats = fit_original_psfs_mbexp(
             mbexp=mbexp,
+            config=config,
             wgts=wgts,
             rng=rng,
         )
@@ -253,6 +261,9 @@ class MetadetectTask(Task):
                 add_original_psf(psf_stats, res)
 
             result[shear_str] = res
+
+        if get_psf_stats:
+            result['psf_stats'] = psf_stats
 
         return result
 
@@ -437,6 +448,7 @@ def add_original_psf(psf_stats, res):
     copy in psf results
     """
     res['psfrec_flags'][:] = psf_stats['flags']
+    res['psfrec_navg'][:] = psf_stats['navg']
     res['psfrec_g'][:, 0] = psf_stats['g1']
     res['psfrec_g'][:, 1] = psf_stats['g2']
     res['psfrec_T'][:] = psf_stats['T']
@@ -501,19 +513,46 @@ def get_mfrac_mbexp(mbexp, mfrac_mbexp):
     return mfrac, wgts
 
 
-def fit_original_psfs_mbexp(mbexp, rng, wgts):
+def fit_original_psfs_mbexp(mbexp, rng, wgts, config):
     """
-    fit the original psfs at the center of the image and get the mean g1,g2,T
-    across all bands
+    fit the original psfs at the center of the image.
+
+    also get the mean g1,g2,T across shear bands
 
     This can fail and flags will be set, but we proceed
+
+    Parameters
+    ----------
+    mbexp: MutiBandExposure
+        The image data
+    rng: np.random.RandomState
+        The numpy random state
+    wgts: sequence
+        Sequence of weights, one per image
+    config: dict like
+        Should have the metadetect config into
+
+    Returns
+    -------
+    dict with entries
+        flags: Flags for processing
+        navg: Number of images averaged, should be same size as shear bands
+        e1: mean e1 (distortion style)
+        e2: mean e2 (distortion style)
+        g1: mean g1 (reduced shear style)
+        g2: mean g2 (reduced shear style)
+        T: Mean trace of the covariance matrix
+        perband: array with results for each band separately. this
+            includes non shear bands.
     """
+
+    shear_band_indices = util.extract_shear_band_indices(
+        mbexp=mbexp,
+        config=config,
+    )
 
     nband = len(mbexp)
     assert len(wgts) == nband
-    wsum = sum(wgts)
-    if wsum <= 0:
-        raise ValueError(f'got sum(wgts) = {wsum}')
 
     fitter = ngmix.admom.AdmomFitter(rng=rng)
     guesser = ngmix.guessers.GMixPSFGuesser(
@@ -524,15 +563,26 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
     runner = ngmix.runners.PSFRunner(fitter=fitter, guesser=guesser, ntry=4)
 
     perband = np.zeros(
-        nband, dtype=[('e1', 'f8'), ('e2', 'f8'), ('T', 'f8')]
+        nband,
+        dtype=[
+            ('e1', 'f8'),
+            ('e2', 'f8'),
+            ('wgt', 'f8'),
+            ('T', 'f8'),
+            ('is_shear_band', bool),
+        ]
     )
 
     try:
+        # these are only summed over shear_bands
+        navg = 0
+        wsum = 0.0
         e1sum = 0.0
         e2sum = 0.0
         Tsum = 0.0
 
         for iband, exp, wgt in zip(range(nband), mbexp, wgts):
+
             cen, _ = util.get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
@@ -557,13 +607,21 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
             e1, e2 = res['e']
             T = res['T']
 
-            e1sum += e1 * wgt
-            e2sum += e2 * wgt
-            Tsum += T * wgt
-
             perband['e1'][iband] = e1
             perband['e2'][iband] = e2
             perband['T'][iband] = T
+            perband['wgt'][iband] = wgt
+
+            if iband in shear_band_indices:
+                perband['is_shear_band'][iband] = True
+                navg += 1
+                wsum += wgt
+                e1sum += e1 * wgt
+                e2sum += e2 * wgt
+                Tsum += T * wgt
+
+        if wsum <= 0:
+            raise ValueError(f'got sum(wgts) = {wsum}')
 
         e1 = e1sum / wsum
         e2 = e2sum / wsum
@@ -581,8 +639,13 @@ def fit_original_psfs_mbexp(mbexp, rng, wgts):
 
         perband = None
 
+    assert navg == len(shear_band_indices), (
+        f'summed {navg} but expected {len(shear_band_indices)}'
+    )
+
     return {
         'flags': flags,
+        'navg': navg,
         'e1': e1,
         'e2': e2,
         'g1': g1,

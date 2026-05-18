@@ -42,23 +42,32 @@ def make_lsst_sim(
         hlr=hlr,
     )
 
-    if psf_type == 'ps':
-        psf = descwl_shear_sims.psfs.make_ps_psf(
-            rng=rng,
-            dim=300,
-        )
-    else:
-        psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
+    # This way we get different PSFs per band for PS PSF
+    sim_data = {'band_data': {}}
+    for band in bands:
+        if psf_type == 'ps':
+            psf = descwl_shear_sims.psfs.make_ps_psf(
+                rng=rng,
+                dim=300,
+            )
+        else:
+            psf = descwl_shear_sims.psfs.make_fixed_psf(psf_type=psf_type)
 
-    sim_data = descwl_shear_sims.make_sim(
-        rng=rng,
-        galaxy_catalog=galaxy_catalog,
-        coadd_dim=coadd_dim,
-        g1=0.02,
-        g2=0.00,
-        psf=psf,
-        bands=bands,
-    )
+        tsim_data = descwl_shear_sims.make_sim(
+            rng=rng,
+            galaxy_catalog=galaxy_catalog,
+            coadd_dim=coadd_dim,
+            g1=0.02,
+            g2=0.00,
+            psf=psf,
+            bands=bands,
+        )
+
+        for key in tsim_data:
+            if key == 'band_data':
+                sim_data['band_data'][band] = tsim_data['band_data'][band]
+            else:
+                sim_data[key] = tsim_data[key]
     return sim_data
 
 
@@ -221,15 +230,20 @@ def test_lsst_metadetect_shear_bands():
     rng = np.random.RandomState(seed=116)
 
     bands = ['g', 'r', 'i', 'z']
+    shear_bands = ["r", "z"]
+
     nband = len(bands)
-    sim_data = make_lsst_sim(116, bands=bands)
+    sim_data = make_lsst_sim(116, bands=bands, psf_type='ps')
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    config = {"shear_bands": ["r", "z"]}
+    config = {"shear_bands": shear_bands}
     metacal_types = ['noshear', '1p', '1m']
 
     detected = afw_image.Mask.getPlaneBitMask('DETECTED')
-    res = run_metadetect(rng=rng, config=config, **data)
+    res = run_metadetect(
+        rng=rng, config=config, get_psf_stats=True, **data,
+    )
+    psf_stats = res.pop('psf_stats')
 
     # we remove the DETECTED bit
     assert np.all(res['noshear']['bmask'] & detected == 0)
@@ -254,15 +268,46 @@ def test_lsst_metadetect_shear_bands():
             assert np.all(res[shear]["mfrac"] == 0)
             assert res[shear][flux_name].shape == (25, nband)
 
+    perband = psf_stats['perband']
+
+    assert perband.size == len(bands)
+    shear_band_indices, = np.where(perband['is_shear_band'])
+    assert shear_band_indices.size == len(shear_bands)
+
+    print(perband['e1'])
+
+    wsum = perband['wgt'][shear_band_indices].sum()
+    e1sum = perband['e1'][shear_band_indices].sum()
+    e2sum = perband['e2'][shear_band_indices].sum()
+    Tsum = perband['T'][shear_band_indices].sum()
+    e1 = e1sum / wsum
+    e2 = e2sum / wsum
+    g1, g2 = ngmix.shape.e1e2_to_g1g2(e1, e2)
+    T = Tsum / wsum
+
     for shear in metacal_types:
         assert np.all(res[shear]["shear_bands"] == np.array([["13"]]))
+
         # g and i band should be all NaNs for gauss
         assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 0]))
         assert np.all(np.isnan(res[shear]["gauss_band_flux"][:, 2]))
+
         # rest should be finite
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 1]))
         assert np.all(np.isfinite(res[shear]["gauss_band_flux"][:, 3]))
         assert np.all(np.isfinite(res[shear]["pgauss_band_flux"]))
+
+        assert np.all(res[shear]['psfrec_navg'] == len(shear_bands))
+
+        np.testing.assert_allclose(
+            res[shear]['psfrec_g'][:, 0], g1,
+        )
+        np.testing.assert_allclose(
+            res[shear]['psfrec_g'][:, 1], g2,
+        )
+        np.testing.assert_allclose(
+            res[shear]['psfrec_T'], T,
+        )
 
 
 def test_lsst_metadetect_pgauss():
@@ -348,17 +393,17 @@ def test_lsst_zero_weights(show=False):
             data['mbexp']['i'].variance.array[50:100, 50:100] = np.inf
             data['noise_mbexp']['i'].variance.array[50:100, 50:100] = np.inf
 
-            if show:
-                import matplotlib.pyplot as mplt
-                fig, axs = mplt.subplots(ncols=2)
-                axs[0].imshow(data['mbexp']['i'].image.array)
-                axs[1].imshow(data['mbexp']['i'].variance.array)
-                mplt.show()
+        if show:
+            import matplotlib.pyplot as mplt
+            fig, axs = mplt.subplots(ncols=2)
+            axs[0].imshow(data['mbexp']['i'].image.array)
+            axs[1].imshow(data['mbexp']['i'].variance.array)
+            mplt.show()
 
         resdict = run_metadetect(rng=rng, config=None, **data)
 
         if do_zero:
-            for shear_type, tres in resdict.items():
+            for key, tres in resdict.items():
                 w, = np.where(
                     tres['stamp_flags'] & procflags.ZERO_WEIGHTS != 0
                 )
@@ -369,7 +414,9 @@ def test_lsst_zero_weights(show=False):
         else:
             for shear_type, tres in resdict.items():
                 # 5x5 grid
-                assert tres.size == 25
+                assert tres.size == 25, (
+                    f'checking {shear_type} for size 25'
+                )
 
         nobj.append(resdict['noshear'].size)
 
@@ -564,5 +611,6 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
 
 if __name__ == '__main__':
     # test_lsst_metadetect_deblender_random('sdss', show=True)
-    test_lsst_metadetect_reconv_size()
+    # test_lsst_metadetect_reconv_size()
     # test_lsst_metadetect_deblender_random('scarlet', show=True)
+    test_lsst_zero_weights(show=True)
