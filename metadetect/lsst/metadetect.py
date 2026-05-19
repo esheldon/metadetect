@@ -88,7 +88,10 @@ def run_metadetect(
         metacal_psf is set to 'fitgauss' and the fitting fails
     """
 
-    config_override = config if config is not None else {}
+    config_override = deepcopy(DEFAULT_MDET_CONFIG)
+    if config:
+        config_override.update(config)
+
     config = MetadetectConfig()
     config.setDefaults()
 
