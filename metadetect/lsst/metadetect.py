@@ -2,6 +2,9 @@ import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure, GMixRangeError
+from copy import deepcopy
+from frozendict import frozendict
+
 from lsst.pex.config import (
     Config,
     ConfigField,
@@ -13,6 +16,7 @@ from lsst.pex.config import (
 )
 from lsst.pipe.base import Task
 from lsst.meas.algorithms import SourceDetectionTask
+from lsst.meas.extensions.scarlet import ScarletDeblendTask
 
 from .. import procflags
 
@@ -20,7 +24,7 @@ from .skysub import subtract_sky_mbexp
 
 from .defaults import (
     DEFAULT_DEBLEND_SCARLET_CONFIG,
-    DEFAULT_DEBLEND_SDSS_CONFIG,
+    DEFAULT_MDET_CONFIG,
     DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
     DEFAULT_PGAUSS_FWHM,
@@ -98,11 +102,14 @@ def run_metadetect(
 
     if deblender == 'scarlet':
         # Load the default scarlet config
-        config_override['deblend'] = deepcopy(DEFAULT_DEBLEND_SCARLET_CONFIG)
-        assert config_override['deblend'].pop('name') == 'scarlet'
+        config_override['detect_and_deblend']['deblend'] = deepcopy(
+            DEFAULT_DEBLEND_SCARLET_CONFIG
+        )
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'scarlet'
+        config.detect_and_deblend.deblend.retarget(ScarletDeblendTask)
     elif deblender == 'sdss':
         # SDSS deblender is the default, so no need to override
-        assert config_override['deblend'].pop('name') == 'sdss'
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'sdss'
     else:
         raise ValueError(f"Unknown deblender: {deblender}")
 
@@ -176,17 +183,7 @@ class MetadetectConfig(Config):
 
     detect_and_deblend = ConfigurableField(
         doc="Detection and Deblending config",
-        target=DetectAndDeblendTask,
-    )
-
-    deblender = ChoiceField[str](
-        doc="Type of deblender to run",
-        default="sdss",
-        allowed={
-            "sdss": "The SDSS style deblender",
-            "scarlet": "The Scarlet deblender",
-        },
-        deprecated="Deprecated and unused",
+        target=measure.DetectAndDeblendTask,
     )
 
     metacal = ConfigField[MetacalConfig](
@@ -234,8 +231,7 @@ class MetadetectTask(Task):
         show=False,
     ):
         # This is to support methods that are not yet refactored.
-        config = self.config.toDict()
-        config['detect']['thresh'] = self.detect.config.thresholdValue
+        config = frozendict(self.config.toDict())
 
         ormask = combine_ormasks(mbexp, ormasks)
         mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
