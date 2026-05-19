@@ -121,8 +121,7 @@ def test_lsst_photometry_smoke(subtract_sky, nowarp):
 
 
 if __name__ == '__main__':
-    for mt in ['pgauss', 'ksigma']:
-        for nowarp in [True, False]:
-            test_lsst_photometry_smoke(
-                meas_type=mt, subtract_sky=False, nowarp=nowarp
-            )
+    for nowarp in [True, False]:
+        test_lsst_photometry_smoke(
+            subtract_sky=False, nowarp=nowarp
+        )
