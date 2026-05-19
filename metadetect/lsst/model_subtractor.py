@@ -10,12 +10,10 @@ from . import util
 
 import numpy as np
 import lsst.scarlet.lite as scl
-from lsst.afw.detection import HeavyFootprintF, makeHeavyFootprint
 from lsst.afw.detection.multiband import MultibandFootprint
-from lsst.afw.image import Mask, MaskedImage, MultibandImage
+from lsst.afw.image import Mask, MultibandImage
 from lsst.afw.geom import SpanSet
 from lsst.afw.detection import Footprint as afwFootprint
-from lsst.afw.image import Image as afwImage
 
 LOG = logging.getLogger('lsst_model_subtractor')
 
@@ -439,7 +437,10 @@ class ModelSubtractor(object):
                     footprint = source.getFootprint()
                     bbox = footprint.getBBox()
 
-                    heavy = scarletModelToHeavy(source=scl_source, blend=blend)
+                    heavy = scarletModelToMultibandFootprint(
+                        source=scl_source,
+                        blend=blend,
+                    )
 
                     for band in bands:
                         heavy[band].subtractFrom(self.mbexp[band].image[bbox])
@@ -449,22 +450,21 @@ class ModelSubtractor(object):
                     self.footprints[sid] = footprint
 
 
-def scarletModelToHeavy(
+def scarletModelToMultibandFootprint(
     source: scl.Source,
     blend: scl.Blend,
     useFlux=False,
-) -> HeavyFootprintF | MultibandFootprint:
+) -> MultibandFootprint:
     """
-    Convert a scarlet_lite model to a `HeavyFootprintF` or
-    `MultibandFootprint`.
+    Convert a scarlet_lite model to a `MultibandFootprint`.
 
-    This is a copy of the code from scarlet meas extension with
+    This is a modified copy of the code from scarlet meas extension with
     a bug fix for nbands in multi epoch
 
     Parameters
     ----------
     source:
-        The source to convert to a `HeavyFootprint`.
+        The source to convert to a `MultibandFootprint`.
     blend:
         The `Blend` object that contains information about
         the observation, PSF, etc, used to convolve the
@@ -476,7 +476,7 @@ def scarletModelToHeavy(
     Returns
     -------
     heavy:
-        The footprint (possibly multiband) containing the model for the source.
+        The multiband footprint containing the model for the source.
     """
     # We want to convolve the model with the observed PSF,
     # which means we need to grow the model box by the PSF to
@@ -510,24 +510,14 @@ def scarletModelToHeavy(
     valid = Mask(valid.astype(np.int32), xy0=xy0)
     spans = SpanSet.fromMask(valid)
 
-    # Create the MultibandHeavyFootprint and
+    # Create the MultibandFootprint and
     # add the location of the source to the peak catalog.
     foot = afwFootprint(spans)
     foot.addPeak(source.center[1], source.center[0], np.max(model.data))
-    if model.n_bands == 1:
-        image = afwImage(
-            array=model.data[0],
-            xy0=valid.getBBox().getMin(),
-            dtype=model.dtype,
-        )
-        maskedImage = MaskedImage(image, dtype=model.dtype)
-        heavy = makeHeavyFootprint(foot, maskedImage)
-    else:
-        # BUG fix:  was blend.bands
-        model = MultibandImage(
-            blend.observation.bands, model.data, valid.getBBox(),
-        )
-        heavy = MultibandFootprint.fromImages(
-            blend.observation.bands, model, footprint=foot
-        )
+    model = MultibandImage(
+        blend.observation.bands, model.data, valid.getBBox(),
+    )
+    heavy = MultibandFootprint.fromImages(
+        blend.observation.bands, model, footprint=foot
+    )
     return heavy
