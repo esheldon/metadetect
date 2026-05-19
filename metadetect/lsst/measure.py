@@ -193,7 +193,7 @@ class DetectAndDeblendTask(Task):
 
         if isinstance(self.deblend, ScarletDeblendTask):
             LOG.info('Using Scarlet deblender')
-            sources, model_data = self._run_with_scarlet(mbexp, detexp, sources)
+            sources, model_data = self._run_with_scarlet(mbexp, sources)
         else:
             LOG.info('Using SDSS deblender')
             model_data = None
