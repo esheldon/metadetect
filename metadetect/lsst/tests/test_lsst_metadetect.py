@@ -536,11 +536,9 @@ def test_lsst_metadetect_deblender_grid(deblender):
     sim_data = make_lsst_sim(116, bands=bands)
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    config = {
-        'deblender': deblender,
-    }
+    config = {}
 
-    res = run_metadetect(rng=rng, config=config, **data)
+    res = run_metadetect(rng=rng, deblender=deblender, config=config, **data)
 
     metacal_types = ['noshear', '1p', '1m']
 
@@ -578,11 +576,9 @@ def test_lsst_metadetect_deblender_random(deblender, show=False):
     if show:
         vis.show_image(data['mbexp']['i'].image.array)
 
-    config = {
-        'deblender': deblender,
-    }
+    config = {}
 
-    res = run_metadetect(rng=rng, config=config, **data)
+    res = run_metadetect(rng=rng, deblender=deblender, config=config, **data)
 
     if show:
         vis.show_image(data['mbexp']['i'].image.array, cat=res['noshear'])

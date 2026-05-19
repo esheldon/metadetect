@@ -2,6 +2,9 @@ import logging
 import numpy as np
 import ngmix
 from ngmix.gexceptions import BootPSFFailure, GMixRangeError
+from copy import deepcopy
+from frozendict import frozendict
+
 from lsst.pex.config import (
     Config,
     ConfigField,
@@ -13,12 +16,15 @@ from lsst.pex.config import (
 )
 from lsst.pipe.base import Task
 from lsst.meas.algorithms import SourceDetectionTask
+from lsst.meas.extensions.scarlet import ScarletDeblendTask
 
 from .. import procflags
 
 from .skysub import subtract_sky_mbexp
 
 from .defaults import (
+    DEFAULT_DEBLEND_SCARLET_CONFIG,
+    DEFAULT_MDET_CONFIG,
     DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
     DEFAULT_PGAUSS_FWHM,
@@ -34,6 +40,7 @@ def run_metadetect(
     mbexp,
     noise_mbexp,
     rng,
+    deblender='sdss',
     mfrac_mbexp=None,
     ormasks=None,
     config=None,
@@ -86,9 +93,25 @@ def run_metadetect(
         If get_psf_stats=True then there is an extra entry 'psf_stats'
     """
 
-    config_override = config if config is not None else {}
+    config_override = deepcopy(DEFAULT_MDET_CONFIG)
+    if config:
+        config_override.update(config)
+
     config = MetadetectConfig()
     config.setDefaults()
+
+    if deblender == 'scarlet':
+        # Load the default scarlet config
+        config_override['detect_and_deblend']['deblend'] = deepcopy(
+            DEFAULT_DEBLEND_SCARLET_CONFIG
+        )
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'scarlet'
+        config.detect_and_deblend.deblend.retarget(ScarletDeblendTask)
+    elif deblender == 'sdss':
+        # SDSS deblender is the default, so no need to override
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'sdss'
+    else:
+        raise ValueError(f"Unknown deblender: {deblender}")
 
     util.override_config(config, config_override)
 
@@ -158,13 +181,9 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
-    deblender = ChoiceField[str](
-        doc="Type of deblender to run",
-        default="sdss",
-        allowed={
-            "sdss": "The SDSS style deblender",
-            "scarlet": "The Scarlet deblender",
-        },
+    detect_and_deblend = ConfigurableField(
+        doc="Detection and Deblending config",
+        target=measure.DetectAndDeblendTask,
     )
 
     metacal = ConfigField[MetacalConfig](
@@ -199,6 +218,7 @@ class MetadetectTask(Task):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.makeSubtask("detect")
+        self.makeSubtask("detect_and_deblend")
 
     def run(
         self,
@@ -211,8 +231,7 @@ class MetadetectTask(Task):
         show=False,
     ):
         # This is to support methods that are not yet refactored.
-        config = self.config.toDict()
-        config['detect']['thresh'] = self.detect.config.thresholdValue
+        config = frozendict(self.config.toDict())
 
         ormask = combine_ormasks(mbexp, ormasks)
         mfrac, wgts = get_mfrac_mbexp(mbexp=mbexp, mfrac_mbexp=mfrac_mbexp)
@@ -243,10 +262,19 @@ class MetadetectTask(Task):
             types=metacal_types,
         )
 
+        dbtask = self.detect_and_deblend
         result = {}
         for shear_str, mcal_mbexp in mdict.items():
-            res = detect_deblend_and_measure(
-                mbexp=mcal_mbexp,
+            if rng is not None:
+                dbtask.rng = rng
+            sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
+
+            res = measure.measure(
+                mbexp=mbexp,
+                model_data=model_data,
+                meas_task=dbtask.meas,
+                detexp=detexp,
+                sources=sources,
                 config=config,
                 rng=rng,
                 show=show,
@@ -266,49 +294,6 @@ class MetadetectTask(Task):
             result['psf_stats'] = psf_stats
 
         return result
-
-
-def detect_deblend_and_measure(
-    mbexp,
-    config,
-    rng,
-    show=False,
-):
-    """
-    run detection, deblending and measurements.
-
-    Parameters
-    ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The metacal'ed exposures to process
-    config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, Entries
-        in this dict override defaults; see lsst_configs.py
-    rng: np.random.RandomState
-        Random number generator
-    show: bool, optional
-        If set to True, show images during processing
-    """
-
-    dbtask = measure.get_detect_and_deblend_task(
-        rng=rng,
-        thresh=config['detect']['thresh'],
-        deblender=config['deblender'],
-    )
-    sources, detexp, model_data = dbtask.run(mbexp=mbexp, show=show)
-
-    results = measure.measure(
-        mbexp=mbexp,
-        model_data=model_data,
-        meas_task=dbtask.meas,
-        detexp=detexp,
-        sources=sources,
-        config=config,
-        rng=rng,
-        show=show,
-    )
-
-    return results
 
 
 def add_mfrac(config, mfrac, res, exp):

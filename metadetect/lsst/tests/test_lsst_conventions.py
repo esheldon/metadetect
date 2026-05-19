@@ -7,6 +7,7 @@ import numpy as np
 import logging
 from metadetect.lsst.configs import get_config
 import metadetect.lsst.measure as lsst_measure
+from metadetect.lsst.photometry import get_detect_and_deblend_task
 from metadetect.lsst import util
 
 logging.basicConfig(
@@ -96,7 +97,7 @@ def test_convention(ginput):
 
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    dbtask = lsst_measure.get_detect_and_deblend_task(rng=rng)
+    dbtask = get_detect_and_deblend_task(rng=rng)
     sources, detexp, model_data = dbtask.run(mbexp=data['mbexp'])
 
     config = get_config()
