@@ -168,7 +168,10 @@ class MetadetectConfig(Config):
     )
 
     shear_bands = ListField[str](
-        doc="List of bands to use for shear measurements. Default is to use all bands.",
+        doc=(
+            "List of bands to use for shear measurements. "
+            "Default is to use all bands."
+        ),
         default=None,
         optional=True,
     )

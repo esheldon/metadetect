@@ -37,12 +37,12 @@ class ContextNoiseReplacer(object):
         # Notes for metacal.
         #
         # For metacal we should generate a noise image so that the exact noise
-        # field is used for all versions of the metacal images.  The assumption is
-        # that, because these noise data should contain no signal, metacal is not
-        # calibrating it.  Thus it doesn't matter whether or not the noise field is
-        # representative of the full covariance of the true image noise.  Rather by
-        # making the field the same for all metacal images we reduce variance in
-        # the calculation of the response
+        # field is used for all versions of the metacal images.  The assumption
+        # is that, because these noise data should contain no signal, metacal
+        # is not calibrating it.  Thus it doesn't matter whether or not the
+        # noise field is representative of the full covariance of the true
+        # image noise.  Rather by making the field the same for all metacal
+        # images we reduce variance in the calculation of the response
 
         if config is None:
             config = NoiseReplacerConfig()
@@ -53,7 +53,9 @@ class ContextNoiseReplacer(object):
 
         if noise_image is None:
             # TODO remove_poisson should be true for real data
-            noise_image = get_noise_image(exposure, rng=rng, remove_poisson=False)
+            noise_image = get_noise_image(
+                exposure, rng=rng, remove_poisson=False
+            )
 
         footprints = {}
         for source in sources:
@@ -129,6 +131,7 @@ class MultibandNoiseReplacer(object):
         with replacer.insertSource(source_id):
             # do something with exposures
     """
+
     def __init__(self, mbexp, sources, rng):
         self.mbexp = mbexp
         self.sources = sources
@@ -273,9 +276,7 @@ def get_noise_image(exp, rng, remove_poisson):
     use = np.where(np.isfinite(variance) & np.isfinite(signal))
 
     if remove_poisson:
-        gains = [
-            amp.getGain() for amp in exp.getDetector().getAmplifiers()
-        ]
+        gains = [amp.getGain() for amp in exp.getDetector().getAmplifiers()]
         mean_gain = np.mean(gains)
 
         corrected_var = variance[use] - signal[use] / mean_gain
@@ -479,10 +480,9 @@ def coadd_exposures(exposures):
     wsum = 0.0
 
     for i, exp in enumerate(exposures):
-
         shape = exp.image.array.shape
 
-        ycen, xcen = (np.array(shape) - 1)/2
+        ycen, xcen = (np.array(shape) - 1) / 2
         cen = geom.Point2D(xcen, ycen)
 
         psfobj = exp.getPsf()
@@ -501,12 +501,12 @@ def coadd_exposures(exposures):
 
         w = np.where(exp.variance.array > 0)
         medvar = np.median(exp.variance.array[w])
-        this_weight = 1.0/medvar
+        this_weight = 1.0 / medvar
 
         coadd_exp.image.array[w] += exp.image.array[w] * this_weight
         psf_im += this_psfim * this_weight
 
-        weight[w] += 1.0/exp.variance.array[w]
+        weight[w] += 1.0 / exp.variance.array[w]
 
         wsum += this_weight
 
@@ -514,16 +514,16 @@ def coadd_exposures(exposures):
         logger.info('found wsum <= 0')
         return None
 
-    fac = 1.0/wsum
+    fac = 1.0 / wsum
 
     coadd_exp.image.array[:, :] *= fac
 
     # the psf is always normalized
-    psf_im *= 1.0/psf_im.sum()
+    psf_im *= 1.0 / psf_im.sum()
 
     coadd_exp.variance.array[:, :] = np.inf
     w = np.where(weight > 0)
-    coadd_exp.variance.array[w] = 1/weight[w]
+    coadd_exp.variance.array[w] = 1 / weight[w]
 
     coadd_psf = get_stack_kernel_psf(psf_im)
     coadd_exp.setPsf(coadd_psf)
@@ -550,11 +550,7 @@ def get_stack_kernel_psf(psf_image):
     from lsst.meas.algorithms import KernelPsf
     from lsst.afw.math import FixedKernel
 
-    return KernelPsf(
-        FixedKernel(
-            afw_image.ImageD(psf_image.astype(float))
-        )
-    )
+    return KernelPsf(FixedKernel(afw_image.ImageD(psf_image.astype(float))))
 
 
 def coadd_mbobs(mbobs):
@@ -595,20 +591,20 @@ def coadd_mbobs(mbobs):
 
         wsum += this_weight
 
-    fac = 1.0/wsum
+    fac = 1.0 / wsum
 
     coadd_image[:, :] *= fac
 
     # the psf is always normalized
-    coadd_psf *= 1.0/coadd_psf.sum()
+    coadd_psf *= 1.0 / coadd_psf.sum()
 
     # use the jacobians from the last obs
     jac = obs.jacobian
     psf_jac = obs.psf.jacobian
 
-    fake_noise = coadd_psf.max() / 1.e6
+    fake_noise = coadd_psf.max() / 1.0e6
     psf_weight = np.zeros(coadd_psf.shape)
-    psf_weight += (1.0/fake_noise**2)
+    psf_weight += 1.0 / fake_noise**2
 
     psf_obs = ngmix.Observation(
         image=coadd_psf,
@@ -639,14 +635,14 @@ def trim_odd_image(im):
         assert dims[1] % 2 != 0, 'image must have odd dims'
 
         dims = np.array(dims)
-        cen = (dims-1)//2
+        cen = (dims - 1) // 2
         cen = cen.astype('i4')
 
         distances = (
-            cen[0]-0,
-            dims[0]-cen[0]-1,
-            cen[1]-0,
-            dims[1]-cen[1]-1,
+            cen[0] - 0,
+            dims[0] - cen[0] - 1,
+            cen[1] - 0,
+            dims[1] - cen[1] - 1,
         )
         logger.debug('distances: %s' % str(distances))
         min_dist = min(distances)
@@ -658,8 +654,8 @@ def trim_odd_image(im):
 
         # adding +1 for slices
         new_im = im[
-            start_row:end_row+1,
-            start_col:end_col+1,
+            start_row: end_row + 1,
+            start_col: end_col + 1,
         ].copy()
 
         logger.debug('new dims: %s' % str(new_im.shape))
@@ -721,14 +717,12 @@ def obs2exp(obs, exp=None, copy_mask_from='bmask', copy_psf=False):
     exp.mask.array[:, :] = mask
 
     w = np.where(obs.weight > 0)
-    exp.variance.array[w] = 1.0/obs.weight[w]
+    exp.variance.array[w] = 1.0 / obs.weight[w]
 
     if copy_psf:
         psf_image = obs.psf.image
         stack_psf = KernelPsf(
-            FixedKernel(
-                afw_image.ImageD(psf_image.astype(float))
-            )
+            FixedKernel(afw_image.ImageD(psf_image.astype(float)))
         )
         exp.setPsf(stack_psf)
 
@@ -781,20 +775,20 @@ def exp2obs(exp, copy_mask_to='ormask', store_exp=False):
     dims = exp.image.array.shape
     weight = np.zeros(dims)
     w = np.where(exp.variance.array > 0)
-    weight[w] = 1.0/exp.variance.array[w]
+    weight[w] = 1.0 / exp.variance.array[w]
 
     psf_obj = exp.getPsf()
     psf_image = psf_obj.computeKernelImage(cen).array
 
     assert psf_image.shape[0] == psf_image.shape[1], 'psf is not square'
     assert psf_image.shape[0] % 2 != 0, 'psf dims are not odd'
-    psf_cen = (np.array(psf_image.shape)-1.0)/2.0
+    psf_cen = (np.array(psf_image.shape) - 1.0) / 2.0
 
     psf_jac = jac.copy()
     psf_jac.set_cen(row=psf_cen[0], col=psf_cen[1])
 
-    psf_err = psf_image.max()*0.0001
-    psf_weight = psf_image*0 + 1.0/psf_err**2
+    psf_err = psf_image.max() * 0.0001
+    psf_weight = psf_image * 0 + 1.0 / psf_err**2
 
     psf_obs = ngmix.Observation(
         image=psf_image,
@@ -912,8 +906,16 @@ def get_stats_mask(*args, **kwargs):
     # stats_mask = ['BAD', 'SAT', 'EDGE', 'NO_DATA']
 
     import lsst.afw.image as afw_image
+
     afw_image.Mask.addMaskPlane('BRIGHT')
-    stats_mask = ['BAD', 'EDGE', 'DETECTED', 'DETECTED_NEGATIVE', 'NO_DATA', 'BRIGHT']
+    stats_mask = [
+        'BAD',
+        'EDGE',
+        'DETECTED',
+        'DETECTED_NEGATIVE',
+        'NO_DATA',
+        'BRIGHT',
+    ]
 
     return stats_mask
 
@@ -935,6 +937,7 @@ def get_detection_mask(*args, **kwargs):
     """
 
     import lsst.afw.image as afw_image
+
     afw_image.Mask.addMaskPlane('BRIGHT')
     mask = ['EDGE', 'NO_DATA', 'BRIGHT']
 

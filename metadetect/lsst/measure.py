@@ -47,6 +47,9 @@ LOG = logging.getLogger('lsst_measure')
 
 
 class SourceDetectionConfig(OriginalSourceDetectionConfig):
+    """
+    A local version of source detection config
+    """
     @property
     def thresh(self):
         return self.thresholdValue
@@ -60,6 +63,11 @@ SourceDetectionTask.ConfigClass = SourceDetectionConfig
 
 
 class DetectAndDeblendConfig(Config):
+    """
+    A configuration for detection, deblending and basic measurements
+
+    The deblend config may be retargeted to ScarletDeblendTask
+    """
     meas = ConfigurableField[SingleFrameMeasurementConfig](
         doc="Measurement config",
         target=SingleFrameMeasurementTask,
@@ -69,8 +77,9 @@ class DetectAndDeblendConfig(Config):
         doc="Detection config", target=SourceDetectionTask
     )
 
-    deblend = ConfigurableField[SourceDeblendConfig](
-        doc="Deblend config", target=SourceDeblendTask
+    deblend = ConfigurableField(
+        doc="Deblend config",
+        target=SourceDeblendTask
     )
 
     seed = Field[int](
@@ -139,6 +148,12 @@ class DetectAndDeblendConfig(Config):
 
 
 class DetectAndDeblendTask(Task):
+    """
+    Task to do detection on a combined coadd from all bands, deblending and
+    basic measurements on the detection image.
+
+    Additional ngmix measurements will be performed separately
+    """
     ConfigClass = DetectAndDeblendConfig
     _DefaultName = "detect_and_deblend"
 
