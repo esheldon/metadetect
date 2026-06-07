@@ -272,25 +272,23 @@ def test_skysub_sim_wldeblend_gal(star_density, sky_n_sigma):
 
         if True:
             lsst_skysub.iterate_detection_and_skysub(
-                exposure=exp, thresh=5,
+                exposure=exp,
+                thresh=5,
             )
             meta = exp.getMetadata()
             sky_meas = meta['BGMEAN']
         else:
             # this one is for debugging; we do the iterations ourselves so we
             # can display the result
-            _, _ = lsst_measure.detect_and_deblend(
-                exposure=exp, thresh=5,
-            )
+            dbtask = lsst_measure.get_detect_and_deblend_task(thresh=5)
+            _ = dbtask.run(exp)
             if False:
                 show_mask(exp)
 
             lsst_skysub.determine_and_subtract_sky(exp)
             sky_meas = exp.getMetadata()['BGMEAN']
 
-            _, _ = lsst_measure.detect_and_deblend(
-                exposure=exp, thresh=5,
-            )
+            _ = dbtask.run(exp)
             if False:
                 show_mask(exp)
 
