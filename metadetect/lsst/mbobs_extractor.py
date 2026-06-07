@@ -130,7 +130,7 @@ class MBObsExtractor(object):
             clip=clip,
         )
 
-        exposures = [self.mbexp[band][bbox] for band in self.filters]
+        exposures = [self.mbexp[band][bbox] for band in self.bands]
         return util.get_mbexp(exposures)
 
     def get_mbobs(
