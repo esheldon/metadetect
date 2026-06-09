@@ -272,6 +272,7 @@ def measure(
     config,
     rng,
     show=False,
+    border=0,
 ):
     """
     run measurements on the input exposure, given the input measurement task,
@@ -324,11 +325,16 @@ def measure(
         model_data=model_data,
     )
 
+    inner_bbox = geom.Box2D(detexp.getBBox()).erodedBy(border)
+
     for i, source in enumerate(extractor.children()):
 
         # perform basic measurements using stack algorithms
         # see DetectAndDeblendConfig for details
         meas_task.callMeasure(source, detexp)
+
+        if border > 0 and not inner_bbox.contains(source.getCentroid()):
+            continue
 
         source_id = source.getId()
 
