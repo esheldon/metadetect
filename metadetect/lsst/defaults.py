@@ -41,7 +41,10 @@ DEFAULT_DEBLEND_SCARLET_CONFIG = {
 # programatically based on the measurement_type
 DEFAULT_MDET_CONFIG = {
     'subtract_sky': DEFAULT_SUBTRACT_SKY,
-    'deblend': deepcopy(DEFAULT_DEBLEND_SDSS_CONFIG),
+    'detect_and_deblend': {
+        'detect': deepcopy(DEFAULT_DETECT_CONFIG),
+        'deblend': deepcopy(DEFAULT_DEBLEND_SDSS_CONFIG),
+    },
     'detect': deepcopy(DEFAULT_DETECT_CONFIG),
     'metacal': deepcopy(DEFAULT_METACAL_CONFIG),
     'pgauss': deepcopy(DEFAULT_PGAUSS_CONFIG),
