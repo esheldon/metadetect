@@ -1,0 +1,5 @@
+# Run this command to always ignore formatting commits in `git blame`
+# git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Changes due to auto-format on save changes
+d603917ddcb8669b405ba93465e769f52cd936e9

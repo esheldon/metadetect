@@ -8,6 +8,9 @@ from .metadetect import (
     _fit_original_psfs_mbexp, get_mfrac_mbexp, combine_ormasks,
     add_ormask, add_original_psf, add_mfrac, _average_psf_stats,
 )
+from lsst.meas.extensions.scarlet import ScarletDeblendTask
+from .defaults import DEFAULT_THRESH
+from . import util
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 
@@ -80,10 +83,12 @@ def run_photometry(
         wgts=wgts,
     )
 
-    sources, detexp = measure.detect_and_deblend(
-        mbexp=mbexp,
-        rng=rng,
+    dbtask = get_detect_and_deblend_task(
         thresh=config['detect']['thresh'],
+        rng=rng,
+    )
+    sources, detexp, model_data = dbtask.run(
+        mbexp=mbexp,
         show=show,
     )
 
@@ -91,6 +96,8 @@ def run_photometry(
         mbexp=mbexp,
         detexp=detexp,
         sources=sources,
+        model_data=model_data,
+        meas_task=dbtask.meas,
         config=config,
         rng=rng
     )
@@ -104,3 +111,59 @@ def run_photometry(
         add_original_psf(psf_stats, res)
 
     return res
+
+
+def get_detect_and_deblend_task(
+    rng=None,
+    thresh=DEFAULT_THRESH,
+    deblender=None,
+    config=None,
+):
+    """
+    run detection and deblending of peaks, as well as basic measurments such as
+    centroid.  The SDSS deblender is run in order to split footprints.
+
+    We must combine detection and deblending in the same function because the
+    schema gets modified in place, which means we must construct the deblend
+    task at the same time as the detect task
+
+    Parameters
+    ----------
+    rng: np.random.RandomState
+        Random number generator for noise replacer
+    thresh: float, optional
+        The detection threshold in units of the sky noise
+    config: dict, optional
+        The configuration dictionary to override the defaults with.
+
+    Returns
+    -------
+    sources, detexp
+        The sources and the detection exposure
+    """
+    if deblender is not None:
+        LOG.warning(
+            "'deblender' kwargs is not used and will be removed soon. "
+            "Specify the deblender via the config kwarg instead."
+        )
+
+    config_override = config if config is not None else {}
+    if thresh:
+        if 'detect' not in config_override:
+            config_override['detect'] = {}
+        config_override['detect']['thresholdValue'] = thresh
+
+    config = measure.DetectAndDeblendConfig()
+    config.setDefaults()
+
+    if config_override.get('deblend', {}).pop('name', '') == "scarlet":
+        config.deblend.retarget(ScarletDeblendTask)
+
+    util.override_config(config, config_override)
+
+    config.freeze()
+    config.validate()
+    task = measure.DetectAndDeblendTask(config=config)
+    if rng is not None:
+        task.rng = rng
+    return task

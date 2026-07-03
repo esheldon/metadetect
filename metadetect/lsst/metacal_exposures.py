@@ -211,7 +211,7 @@ def get_metacal_exps(exp, psf_stats=None, types=None, rot=False):
     else:
         gauss_psf = _get_gauss_target_psf(psf_int, flux=psf_flux)
 
-    dilation = 1.0 + 2.0*STEP
+    dilation = 1.0 + 2.0 * STEP
     psf_dilated = gauss_psf.dilate(dilation)
 
     psf_dilated_image = psf_image.copy()

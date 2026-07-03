@@ -1,8 +1,11 @@
 import logging
 import numpy as np
 import ngmix
+
 from ngmix.gexceptions import BootPSFFailure, GMixRangeError
-import lsst.geom as geom
+from copy import deepcopy
+from frozendict import frozendict
+
 from lsst.pex.config import (
     Config,
     ConfigField,
@@ -14,19 +17,22 @@ from lsst.pex.config import (
 )
 from lsst.pipe.base import Task
 from lsst.meas.algorithms import SourceDetectionTask
+from lsst.meas.extensions.scarlet import ScarletDeblendTask
 
 from .. import procflags
 
 from .skysub import subtract_sky_mbexp
 
 from .defaults import (
+    DEFAULT_DEBLEND_SCARLET_CONFIG,
+    DEFAULT_MDET_CONFIG,
     DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
     DEFAULT_PGAUSS_FWHM,
 )
 from . import measure
 from .metacal_exposures import get_metacal_mbexps_fixnoise
-from .util import get_integer_center, get_jacobian, override_config
+from . import util
 
 LOG = logging.getLogger('lsst_metadetect')
 
@@ -35,6 +41,7 @@ def run_metadetect(
     mbexp,
     noise_mbexp,
     rng,
+    deblender='sdss',
     mfrac_mbexp=None,
     ormasks=None,
     config=None,
@@ -85,11 +92,27 @@ def run_metadetect(
         metacal_psf is set to 'fitgauss' and the fitting fails
     """
 
-    config_override = config if config is not None else {}
+    config_override = deepcopy(DEFAULT_MDET_CONFIG)
+    if config:
+        config_override.update(config)
+
     config = MetadetectConfig()
     config.setDefaults()
 
-    override_config(config, config_override)
+    if deblender == 'scarlet':
+        # Load the default scarlet config
+        config_override['detect_and_deblend']['deblend'] = deepcopy(
+            DEFAULT_DEBLEND_SCARLET_CONFIG
+        )
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'scarlet'
+        config.detect_and_deblend.deblend.retarget(ScarletDeblendTask)
+    elif deblender == 'sdss':
+        # SDSS deblender is the default, so no need to override
+        assert config_override['detect_and_deblend']['deblend'].pop('name') == 'sdss'
+    else:
+        raise ValueError(f"Unknown deblender: {deblender}")
+
+    util.override_config(config, config_override)
 
     config.freeze()
     config.validate()
@@ -158,6 +181,11 @@ class MetadetectConfig(Config):
         target=SourceDetectionTask,
     )
 
+    detect_and_deblend = ConfigurableField(
+        doc="Detection and Deblending config",
+        target=measure.DetectAndDeblendTask,
+    )
+
     metacal = ConfigField[MetacalConfig](
         doc="Metacal config",
     )
@@ -168,7 +196,10 @@ class MetadetectConfig(Config):
     )
 
     shear_bands = ListField[str](
-        doc="List of bands to use for shear measurements. Default is to use all bands.",
+        doc=(
+            "List of bands to use for shear measurements. "
+            "Default is to use all bands."
+        ),
         default=None,
         optional=True,
     )
@@ -187,6 +218,7 @@ class MetadetectTask(Task):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.makeSubtask("detect")
+        self.makeSubtask("detect_and_deblend")
 
     def run(
         self,
@@ -199,8 +231,7 @@ class MetadetectTask(Task):
         border=0,
     ):
         # This is to support methods that are not yet refactored.
-        config = self.config.toDict()
-        config['detect']['thresh'] = self.detect.config.thresholdValue
+        config = frozendict(self.config.toDict())
 
         shear_bands = config['shear_bands'] or mbexp.bands
         if not all(band in mbexp.bands for band in shear_bands):
@@ -245,10 +276,19 @@ class MetadetectTask(Task):
             types=metacal_types,
         )
 
+        dbtask = self.detect_and_deblend
         result = {}
         for shear_str, mcal_mbexp in mdict.items():
-            res = detect_deblend_and_measure(
+            if rng is not None:
+                dbtask.rng = rng
+            sources, detexp, model_data = dbtask.run(mbexp=mcal_mbexp, show=show)
+
+            res = measure.measure(
                 mbexp=mcal_mbexp,
+                model_data=model_data,
+                meas_task=dbtask.meas,
+                detexp=detexp,
+                sources=sources,
                 config=config,
                 rng=rng,
                 show=show,
@@ -277,62 +317,6 @@ class MetadetectTask(Task):
         return result
 
 
-def detect_deblend_and_measure(
-    mbexp,
-    config,
-    rng,
-    show=False,
-    border=0,
-):
-    """
-    run detection, deblending and measurements.
-
-    Note deblending is always run in a hierarchical detection process, but the
-    deblending is only used for getting centers, and because there is currently
-    no other way to split footprints
-
-    Parameters
-    ----------
-    mbexp: lsst.afw.image.MultibandExposure
-        The metacal'ed exposures to process
-    config: dict, optional
-        Configuration for the fitter, metacal, psf, detect, Entries
-        in this dict override defaults; see lsst_configs.py
-    rng: np.random.RandomState
-        Random number generator
-    show: bool, optional
-        If set to True, show images during processing
-    border: bool, optional
-        If positive, detections whose centroids lie ``border`` pixels away from
-        the bounding box edge of ``mbexp`` will be excluded for measurement.
-    """
-
-    LOG.info('measuring with blended stamps')
-
-    sources, detexp = measure.detect_and_deblend(
-        mbexp=mbexp,
-        rng=rng,
-        thresh=config['detect']['thresh'],
-        show=show,
-    )
-
-    if border > 0:
-        inner_bbox = geom.Box2D(detexp.getBBox()).erodedBy(border)
-        sources = sources.copy(deep=not sources.isContiguous())
-        within_border = inner_bbox.contains(sources.getX(), sources.getY())
-        sources = sources[within_border]
-
-    results = measure.measure(
-        mbexp=mbexp,
-        detexp=detexp,
-        sources=sources,
-        config=config,
-        rng=rng,
-    )
-
-    return results
-
-
 def add_mfrac(config, mfrac, res, exp):
     """
     calculate and add mfrac to the input result array
@@ -341,12 +325,12 @@ def add_mfrac(config, mfrac, res, exp):
         # we are using the positions with the metacal shear removed for
         # this.
 
-        cen, _ = get_integer_center(
+        cen, _ = util.get_integer_center(
             wcs=exp.getWcs(),
             bbox=exp.getBBox(),
             as_double=True,
         )
-        jac = get_jacobian(exp=exp, cen=cen)
+        jac = util.get_jacobian(exp=exp, cen=cen)
 
         res['mfrac'] = measure_weighted_mfrac(
             mfrac=mfrac,
@@ -563,14 +547,14 @@ def _fit_original_psfs_mbexp(mbexp, rng):
 
     for iband, (band, exp) in enumerate(zip(mbexp.bands, mbexp)):
         try:
-            cen, _ = get_integer_center(
+            cen, _ = util.get_integer_center(
                 wcs=exp.getWcs(),
                 bbox=exp.getBBox(),
                 as_double=True,
             )
-            jac = get_jacobian(exp=exp, cen=cen)
+            jac = util.get_jacobian(exp=exp, cen=cen)
 
-            psf_im = measure.extract_psf_image(exp, cen)
+            psf_im = util.extract_psf_image(exp, cen)
 
             psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
             psf_jacob = jac.copy()

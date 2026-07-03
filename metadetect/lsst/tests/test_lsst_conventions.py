@@ -6,7 +6,8 @@ import sys
 import numpy as np
 import logging
 from metadetect.lsst.configs import get_config
-import metadetect.lsst.measure
+import metadetect.lsst.measure as lsst_measure
+from metadetect.lsst.photometry import get_detect_and_deblend_task
 from metadetect.lsst import util
 from lsst.utils import getPackageDir
 
@@ -108,16 +109,17 @@ def test_convention(ginput):
 
     data = do_coadding(rng=rng, sim_data=sim_data, nowarp=True)
 
-    sources, detexp = metadetect.lsst.measure.detect_and_deblend(
-        mbexp=data['mbexp'], rng=rng,
-    )
+    dbtask = get_detect_and_deblend_task(rng=rng)
+    sources, detexp, model_data = dbtask.run(mbexp=data['mbexp'])
 
     config = get_config()
 
-    res = metadetect.lsst.measure.measure(
+    res = lsst_measure.measure(
         mbexp=data['mbexp'],
         detexp=detexp,
         sources=sources,
+        meas_task=dbtask.meas,
+        model_data=model_data,
         config=config,
         rng=rng,
     )

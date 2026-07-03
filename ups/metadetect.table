@@ -1,5 +1,6 @@
 setupRequired(meas_base)
 setupRequired(meas_deblender)
+setupRequired(meas_extensions_scarlet)
 setupRequired(pex_exceptions)
 setupOptional(descwl_shear_sims)
 
