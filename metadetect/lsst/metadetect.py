@@ -24,7 +24,7 @@ from .. import procflags
 from .skysub import subtract_sky_mbexp
 
 from .defaults import (
-    DEFAULT_DEBLEND_SCARLET_CONFIG,
+    #DEFAULT_DEBLEND_SCARLET_CONFIG,
     DEFAULT_MDET_CONFIG,
     DEFAULT_STAMP_SIZE,
     DEFAULT_SUBTRACT_SKY,
@@ -36,13 +36,23 @@ from . import util
 
 LOG = logging.getLogger('lsst_metadetect')
 
+# build catalog:
+# ns: detections(noshear) # objects in dp2 catalog
+# 1p: detections(1p (w/ centroid shift)) - or None
+#etc...
+
+# external loop to calulate centroid shifts for metacal
+# as opposed to calculating shifts on the fly
+# push current changes to branch on lsst/metadetect
 
 def run_metadetect(
     mbexp,
     noise_mbexp,
     rng,
     deblender='sdss',
+    detection_scheme='internal',
     mfrac_mbexp=None,
+    sources=None,
     ormasks=None,
     config=None,
     show=False,
@@ -59,9 +69,15 @@ def run_metadetect(
         The exposures to process
     noise_mbexp: lsst.afw.image.MultibandExposure
         The noise exposures for metacal
+    detection_scheme : str
+        Method of object detection to either match traditional metadetect 
+        ('internal'), or metacal ('external') with detection bias reintroduced
+        but matched to the Object Catalog, or 'both'. Defaults to 'internal'.
     mfrac_mbexp: lsst.afw.image.MultibandExposure, optional
         The fraction of masked exposures for the pixel; for coadds this is the
         fraction of input images contributing to each pixel that were masked
+    sources : lsst.afw.table.SourceCatalog
+        If detection_scheme 'external' or 'both', must include detection catalog 
     ormasks: list of images, optional
         A list of logical or masks, such as created for all images that went
         into a coadd.
