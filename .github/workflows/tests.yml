@@ -47,6 +47,7 @@ jobs:
           create-args: >-
             python=${{ matrix.pyver }}
             pip
+            setuptools
 
       - name: configure conda and install code
         shell: bash -l {0}
